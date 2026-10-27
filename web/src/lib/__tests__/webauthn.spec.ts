@@ -4,7 +4,25 @@ import { fixture, must } from '@/test/fixtures'
 import { available, create, get } from '@/lib/webauthn'
 
 const buf = (...n: number[]) => Uint8Array.from(n).buffer
-const calls = { create: vi.fn(), get: vi.fn() }
+interface Key {
+  id: ArrayBuffer
+}
+const failure = (e: Error): Error => e
+const rejected = (call: Promise<unknown>) =>
+  call.then(() => {
+    throw new Error('the call did not reject')
+  }, failure)
+const calls = {
+  create:
+    vi.fn<
+      (o: {
+        publicKey: { challenge: ArrayBuffer; user: Key; excludeCredentials: Key[] }
+      }) => Promise<unknown>
+    >(),
+  get: vi.fn<
+    (o: { publicKey: { allowCredentials: Key[] }; signal?: AbortSignal }) => Promise<unknown>
+  >(),
+}
 
 describe('webauthn', () => {
   beforeEach(() => {
@@ -46,7 +64,7 @@ describe('webauthn', () => {
     const { publicKey } = must(calls.create.mock.calls[0])[0]
     expect([...new Uint8Array(publicKey.challenge)]).toEqual([1, 2, 3])
     expect([...new Uint8Array(publicKey.user.id)]).toEqual([4, 5])
-    expect([...new Uint8Array(publicKey.excludeCredentials[0].id)]).toEqual([251, 255])
+    expect([...new Uint8Array(must(publicKey.excludeCredentials[0]).id)]).toEqual([251, 255])
     expect(sent).toEqual({
       id: 'AQID',
       rawId: 'AQID',
@@ -105,7 +123,7 @@ describe('webauthn', () => {
       allowCredentials: [{ type: 'public-key', id: 'BAU' }],
     })
     const { publicKey } = must(calls.get.mock.calls[0])[0]
-    expect([...new Uint8Array(publicKey.allowCredentials[0].id)]).toEqual([4, 5])
+    expect([...new Uint8Array(must(publicKey.allowCredentials[0]).id)]).toEqual([4, 5])
     expect(sent.response).toEqual({
       clientDataJSON: 'AQ',
       authenticatorData: 'Ag',
@@ -131,15 +149,15 @@ describe('webauthn', () => {
   it('hands the browser the signal, and an aborted prompt keeps its name', async () => {
     const ctl = new AbortController()
     calls.get.mockRejectedValue(new DOMException('aborted', 'AbortError'))
-    const err = await get({ challenge: 'AQID' }, { signal: ctl.signal }).catch((e) => e)
+    const err = await rejected(get({ challenge: 'AQID' }, { signal: ctl.signal }))
     expect(must(calls.get.mock.calls[0])[0].signal).toBe(ctl.signal)
     expect(err.name).toBe('AbortError')
     expect(err.message).toBe('The passkey prompt was cancelled.')
 
     calls.get.mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
-    expect((await get({ challenge: 'AQID' }).catch((e) => e)).name).toBe('NotAllowedError')
+    expect((await rejected(get({ challenge: 'AQID' }))).name).toBe('NotAllowedError')
     calls.get.mockRejectedValue(new DOMException('no', 'SecurityError'))
-    expect((await get({ challenge: 'AQID' }).catch((e) => e)).name).toBe('Error')
+    expect((await rejected(get({ challenge: 'AQID' }))).name).toBe('Error')
   })
 
   it('does not reach for a browser that has no passkeys', async () => {

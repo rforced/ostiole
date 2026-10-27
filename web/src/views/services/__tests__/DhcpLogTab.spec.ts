@@ -38,7 +38,7 @@ async function tab(
   { level = 'info', dhcp = true }: { level?: LogLevel; dhcp?: boolean } = {},
 ) {
   vi.mocked(api.services.dhcpLog).mockResolvedValue(
-    fixture<DhcpLogPage>({ entries: list as DhcpRow[], held: list.length, kept: level === 'info' }),
+    fixture<DhcpLogPage>({ entries: list, held: list.length, kept: level === 'info' }),
   )
   vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal: 8_000_000_000 }))
   vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))

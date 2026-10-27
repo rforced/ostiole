@@ -9,7 +9,9 @@ import { ROLES } from '@/views/system/accounts/roles'
 const MIN_PASSWORD = 12
 
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['create'])
+const emit = defineEmits<{
+  create: [account: { username: string; password: string; role: string }]
+}>()
 
 const form = ref({ username: '', password: '', role: 'viewer' })
 const valid = computed(

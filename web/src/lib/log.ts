@@ -221,7 +221,7 @@ export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<R
 
   function release() {
     if (missed) {
-      reload()
+      void reload()
       return
     }
     const list = waiting.reverse()
@@ -265,14 +265,14 @@ export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<R
       if (opened) {
         newest = 0
         waiting = []
-        if (live.value) reload()
+        if (live.value) void reload()
         else missed = true
       }
       opened = true
     }
     es.onmessage = (m) => {
       try {
-        arrive(JSON.parse(m.data))
+        arrive(JSON.parse(m.data as string) as Row)
       } catch {
         /* ignore malformed */
       }
@@ -307,14 +307,14 @@ export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<R
   })
   watch(query, () => {
     window.clearTimeout(settle)
-    settle = window.setTimeout(reload, SETTLE_MS)
+    settle = window.setTimeout(() => void reload(), SETTLE_MS)
   })
-  watch(filters, reload)
+  watch(filters, () => void reload())
 
   onMounted(() => {
     document.addEventListener('visibilitychange', onVisibility)
     if (!document.hidden) connect()
-    reload()
+    void reload()
   })
   onBeforeUnmount(() => {
     document.removeEventListener('visibilitychange', onVisibility)

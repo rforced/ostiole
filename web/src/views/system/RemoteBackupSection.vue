@@ -154,9 +154,9 @@ watch(
   applied,
   (on) => {
     if (!on) return
-    loadStatus.run()
+    void loadStatus.run()
     // Listing the bucket is an operator's, like restoring from it.
-    if (!auth.readOnly) loadCopies.run()
+    if (!auth.readOnly) void loadCopies.run()
   },
   { immediate: true },
 )

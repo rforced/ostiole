@@ -23,7 +23,7 @@ export function useReorder(): {
     change()
     // The group reads the class in the update this change causes; the
     // slide it starts runs on after the class goes back.
-    nextTick(() => {
+    void nextTick(() => {
       moveClass.value = STILL
     })
   }

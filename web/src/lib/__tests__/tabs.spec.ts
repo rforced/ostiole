@@ -21,7 +21,7 @@ async function mountAt(path: string) {
     history: createMemoryHistory(),
     routes: [{ path: '/firewall', component: Host }],
   })
-  router.push(path)
+  void router.push(path)
   await router.isReady()
   return { wrapper: mount(Host, { global: { plugins: [router] } }), router }
 }
@@ -71,7 +71,7 @@ describe('useTabHash', () => {
       history: createMemoryHistory(),
       routes: [{ path: '/firewall/rules', component: Late }],
     })
-    router.push('/firewall/rules#dmz')
+    void router.push('/firewall/rules#dmz')
     await router.isReady()
     const wrapper = mount(Late, { global: { plugins: [router] } })
     // Nothing loaded is nothing to choose, rather than a guess at the hash.
@@ -104,7 +104,7 @@ describe('usePageTabs', () => {
       history: createMemoryHistory(),
       routes: [{ path: '/services/dhcp', component: Page, meta: { tabs } }],
     })
-    router.push('/services/dhcp#v6')
+    void router.push('/services/dhcp#v6')
     await router.isReady()
     const wrapper = mount(Page, { global: { plugins: [router] } })
     expect(wrapper.text()).toBe('IPv4,IPv6:v6')

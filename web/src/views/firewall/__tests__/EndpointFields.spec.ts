@@ -35,8 +35,8 @@ function mountFields(side: string, zone: string, interfaces: Interface[]) {
   return mount(EndpointFields, { props: { side, zone, modelValue: model } })
 }
 
-const peerOption = (w: Fields) => w.get(`#${w.props('side')}-mode`).find('option[value="peer"]')
-const peerChoices = (w: Fields) => w.findAll(`#${w.props('side')}-peer option`).map((o) => o.text())
+const peerOption = (w: Fields) => w.get(`#${w.props().side}-mode`).find('option[value="peer"]')
+const peerChoices = (w: Fields) => w.findAll(`#${w.props().side}-peer option`).map((o) => o.text())
 
 describe('EndpointFields peers', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -63,7 +63,7 @@ describe('EndpointFields zone', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   const kinds = (w: Fields) =>
-    w.findAll(`#${w.props('side')}-mode option`).map((o) => o.attributes('value'))
+    w.findAll(`#${w.props().side}-mode option`).map((o) => o.attributes('value'))
 
   // A zone is somewhere traffic goes, so only a destination can name one.
   it('offers a zone to a destination, right after Any, and to a source never', () => {

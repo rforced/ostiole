@@ -68,7 +68,7 @@ const derived = useDraftRows((draft) => api.dnsNames(draft), {
 })
 watch(live, (on) => {
   if (on) {
-    derived.run()
+    void derived.run()
     derived.start()
   } else {
     derived.stop()

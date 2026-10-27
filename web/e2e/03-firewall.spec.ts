@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 
 import { expect, test } from './fixtures'
-import { applyAndConfirm, login, shot, sidebar } from './helpers'
+import { applyAndConfirm, login, savedConfig, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -250,7 +250,7 @@ test('the log keeps its own settings', async ({ page }) => {
   await card.getByLabel('Entries').fill('60000')
   await card.getByLabel('Log dropped packets').check()
   await applyAndConfirm(page)
-  const cfg = await (await page.request.get('/api/v1/config')).json()
+  const cfg = await savedConfig(page.request)
   expect(cfg.system.management.firewallLog).toEqual({ entries: 60000 })
   expect(cfg.system.management.logDefaultDrops).toBe(true)
 

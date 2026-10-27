@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import NetworkDialog from '@/views/wireless/NetworkDialog.vue'
-import type { Interface, WirelessRadios } from '@/lib/types.gen'
+import type { Config, Interface, WirelessRadios } from '@/lib/types.gen'
 import { type DeepPartial, configOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -99,7 +99,7 @@ describe('NetworkDialog round trip', () => {
     const network = { ...guest, description: 'Guests', logDrops: true }
     const w = await open({ setUp: true, enhancedOpen: true, radios: [] }, network)
     const config = useConfigStore()
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as Config
     await w.get('form').trigger('submit')
     expect(config.findInterface('ap0')).toMatchObject({ description: 'Guests', logDrops: true })
     expect(config.dirty).toBe(false)

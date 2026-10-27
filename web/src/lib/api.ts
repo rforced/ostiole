@@ -233,7 +233,7 @@ async function request<T = unknown>(
   if (res.status === 204) return undefined as T
   const type = res.headers.get('Content-Type') ?? ''
   if (type.startsWith('text/')) return (await res.text()) as T
-  return res.json()
+  return (await res.json()) as T
 }
 
 const get = <T = unknown>(path: string, signal?: AbortSignal) =>
@@ -261,9 +261,9 @@ async function apiError(res: Response) {
   let issues: ApiIssue[] = []
   let code = ''
   try {
-    const err = await res.json()
+    const err = (await res.json()) as { error?: string; issues?: unknown; code?: unknown } | null
     if (err?.error) message = err.error
-    if (Array.isArray(err?.issues)) issues = err.issues
+    if (Array.isArray(err?.issues)) issues = err.issues as ApiIssue[]
     if (typeof err?.code === 'string') code = err.code
   } catch {
     /* non-JSON error body */
@@ -530,7 +530,7 @@ export const api = {
         body: JSON.stringify({ data, passphrase } satisfies RestoreRequest),
       })
       if (!res.ok) throw await apiError(res)
-      return res.json()
+      return (await res.json()) as RestoreResponse
     },
   },
   ruleset: () => get<string>('/ruleset'),
@@ -619,7 +619,7 @@ export const api = {
       if (!res.ok) {
         let message = res.statusText
         try {
-          message = (await res.json())?.error ?? message
+          message = ((await res.json()) as { error?: string } | null)?.error ?? message
         } catch {
           /* not JSON */
         }
@@ -641,7 +641,7 @@ export const api = {
       if (!res.ok) {
         let message = res.statusText
         try {
-          message = (await res.json())?.error ?? message
+          message = ((await res.json()) as { error?: string } | null)?.error ?? message
         } catch {
           /* not JSON */
         }
@@ -770,7 +770,7 @@ export const api = {
       if (!res.ok) {
         let message = res.statusText
         try {
-          message = (await res.json())?.error ?? message
+          message = ((await res.json()) as { error?: string } | null)?.error ?? message
         } catch {
           /* not JSON */
         }

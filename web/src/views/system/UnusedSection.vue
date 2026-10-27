@@ -422,7 +422,7 @@ watch(
     edits++
     behind.value = true
     window.clearTimeout(timer)
-    timer = window.setTimeout(load.run, DEBOUNCE_MS)
+    timer = window.setTimeout(() => void load.run(), DEBOUNCE_MS)
   },
   { deep: true },
 )

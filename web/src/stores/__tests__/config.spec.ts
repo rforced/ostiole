@@ -181,7 +181,7 @@ describe('config store zones', () => {
     const config = useConfigStore()
     const d = draft()
     d.blocking = { enabled: false, enforce: { redirectDns: true } }
-    config.saved = JSON.parse(JSON.stringify(d))
+    config.saved = JSON.parse(JSON.stringify(d)) as Config
     config.replaceDraft(configOf(d))
 
     const names = ['lan']
@@ -622,7 +622,7 @@ describe('config store interfaces', () => {
     const config = useConfigStore()
     const toast = useToastStore()
     config.replaceDraft(configOf(wired()))
-    const before = JSON.parse(JSON.stringify(config.draft))
+    const before = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
 
     config.undoable('Removed 2 unused items.', () => {
       config.removeRule('r1')
@@ -642,7 +642,7 @@ describe('config store interfaces', () => {
     const config = useConfigStore()
     const toast = useToastStore()
     config.replaceDraft(configOf(wired()))
-    const before = JSON.parse(JSON.stringify(config.draft))
+    const before = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
 
     expect(() =>
       config.undoable('Removed 2 unused items.', () => {
@@ -1913,7 +1913,7 @@ describe('config store put back', () => {
   function seeded(extra = {}) {
     const config = useConfigStore()
     const d = { ...draft(), ...extra }
-    config.saved = JSON.parse(JSON.stringify(d))
+    config.saved = JSON.parse(JSON.stringify(d)) as Config
     config.replaceDraft(configOf(d))
     return config
   }

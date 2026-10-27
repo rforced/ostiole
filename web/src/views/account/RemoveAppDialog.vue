@@ -14,7 +14,7 @@ defineProps({
   passkeys: { type: Array as PropType<string[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['done'])
+const emit = defineEmits<{ done: [] }>()
 
 const password = ref('')
 const error = ref('')

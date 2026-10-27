@@ -14,7 +14,7 @@ export default defineConfig(
     ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**'],
   },
   js.configs.recommended,
-  tseslint.configs.recommended,
+  tseslint.configs.recommendedTypeChecked,
   pluginVue.configs['flat/recommended'],
   {
     name: 'app/browser-globals',
@@ -25,11 +25,30 @@ export default defineConfig(
     },
   },
   {
+    // tsconfig.eslint.json adds a *.vue module shim that only lint sees:
+    // typescript-eslint cannot read SFCs, and vue-tsc must keep failing on
+    // a mistyped .vue import.
+    name: 'app/type-aware',
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.eslint.json', './tsconfig.node.json'],
+        tsconfigRootDir: import.meta.dirname,
+        extraFileExtensions: ['.vue'],
+      },
+    },
+  },
+  {
     name: 'app/vue-ts-parser',
     files: ['**/*.vue'],
     languageOptions: {
       parserOptions: { parser: tseslint.parser },
     },
+  },
+  {
+    // Served as is before the app loads, outside every tsconfig.
+    name: 'app/public-scripts',
+    files: ['public/**/*.js'],
+    extends: [tseslint.configs.disableTypeChecked],
   },
   {
     // The fake EventSource and WebSocket classes publish their instance.

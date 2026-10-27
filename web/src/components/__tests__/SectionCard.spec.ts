@@ -20,7 +20,8 @@ describe('SectionCard footer', () => {
     const strip = w.find('.card-strip')
     expect(strip.text()).toBe('Only an admin can change this.')
     expect(strip.classes()).toContain('border-t')
-    expect(w.element.lastElementChild).toBe(strip.element)
+    const root: unknown = w.element
+    expect(root instanceof Element && root.lastElementChild).toBe(strip.element)
   })
 
   it('stays outside a locked body', () => {

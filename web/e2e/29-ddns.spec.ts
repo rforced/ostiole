@@ -1,7 +1,7 @@
 import { createServer, type Server, type ServerResponse } from 'node:http'
 
 import { expect, test } from './fixtures'
-import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers'
+import { applyAndConfirm, confirmDialog, login, savedConfig, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -35,7 +35,9 @@ test.beforeAll(async () => {
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
       const url = new URL(req.url ?? '', `http://127.0.0.1:${PORT}`)
-      const sent: Record<string, unknown> | null = body ? JSON.parse(body) : null
+      const sent: Record<string, unknown> | null = body
+        ? (JSON.parse(body) as Record<string, unknown>)
+        : null
       asked.push({ method: req.method, path: url.pathname, query: url.searchParams, body: sent })
       if (req.headers.authorization !== `Bearer ${TOKEN}`) {
         reply(res, 403, null, [
@@ -167,7 +169,7 @@ test('keep a record at the provider that holds its domain', async ({ page }) => 
   await confirmDialog(page, { typed: 'cf' })
   await applyAndConfirm(page)
   expect(asked.filter((a) => a.method === 'DELETE')).toEqual([])
-  const cfg = await (await page.request.get('/api/v1/config')).json()
+  const cfg = await savedConfig(page.request)
   expect(cfg.services.ddns).toBeUndefined()
   expect(cfg.dnsProviders).toBeUndefined()
 })

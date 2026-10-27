@@ -6,7 +6,8 @@ import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import ZoneField, { NEW_ZONE } from '@/components/ZoneField.vue'
+import ZoneField from '@/components/ZoneField.vue'
+import { NEW_ZONE } from '@/components/zones'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import type { Interface, WireGuard } from '@/lib/types.gen'
@@ -130,7 +131,7 @@ async function derive(): Promise<boolean> {
 
 /** A pasted key gets its public key at once. A half-typed one waits for Save. */
 function keyChanged() {
-  if (KEY_SHAPE.test(form.value.privateKey.trim())) derive()
+  if (KEY_SHAPE.test(form.value.privateKey.trim())) void derive()
   else form.value.publicKey = ''
 }
 
@@ -146,7 +147,7 @@ async function save() {
   // What this dialog does not show, such as log drops set on the
   // Interfaces page, stays as it was.
   const iface: Interface = props.tunnel
-    ? JSON.parse(JSON.stringify(props.tunnel))
+    ? (JSON.parse(JSON.stringify(props.tunnel)) as Interface)
     : { name: '', enabled: true, ipv4: { mode: '' }, ipv6: { mode: '' } }
   const wireguard: WireGuard = {
     ...iface.wireguard,

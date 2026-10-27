@@ -13,7 +13,7 @@ const props = defineProps({
   parents: { type: Array as PropType<{ name: string }[]>, required: true },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['created'])
+const emit = defineEmits<{ created: [iface: Interface] }>()
 
 const config = useConfigStore()
 const parent = ref('')

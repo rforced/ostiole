@@ -71,12 +71,12 @@ function closed(event: Event) {
         <DropdownMenuItem
           v-for="item in items"
           :key="item.label"
-          :as="item.href ? 'a' : 'div'"
-          :href="item.href"
+          as-child
           class="flex cursor-default items-center rounded px-2.5 py-1.5 text-sm text-ink outline-none select-none data-highlighted:bg-accent data-highlighted:text-on-fill max-sm:min-h-11"
           @select="choose(item)"
         >
-          {{ item.label }}
+          <a v-if="item.href" :href="item.href">{{ item.label }}</a>
+          <div v-else>{{ item.label }}</div>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenuPortal>

@@ -104,7 +104,7 @@ describe('AccountsSection', () => {
       account('operator', 'operator'),
     ])
 
-    await must(wrapper.get<HTMLInputElement>('#user-name').element.form).dispatchEvent(
+    must(wrapper.get<HTMLInputElement>('#user-name').element.form).dispatchEvent(
       new Event('submit'),
     )
     await flushPromises()
@@ -140,7 +140,7 @@ describe('AccountsSection', () => {
 
     await button(row(wrapper, 'admin'), 'Rename').trigger('click')
     await wrapper.get('#rename-to').setValue('alice')
-    await must(wrapper.get<HTMLInputElement>('#rename-to').element.form).dispatchEvent(
+    must(wrapper.get<HTMLInputElement>('#rename-to').element.form).dispatchEvent(
       new Event('submit'),
     )
     await flushPromises()
@@ -157,7 +157,7 @@ describe('AccountsSection', () => {
 
     await button(row(wrapper, 'watcher'), 'Rename').trigger('click')
     await wrapper.get('#rename-to').setValue('admin')
-    await must(wrapper.get<HTMLInputElement>('#rename-to').element.form).dispatchEvent(
+    must(wrapper.get<HTMLInputElement>('#rename-to').element.form).dispatchEvent(
       new Event('submit'),
     )
     await flushPromises()

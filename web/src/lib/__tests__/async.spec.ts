@@ -53,9 +53,9 @@ describe('useAsync', () => {
 
   it('clears the error on the next success', async () => {
     let fail = true
-    const load = useAsync(async () => {
-      if (fail) throw new Error('down')
-      return 'up'
+    const load = useAsync(() => {
+      if (fail) return Promise.reject(new Error('down'))
+      return Promise.resolve('up')
     })
     await load.run()
     expect(load.error.value).toBe('down')
@@ -89,9 +89,9 @@ describe('useAsync', () => {
     const first = deferred<void>()
     fn.mockReturnValueOnce(first.promise).mockResolvedValue(undefined)
     const load = useAsync(fn)
-    load.run('a')
-    load.run('b')
-    load.run('c')
+    void load.run('a')
+    void load.run('b')
+    void load.run('c')
     first.resolve()
     await vi.waitFor(() => expect(fn).toHaveBeenCalledTimes(2))
     expect(fn).toHaveBeenLastCalledWith('c')

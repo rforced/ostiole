@@ -68,10 +68,11 @@ describe('LayoutDialog', () => {
         return { top: i * 40, height: 40 } as DOMRect
       })
       const list = w.get<HTMLElement>('ul').element
-      list.setPointerCapture = vi.fn()
+      const capture = vi.fn()
+      list.setPointerCapture = capture
       list.hasPointerCapture = () => true
       list.releasePointerCapture = vi.fn()
-      return list
+      return { list, capture }
     }
     const pointer = (el: EventTarget, type: string, clientY: number, init: PointerEventInit = {}) =>
       el.dispatchEvent(new PointerEvent(type, { pointerId: 1, clientY, ...init }))
@@ -85,9 +86,9 @@ describe('LayoutDialog', () => {
 
     it('moves the row to the slot nearest it and saves once, when it lets go', async () => {
       const w = open()
-      const list = layOut(w)
+      const { list, capture } = layOut(w)
       grab(w, 'System', 25)
-      expect(list.setPointerCapture).toHaveBeenCalledWith(1)
+      expect(capture).toHaveBeenCalledWith(1)
 
       pointer(list, 'pointermove', 70)
       pointer(list, 'pointermove', 105)
@@ -104,7 +105,7 @@ describe('LayoutDialog', () => {
 
     it('puts the rows back and saves nothing when the pointer is cancelled', async () => {
       const w = open()
-      const list = layOut(w)
+      const { list } = layOut(w)
       const before = titles(w)
       grab(w, 'Router', 380, 'touch')
       pointer(list, 'pointermove', 20)
@@ -119,7 +120,7 @@ describe('LayoutDialog', () => {
 
     it('saves nothing when the row lands where it was', async () => {
       const w = open()
-      const list = layOut(w)
+      const { list } = layOut(w)
       grab(w, 'Traffic', 100)
       pointer(list, 'pointermove', 115)
       pointer(list, 'pointerup', 115)

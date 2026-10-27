@@ -130,7 +130,7 @@ describe('QueriesTab', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     vi.stubGlobal('EventSource', FakeSource)
-    vi.mocked(api.queries.list).mockImplementation(async (params) => answers(params))
+    vi.mocked(api.queries.list).mockImplementation((params) => Promise.resolve(answers(params)))
     vi.mocked(api.queries.summary).mockResolvedValue(
       fixture<QuerySummary>({ total: 450, blocked: 0, clients: 1 }),
     )

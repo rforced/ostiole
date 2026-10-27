@@ -30,7 +30,7 @@ export function useTabHash(values: MaybeRefOrGetter<string[]>): WritableComputed
       const list = toValue(values)
       if (!list.includes(value)) return
       const hash = value === list[0] ? '' : `#${value}`
-      if (hash !== route.hash) router.replace({ hash })
+      if (hash !== route.hash) void router.replace({ hash })
     },
   })
 }

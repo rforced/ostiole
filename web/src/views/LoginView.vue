@@ -69,8 +69,10 @@ watch(
   (s) => {
     if (s === 3) {
       code.value = ''
-      if (passkeys.value) passkeyEl.value?.$el.focus()
-      else codeEl.value?.focus()
+      if (passkeys.value) {
+        const el: unknown = passkeyEl.value?.$el
+        if (el instanceof HTMLElement) el.focus()
+      } else codeEl.value?.focus()
     } else if (s === 2) passwordEl.value?.focus()
     else usernameEl.value?.focus()
   },

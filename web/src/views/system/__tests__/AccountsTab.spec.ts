@@ -44,7 +44,7 @@ function draft() {
   })
 }
 
-const row = (wrapper: VueWrapper, id: string) =>
+const row = (wrapper: Pick<VueWrapper, 'findAll'>, id: string) =>
   must(
     wrapper
       .findAll('tr')

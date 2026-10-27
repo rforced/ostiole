@@ -144,7 +144,7 @@ describe('ManagementSection host settings', () => {
 
   it('drops a hostname typed and cleared again', async () => {
     const { wrapper, config } = await open({ management: { webPort: 443, sshPort: 22 } })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     const input = wrapper.get('#sys-hostname')
     await input.setValue('router-01')
     expect(config.dirty).toBe(true)

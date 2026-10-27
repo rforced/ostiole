@@ -34,17 +34,23 @@ const tones: Record<string, string> = {
   changed: 'text-warn',
 }
 
+function scalar(v: unknown) {
+  if (typeof v === 'string') return v
+  if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint') return String(v)
+  return ''
+}
+
 /** Renders a value the way the API would have stored it. */
 function value(v: unknown) {
   if (v === undefined || v === null) return 'nothing'
   if (typeof v === 'string') return `"${v}"`
   if (typeof v === 'object') return JSON.stringify(v)
-  return String(v)
+  return scalar(v)
 }
 
 /** A line of a file, without the indent that only nests it. */
 function line(c: ChangeLine) {
-  return String((c.kind === 'removed' ? c.before : c.after) ?? '').trimStart()
+  return scalar(c.kind === 'removed' ? c.before : c.after).trimStart()
 }
 
 /** A value cut after each comma, so a long one wraps between its fields. */

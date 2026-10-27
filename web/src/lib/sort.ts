@@ -29,7 +29,7 @@ function v6Key(ip: string) {
   }
   const missing = 8 - head.length - tail.length
   if (halves.length === 2 ? missing < 1 : missing !== 0) return null
-  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill('0'), ...tail]
+  const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail]
   if (!groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return null
   return groups.map((g) => g.padStart(4, '0')).join('')
 }

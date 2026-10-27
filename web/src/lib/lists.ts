@@ -1,5 +1,5 @@
 /** Whether a list item is an http or https URL. */
-export function isURL(item: unknown) {
+export function isURL(item: string | null | undefined) {
   return /^https?:\/\//i.test(String(item ?? '').trim())
 }
 
@@ -7,7 +7,7 @@ export function isURL(item: unknown) {
  * Splits a free-text list (newlines, commas, or spaces) into trimmed items.
  * A URL stays whole, since it may hold a comma.
  */
-export function parseList(text: unknown) {
+export function parseList(text: string | null | undefined) {
   return String(text ?? '')
     .split(/\s+/)
     .flatMap((item) => (isURL(item) ? [item] : item.split(',')))

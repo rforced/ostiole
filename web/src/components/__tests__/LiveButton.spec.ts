@@ -7,7 +7,7 @@ function live(props = {}) {
   const wrapper = mount(LiveButton, {
     props: {
       modelValue: false,
-      'onUpdate:modelValue': (v) => wrapper.setProps({ modelValue: v }),
+      'onUpdate:modelValue': (v: boolean) => wrapper.setProps({ modelValue: v }),
       ...props,
     },
   })

@@ -11,7 +11,7 @@ defineProps({
   /** Whether this is the row being dragged. */
   dragging: { type: Boolean, default: false },
 })
-defineEmits(['toggle', 'grab'])
+defineEmits<{ toggle: []; grab: [event: PointerEvent] }>()
 </script>
 
 <template>

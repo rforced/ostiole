@@ -11,7 +11,7 @@ const props = defineProps({
   layout: { type: Object as PropType<Layout>, required: true },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['change'])
+const emit = defineEmits<{ change: [layout: Layout] }>()
 
 const copy = (layout: Layout): Layout => ({ order: [...layout.order], hidden: [...layout.hidden] })
 

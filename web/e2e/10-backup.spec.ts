@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 
+import type { Config } from '../src/lib/types.gen'
+
 import { expect, test } from './fixtures'
-import { PASSWORD, applyAndConfirm, login, shot, sidebar } from './helpers'
+import { applyAndConfirm, login, PASSWORD, savedConfig, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -19,13 +21,19 @@ test('download a backup, change the router, then restore it', async ({ page }) =
   const file = await download
   expect(file.suggestedFilename()).toMatch(/^[\w.-]+-\d{8}-\d{6}\.json$/)
 
-  const saved = JSON.parse(readFileSync(await file.path(), 'utf8'))
+  const saved = JSON.parse(readFileSync(await file.path(), 'utf8')) as {
+    kind: string
+    note: string
+    config: Config
+    users?: unknown[]
+  }
   expect(saved.kind).toBe('ostiole-backup')
   expect(saved.note).toBe('before the hostname change')
-  expect(saved.config.rules.length).toBeGreaterThan(0)
+  expect((saved.config.rules ?? []).length).toBeGreaterThan(0)
   // Accounts stay out unless asked for.
   expect(saved.users ?? []).toHaveLength(0)
   const originalHostname = saved.config.system.hostname
+  if (!originalHostname) throw new Error('the backup has no hostname')
 
   // Change something, apply it, then put the backup back.
   await sidebar(page, 'General')
@@ -80,7 +88,7 @@ test('a revision can be compared with the running configuration', async ({ page 
 // endpoint is a name that cannot resolve, so nothing leaves the machine.
 test('the remote backup settings become a system cron', async ({ page }) => {
   await login(page)
-  const { hostname } = (await (await page.request.get('/api/v1/config')).json()).system
+  const { hostname } = (await savedConfig(page.request)).system
   await page.goto('/system/configuration#remote')
   const section = page.getByRole('region', { name: 'Remote backup' })
   await expect(section).toBeVisible()

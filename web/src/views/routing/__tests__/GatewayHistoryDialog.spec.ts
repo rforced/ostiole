@@ -98,7 +98,7 @@ describe('GatewayHistoryDialog', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     vi.stubGlobal('EventSource', FakeSource)
-    vi.mocked(api.gatewayHistory.read).mockImplementation(async (_, w) => answer(w))
+    vi.mocked(api.gatewayHistory.read).mockImplementation((_, w) => Promise.resolve(answer(w)))
   })
 
   it("charts a day of both families, with the day's figures and events", async () => {

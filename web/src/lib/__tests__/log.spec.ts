@@ -48,9 +48,9 @@ function hide(hidden: boolean) {
 /** A log of n entries, newest first, served a page at a time like the router. */
 function router(n: number) {
   const all: Row[] = Array.from({ length: n }, (_, i) => ({ seq: n - i, word: `w${n - i}` }))
-  return vi.fn(async (params: Record<string, unknown>) => {
+  return vi.fn((params: Record<string, unknown>) => {
     const before = Number(params.before ?? 0)
-    const q = String(params.q ?? '')
+    const q = typeof params.q === 'string' ? params.q : ''
     const from = before ? all.findIndex((e) => e.seq < before) : 0
     const found = all
       .slice(from)
@@ -58,7 +58,7 @@ function router(n: number) {
       .slice(0, Number(params.limit))
     const last = found[found.length - 1]
     const more = last !== undefined && last.seq > 1
-    return { entries: found, more, next: more ? last?.seq : undefined, held: n }
+    return Promise.resolve({ entries: found, more, next: more ? last?.seq : undefined, held: n })
   })
 }
 
@@ -127,13 +127,13 @@ describe('useLog', () => {
   it('asks the router once typing rests, and drops the read it replaces', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     let pending = 0
-    const read = vi.fn(async (params, signal) => {
+    const read = vi.fn(async (params: Record<string, unknown>, signal: AbortSignal) => {
       pending++
       await new Promise((resolve, reject) => {
         signal.addEventListener('abort', () => reject(new DOMException('gone', 'AbortError')))
         setTimeout(resolve, 100)
       })
-      return { entries: [{ seq: 1, word: params.q ?? '' }], held: 1 }
+      return { entries: [{ seq: 1, word: typeof params.q === 'string' ? params.q : '' }], held: 1 }
     })
     const { log } = harness(read)
     log().query.value = 'a'
@@ -157,10 +157,12 @@ describe('useLog', () => {
   // A search that stopped on its budget reads on by itself; that is not
   // scrolling into history, so Live stays on.
   it('keeps Live on while a search carries on', async () => {
-    const read = vi.fn(async (params) =>
-      params.before
-        ? { entries: [{ seq: 5, word: 'x' }], more: false, held: 1000 }
-        : { entries: [{ seq: 900, word: 'x' }], more: true, next: 600, held: 1000 },
+    const read = vi.fn((params: Record<string, unknown>) =>
+      Promise.resolve(
+        params.before
+          ? { entries: [{ seq: 5, word: 'x' }], more: false, held: 1000 }
+          : { entries: [{ seq: 900, word: 'x' }], more: true, next: 600, held: 1000 },
+      ),
     )
     const { log } = harness(read)
     await flushPromises()

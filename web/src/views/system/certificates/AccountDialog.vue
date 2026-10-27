@@ -68,7 +68,7 @@ watch(
     form.value = blank()
     showEAB.value = false
     showCACert.value = false
-    key.run()
+    void key.run()
   },
   { immediate: true },
 )

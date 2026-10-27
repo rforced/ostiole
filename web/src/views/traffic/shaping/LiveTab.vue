@@ -75,7 +75,7 @@ watch(live, (on) => {
   if (on) {
     // A rate across the pause would be an average of it, not the line now.
     previous = null
-    load.run()
+    void load.run()
     load.start()
   } else {
     load.stop()

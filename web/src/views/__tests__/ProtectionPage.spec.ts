@@ -39,7 +39,7 @@ function page() {
 /** Mounts the page on a saved configuration, so dirty means a change. */
 async function opened(cfg: Config) {
   const config = useConfigStore()
-  config.saved = JSON.parse(JSON.stringify(cfg))
+  config.saved = JSON.parse(JSON.stringify(cfg)) as Config
   config.replaceDraft(cfg)
   config.loaded = true
   const wrapper = mount(ProtectionPage, { global: { stubs } })

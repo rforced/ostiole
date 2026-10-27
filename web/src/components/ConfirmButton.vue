@@ -32,7 +32,7 @@ const props = defineProps({
   /** Hidden from a viewer unless set false: an account's own things are its to delete. */
   readOnly: { type: Boolean, default: undefined },
 })
-const emit = defineEmits(['confirm'])
+const emit = defineEmits<{ confirm: [] }>()
 const auth = useAuthStore()
 const confirm = useConfirmStore()
 const locked = computed(() => props.readOnly ?? auth.readOnly)

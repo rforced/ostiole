@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { applyAndConfirm, login, shot } from './helpers'
+import { applyAndConfirm, login, savedConfig, shot } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -20,9 +20,9 @@ test('switch the query log on, and see why it has nothing to show', async ({ pag
   await applyAndConfirm(page)
 
   // The setting lives on the DNS server, not on blocking.
-  const cfg = await (await page.request.get('/api/v1/config')).json()
+  const cfg = await savedConfig(page.request)
   expect(cfg.services.dns.queryLog).toEqual({ enabled: true, entries: 5000 })
-  expect(cfg.blocking?.queryLog).toBeUndefined()
+  expect(cfg.blocking ?? {}).not.toHaveProperty('queryLog')
 
   await page.reload()
   await expect(page.getByLabel('Query log enabled')).toBeChecked()
@@ -42,7 +42,7 @@ test('switching it off takes the log away and remembers the size', async ({ page
 
   // Off is the absence of enabled; the size stays so turning it back on
   // does not ask for it again.
-  const cfg = await (await page.request.get('/api/v1/config')).json()
+  const cfg = await savedConfig(page.request)
   expect(cfg.services.dns.queryLog?.enabled).toBeUndefined()
   expect(cfg.services.dns.queryLog?.entries).toBe(5000)
 })

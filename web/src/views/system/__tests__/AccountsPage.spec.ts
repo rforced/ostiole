@@ -19,7 +19,7 @@ async function page(path: string, role: string) {
     history: createMemoryHistory(),
     routes: [{ path: '/system/accounts', component: AccountsPage, meta: { tabs } }],
   })
-  router.push(path)
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(AccountsPage, {
     global: {

@@ -2,10 +2,8 @@
  * The schedules people actually want, so nobody has to remember the cron
  * field order to get a nightly backup or a weekly patch run. Shared by
  * the cron dialog and the update settings, which offer the same list.
- *
- * @type {{value: string, label: string}[]}
  */
-export const SCHEDULE_PRESETS = [
+export const SCHEDULE_PRESETS: { value: string; label: string }[] = [
   { value: '0 3 * * *', label: 'Every night at 03:00' },
   { value: '0 4 * * *', label: 'Every night at 04:00' },
   { value: '0 * * * *', label: 'Every hour' },

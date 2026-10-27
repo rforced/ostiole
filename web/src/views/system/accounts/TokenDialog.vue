@@ -4,12 +4,13 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { CreateTokenRequest } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { ROLES } from '@/views/system/accounts/roles'
 
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['create'])
+const emit = defineEmits<{ create: [token: CreateTokenRequest] }>()
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -18,7 +19,7 @@ const roles = computed(() => {
   const at = ROLES.findIndex((r) => r.value === auth.user?.role)
   return ROLES.slice(at < 0 ? -1 : at)
 })
-const blank = () => ({
+const blank = (): Required<CreateTokenRequest> => ({
   name: '',
   role: 'viewer',
   expiresInDays: 0,

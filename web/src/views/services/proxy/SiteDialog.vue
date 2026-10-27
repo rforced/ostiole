@@ -9,7 +9,8 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, keptOrder, parseList } from '@/lib/lists'
 import type { ProxyPath, ProxySite } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import AllowFromAliases, { splitAllowFrom } from '@/views/services/proxy/AllowFromAliases.vue'
+import AllowFromAliases from '@/views/services/proxy/AllowFromAliases.vue'
+import { splitAllowFrom } from '@/views/services/proxy/allowFrom'
 
 const props = defineProps({
   /** The site being edited, or null for a new one. */

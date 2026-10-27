@@ -12,15 +12,15 @@ const ENTRIES = Array.from({ length: 2500 }, (_, i) => `10.0.${Math.floor(i / 10
 
 /** Stands in for the router: searches and pages the way it does. */
 function router() {
-  return vi.fn(async (q: string, offset: number, limit: number) => {
+  return vi.fn((q: string, offset: number, limit: number) => {
     const hits = ENTRIES.filter((e) => e.includes(q))
-    return {
+    return Promise.resolve({
       total: ENTRIES.length,
       matches: hits.length,
       offset,
       items: hits.slice(offset, offset + limit),
       fetchedAt: '2026-09-26T12:00:00Z',
-    }
+    })
   })
 }
 

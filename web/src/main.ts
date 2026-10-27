@@ -26,7 +26,7 @@ window.addEventListener(UNAUTHORIZED_EVENT, () => {
   auth.invalidate()
   const current = router.currentRoute.value
   if (!current.meta.public) {
-    router.push({ name: 'login', query: { redirect: current.fullPath } })
+    void router.push({ name: 'login', query: { redirect: current.fullPath } })
   }
 })
 

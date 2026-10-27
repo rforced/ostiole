@@ -109,10 +109,14 @@ const EXCEPTIONS: Record<string, string> = { allow: 'Allow', deny: 'Block' }
  */
 const withToggle = computed(() => {
   const toggle = exceptionToggles(config.draft)
-  const made = new WeakMap()
+  const made = new WeakMap<QueryRow, QueryRow & { toggle: ReturnType<typeof toggle> }>()
   return (e: QueryRow) => {
-    if (!made.has(e)) made.set(e, { ...e, toggle: toggle(e) })
-    return made.get(e)
+    let row = made.get(e)
+    if (!row) {
+      row = { ...e, toggle: toggle(e) }
+      made.set(e, row)
+    }
+    return row
   }
 })
 
@@ -159,7 +163,7 @@ function explain(name: string) {
     why.value = next
     return
   }
-  lookup.run(name)
+  void lookup.run(name)
 }
 </script>
 

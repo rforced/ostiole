@@ -66,7 +66,7 @@ watch(
 let settle = 0
 watch(query, () => {
   window.clearTimeout(settle)
-  if (open.value) settle = window.setTimeout(() => load.run(0), SETTLE_MS)
+  if (open.value) settle = window.setTimeout(() => void load.run(0), SETTLE_MS)
 })
 watch(
   open,
@@ -77,7 +77,7 @@ watch(
       return
     }
     page.value = null
-    load.run(0)
+    void load.run(0)
   },
   { immediate: true },
 )

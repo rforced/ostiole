@@ -130,7 +130,7 @@ describe('BandwidthDialog', () => {
         ),
       }
       const config = useConfigStore()
-      config.saved = JSON.parse(JSON.stringify(cfg))
+      config.saved = JSON.parse(JSON.stringify(cfg)) as typeof cfg
       config.replaceDraft(cfg)
       const wrapper = mount(BandwidthDialog, {
         props: { open: true, iface: config.findInterface('eth0') },

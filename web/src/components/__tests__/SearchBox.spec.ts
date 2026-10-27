@@ -8,7 +8,7 @@ describe('SearchBox', () => {
     const wrapper = mount(SearchBox, {
       props: {
         modelValue: '',
-        'onUpdate:modelValue': (v) => wrapper.setProps({ modelValue: v }),
+        'onUpdate:modelValue': (v: string) => wrapper.setProps({ modelValue: v }),
         placeholder: 'address, MAC, or interface',
       },
     })
@@ -29,7 +29,7 @@ describe('SearchBox', () => {
   })
 
   // With nothing typed the card's own count says how many there are.
-  it('says nothing while it holds no query', async () => {
+  it('says nothing while it holds no query', () => {
     const wrapper = mount(SearchBox, {
       props: { modelValue: ' ', placeholder: 'x', shown: 5, total: 5 },
     })

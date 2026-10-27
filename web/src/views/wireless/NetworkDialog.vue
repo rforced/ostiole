@@ -149,7 +149,9 @@ function save() {
   // What this dialog does not show, such as log drops set on the
   // Interfaces page, stays as it was.
   const was = f.previousName ? config.findInterface(f.previousName) : null
-  const existing: Partial<Interface> = was ? JSON.parse(JSON.stringify(was)) : {}
+  const existing: Partial<Interface> = was
+    ? (JSON.parse(JSON.stringify(was)) as Partial<Interface>)
+    : {}
   const iface: WirelessInterface = {
     ...existing,
     name,

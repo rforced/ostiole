@@ -13,12 +13,11 @@ function stubMatchMedia(matches: boolean) {
     addEventListener: vi.fn((_: string, fn: Listener) => listeners.add(fn)),
     removeEventListener: vi.fn((_: string, fn: Listener) => listeners.delete(fn)),
   }
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn(() => mql),
-  )
+  const matchMedia = vi.fn(() => mql)
+  vi.stubGlobal('matchMedia', matchMedia)
   return {
     listeners,
+    matchMedia,
     change(next: boolean) {
       mql.matches = next
       for (const fn of listeners) fn({ matches: next })
@@ -39,7 +38,7 @@ describe('useMediaQuery', () => {
     const media = stubMatchMedia(true)
     const scope = effectScope()
     const narrow = scope.run(() => useMediaQuery('(width < 64rem)'))
-    expect(window.matchMedia).toHaveBeenCalledWith('(width < 64rem)')
+    expect(media.matchMedia).toHaveBeenCalledWith('(width < 64rem)')
     expect(narrow?.value).toBe(true)
     media.change(false)
     expect(narrow?.value).toBe(false)

@@ -14,7 +14,7 @@ import { formatWhen } from '@/lib/format'
 defineProps({
   pending: { type: Object as PropType<RestoreResponse>, required: true },
 })
-defineEmits(['load', 'cancel'])
+defineEmits<{ load: []; cancel: [] }>()
 
 /** "1 rule" or "3 rules"; pass the plural where an -s will not do. */
 function count(n: number, one: string, many = `${one}s`) {

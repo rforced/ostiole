@@ -50,7 +50,7 @@ async function page(path = '/login', options = {}) {
     history: createMemoryHistory(),
     routes: [{ path: '/:any(.*)*', component: LoginView }],
   })
-  router.push(path)
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(LoginView, {
     ...options,
@@ -357,10 +357,9 @@ describe('LoginView steps', () => {
     await must(button(wrapper, ALONE)).trigger('click')
     await flushPromises()
     expect(api.auth.loginStart).toHaveBeenCalledWith()
-    expect(webauthn.get).toHaveBeenCalledWith(
-      { challenge: 'c' },
-      { signal: expect.any(AbortSignal) },
-    )
+    const [options, init] = vi.mocked(webauthn.get).mock.calls[0] ?? []
+    expect(options).toEqual({ challenge: 'c' })
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
     expect(api.auth.loginPasskey).toHaveBeenCalledWith('pk', credential)
     expect(api.auth.login).not.toHaveBeenCalled()
     expect(router.currentRoute.value.fullPath).toBe('/firewall/rules')

@@ -60,14 +60,14 @@ export function useTrafficStream<L = unknown, D = unknown>({
       opened = true
     }
     es.onmessage = (m) => {
-      let ev
+      let ev: { kind?: string }
       try {
-        ev = JSON.parse(m.data)
+        ev = JSON.parse(m.data as string) as { kind?: string }
       } catch {
         return
       }
-      if (ev.kind === 'links') links?.(ev)
-      else if (ev.kind === 'devices') devices?.(ev)
+      if (ev.kind === 'links') links?.(ev as L)
+      else if (ev.kind === 'devices') devices?.(ev as D)
     }
     es.onerror = () => {
       error.value = streamLost(es)

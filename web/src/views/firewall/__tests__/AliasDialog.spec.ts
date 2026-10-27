@@ -193,7 +193,7 @@ describe('AliasDialog round trip', () => {
       type: 'hosts',
       entries: ['198.51.100.7', 'https://lists.example.net/cdn.txt?families=v4,v6'],
     })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     expect(wrapper.get<HTMLInputElement>('#alias-refresh').element.value).toBe('')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(false)
@@ -201,7 +201,7 @@ describe('AliasDialog round trip', () => {
 
   it('keeps an empty list the API stored as null', async () => {
     const { wrapper, config } = open({ name: 'spare', type: 'hosts', entries: null })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     expect(wrapper.get<HTMLTextAreaElement>('#alias-entries').element.value).toBe('')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(false)
@@ -209,7 +209,7 @@ describe('AliasDialog round trip', () => {
 
   it('writes what is typed into an alias stored with no entries', async () => {
     const { wrapper, config } = open({ name: 'spare', type: 'hosts', entries: null })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     await wrapper.get('#alias-entries').setValue('192.0.2.1')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
@@ -223,7 +223,7 @@ describe('AliasDialog round trip', () => {
       entries: ['198.51.100.7'],
       refreshHours: 6,
     })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     expect(wrapper.find('#alias-refresh').exists()).toBe(false)
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(false)
@@ -237,7 +237,7 @@ describe('AliasDialog round trip', () => {
       entries: ['https://lists.example.net/cdn.txt'],
       refreshHours: 6,
     })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     expect(wrapper.get<HTMLInputElement>('#alias-refresh').element.value).toBe('6')
     await wrapper.get('#alias-refresh').setValue('12')
     await wrapper.get('form').trigger('submit')

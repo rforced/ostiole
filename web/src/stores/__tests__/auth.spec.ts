@@ -120,9 +120,9 @@ describe('signing in with MFA', () => {
 
   it('opens no prompt once aborted while the router was asked', async () => {
     const ctl = new AbortController()
-    vi.mocked(api.auth.loginStart).mockImplementation(async () => {
+    vi.mocked(api.auth.loginStart).mockImplementation(() => {
       ctl.abort()
-      return { token: 'pk', publicKey: { challenge: 'c' } }
+      return Promise.resolve({ token: 'pk', publicKey: { challenge: 'c' } })
     })
     const auth = useAuthStore()
     await expect(auth.loginPasskeyAlone(ctl.signal)).rejects.toMatchObject({ name: 'AbortError' })
@@ -133,9 +133,9 @@ describe('signing in with MFA', () => {
   it('sends nothing once the prompt was aborted', async () => {
     const ctl = new AbortController()
     vi.mocked(api.auth.loginStart).mockResolvedValue({ token: 'pk', publicKey: { challenge: 'c' } })
-    vi.mocked(webauthn.get).mockImplementation(async () => {
+    vi.mocked(webauthn.get).mockImplementation(() => {
       ctl.abort()
-      return credential
+      return Promise.resolve(credential)
     })
     const auth = useAuthStore()
     await expect(auth.loginPasskeyAlone(ctl.signal)).rejects.toMatchObject({ name: 'AbortError' })

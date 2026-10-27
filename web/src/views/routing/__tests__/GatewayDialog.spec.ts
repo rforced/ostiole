@@ -205,7 +205,7 @@ describe('GatewayDialog round trip', () => {
 
   it('reopens the first line as saved and leaves an untouched save alone', async () => {
     const { wrapper, config } = open({ name: 'wan', enabled: true, interface: 'eth0' })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     await flushPromises()
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(false)

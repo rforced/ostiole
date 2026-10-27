@@ -107,29 +107,30 @@ function object(v: unknown): Record<string, unknown> {
 
 /** The last shape this browser saw, or the first-visit one. */
 export function rememberedShape(): Readonly<Shape> {
-  let raw: Record<string, unknown> | null = null
+  let raw: unknown = null
   try {
     raw = JSON.parse(localStorage.getItem(SHAPE_KEY) ?? 'null')
   } catch {
     /* unreadable, so start over */
   }
   if (!raw || typeof raw !== 'object') return FIRST_SHAPE
-  const stored = object(raw.cards)
+  const top = object(raw)
+  const stored = object(top.cards)
   const cards: Record<string, number> = {}
   for (const name of OPTIONAL) {
     if (Object.hasOwn(stored, name)) cards[name] = count(stored[name], 0)
   }
-  const held = object(raw.heights)
+  const held = object(top.heights)
   const heights: Record<string, number> = {}
   for (const name of BLOCKS) {
     const h = held[name]
     if (typeof h === 'number' && Number.isInteger(h) && h > 0 && h <= TALLEST) heights[name] = h
   }
   return {
-    warnings: count(raw.warnings, FIRST_SHAPE.warnings),
-    interfaces: count(raw.interfaces, FIRST_SHAPE.interfaces),
-    rules: count(raw.rules, FIRST_SHAPE.rules),
-    services: count(raw.services, FIRST_SHAPE.services),
+    warnings: count(top.warnings, FIRST_SHAPE.warnings),
+    interfaces: count(top.interfaces, FIRST_SHAPE.interfaces),
+    rules: count(top.rules, FIRST_SHAPE.rules),
+    services: count(top.services, FIRST_SHAPE.services),
     cards,
     heights,
   }

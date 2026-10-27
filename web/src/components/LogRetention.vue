@@ -70,9 +70,9 @@ const files = useAsync(async () => {
   inFiles.value = st.enabled ? ((st.logs ?? []).find((l) => l.name === props.log) ?? null) : null
 })
 onMounted(() => {
-  stats.run()
-  limitsLoad.run()
-  if (FILE_LOGS.includes(props.log)) files.run()
+  void stats.run()
+  void limitsLoad.run()
+  if (FILE_LOGS.includes(props.log)) void files.run()
 })
 
 const cost = computed(() => formatBytes(fullBytes(props.log, entries.value)))

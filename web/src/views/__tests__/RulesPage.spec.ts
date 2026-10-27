@@ -124,7 +124,7 @@ async function mountPage(path = '/firewall/rules', extraStubs = {}, cfg = config
     history: createMemoryHistory(),
     routes: [{ path: '/firewall/rules', component: RulesPage }],
   })
-  router.push(path)
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(RulesPage, {
     global: { plugins: [router], stubs: { ...stubs, ...extraStubs } },

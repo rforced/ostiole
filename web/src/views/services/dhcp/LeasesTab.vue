@@ -77,7 +77,7 @@ const load = useAsync(
 )
 watch(live, (on) => {
   if (on) {
-    load.run()
+    void load.run()
     load.start()
   } else {
     load.stop()

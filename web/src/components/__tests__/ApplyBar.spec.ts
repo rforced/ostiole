@@ -167,14 +167,14 @@ describe('ApplyBar', () => {
       const config = useConfigStore()
       draft().system.hostname = 'new'
       vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
-      vi.mocked(api.config.apply).mockImplementation(async (_cfg, _base, _seconds, tag) => {
+      vi.mocked(api.config.apply).mockImplementation((_cfg, _base, _seconds, tag) => {
         if (made)
           statusIs({
             configured: true,
             pending: { ...pending, tag },
           })
         for (let i = 0; i < silent; i++) vi.mocked(api.status).mockRejectedValueOnce(lost)
-        throw lost
+        return Promise.reject(lost)
       })
       const w = mount(ApplyBar)
       await flushPromises()
@@ -233,12 +233,12 @@ describe('ApplyBar', () => {
     it("does not take another tab's apply for its own", async () => {
       const { w } = await sent({ made: false })
       draft().system.hostname = 'mine'
-      vi.mocked(api.config.apply).mockImplementation(async () => {
+      vi.mocked(api.config.apply).mockImplementation(() => {
         statusIs({
           configured: true,
           pending: { ...pending, tag: 'apply-other' },
         })
-        throw lost
+        return Promise.reject(lost)
       })
       await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()

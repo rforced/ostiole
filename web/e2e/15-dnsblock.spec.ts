@@ -15,17 +15,20 @@ let served = 0
 let delayMs = 0
 
 test.beforeAll(async () => {
-  const server = createServer(async (_req, res) => {
+  const server = createServer((_req, res) => {
     served++
-    if (delayMs) await new Promise((r) => setTimeout(r, delayMs))
-    res.writeHead(200, { 'Content-Type': 'text/plain' })
-    res.end(
-      '# Title: a list\n' +
-        '127.0.0.1 localhost\n' +
-        '0.0.0.0 ads.example.com\n' +
-        '0.0.0.0 www.ads.example.com\n' +
-        '0.0.0.0 tracker.example.net\n',
-    )
+    const reply = () => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' })
+      res.end(
+        '# Title: a list\n' +
+          '127.0.0.1 localhost\n' +
+          '0.0.0.0 ads.example.com\n' +
+          '0.0.0.0 www.ads.example.com\n' +
+          '0.0.0.0 tracker.example.net\n',
+      )
+    }
+    if (delayMs) setTimeout(reply, delayMs)
+    else reply()
   })
   lists = server
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))

@@ -58,7 +58,7 @@ describe('InterfacesTab', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     vi.stubGlobal('EventSource', FakeSource)
-    vi.mocked(api.traffic.interfaces).mockImplementation(async (w) => answer(w))
+    vi.mocked(api.traffic.interfaces).mockImplementation((w) => Promise.resolve(answer(w)))
   })
 
   it('charts each link with its totals, and takes each second from the stream', async () => {
@@ -77,8 +77,8 @@ describe('InterfacesTab', () => {
 
   // The speed comes from what the router runs, never from the draft.
   it('draws the speed the router shapes a link to', async () => {
-    vi.mocked(api.traffic.interfaces).mockImplementation(async (w) =>
-      answer(w, [[NOW - 1, 180_000_000, 2000]]),
+    vi.mocked(api.traffic.interfaces).mockImplementation((w) =>
+      Promise.resolve(answer(w, [[NOW - 1, 180_000_000, 2000]])),
     )
     const config = useConfigStore()
     config.saved = configOf({

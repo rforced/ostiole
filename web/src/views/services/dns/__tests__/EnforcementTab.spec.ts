@@ -27,7 +27,7 @@ function draft() {
 
 async function tab(cfg = draft()) {
   const config = useConfigStore()
-  config.saved = JSON.parse(JSON.stringify(cfg))
+  config.saved = JSON.parse(JSON.stringify(cfg)) as typeof cfg
   config.replaceDraft(cfg)
   config.loaded = true
   const wrapper = mount(EnforcementTab, { global: { stubs } })

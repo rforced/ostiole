@@ -1,7 +1,7 @@
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net'
 
 import { expect, test } from './fixtures'
-import { applyAndConfirm, login, shot } from './helpers'
+import { applyAndConfirm, login, savedConfig, shot } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -20,7 +20,7 @@ function session(socket: Socket) {
   let data: string[] | null = null
   let pending = ''
   reply('220 mail.example.test ESMTP')
-  socket.on('data', (chunk) => {
+  socket.on('data', (chunk: string) => {
     pending += chunk
     for (let end = pending.indexOf('\r\n'); end !== -1; end = pending.indexOf('\r\n')) {
       const line = pending.slice(0, end)
@@ -115,7 +115,7 @@ test('a test mail arrives before anything is applied', async ({ page }) => {
   await expect.poll(() => mails.length).toBe(1)
   const mail = mails[0]
   if (!mail) throw new Error('no mail arrived')
-  const { system } = await (await page.request.get('/api/v1/config')).json()
+  const { system } = await savedConfig(page.request)
   const name = system.hostname
   expect(mail.from).toBe('MAIL FROM:<router@example.net>')
   expect(mail.to).toEqual(['RCPT TO:<ops@example.net>', 'RCPT TO:<noc@example.net>'])
@@ -126,7 +126,7 @@ test('a test mail arrives before anything is applied', async ({ page }) => {
   await page.getByLabel('Post to a webhook').uncheck()
   await page.getByLabel('Notifications enabled').check()
   await applyAndConfirm(page)
-  const cfg = await (await page.request.get('/api/v1/config')).json()
+  const cfg = await savedConfig(page.request)
   expect(cfg.notifications).toMatchObject({
     enabled: true,
     email: {
@@ -137,7 +137,7 @@ test('a test mail arrives before anything is applied', async ({ page }) => {
       to: ['ops@example.net', 'noc@example.net'],
     },
   })
-  expect(cfg.notifications.webhook?.enabled).toBeUndefined()
+  expect(cfg.notifications?.webhook ?? {}).not.toHaveProperty('enabled')
 
   await page.reload()
   await expect(page.getByLabel('Notifications enabled')).toBeChecked()

@@ -19,7 +19,7 @@ defineProps({
   /** Fills the drawer rather than standing beside the page. */
   drawer: { type: Boolean, default: false },
 })
-const emit = defineEmits(['navigate'])
+const emit = defineEmits<{ navigate: [] }>()
 
 const auth = useAuthStore()
 const config = useConfigStore()

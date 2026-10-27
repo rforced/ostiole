@@ -17,7 +17,7 @@ const props = defineProps({
   /** How far back a search looked when it stopped on its budget. */
   searchedTo: { type: String, default: '' },
 })
-const emit = defineEmits(['load'])
+const emit = defineEmits<{ load: [] }>()
 
 const foot = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null

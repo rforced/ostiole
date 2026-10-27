@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { expect, test } from './fixtures'
-import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers'
+import { applyAndConfirm, confirmDialog, login, savedConfig, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -101,14 +101,14 @@ test('order a certificate over dns-01', async ({ page }) => {
   await expect(row).toContainText('not issued')
   await page.screenshot({ path: shot('61-certificates'), fullPage: true })
 
-  const cfg = await (await page.request.get('/api/v1/config')).json()
-  expect(cfg.certificates[0]).toMatchObject({
+  const cfg = await savedConfig(page.request)
+  expect(cfg.certificates?.[0]).toMatchObject({
     id: 'router',
     source: 'acme',
     challenge: 'dns-01',
     account: 'staging',
   })
-  expect(cfg.certificates[0].provider).toBeUndefined()
+  expect(cfg.certificates?.[0]).not.toHaveProperty('provider')
   expect(cfg.dnsProviders).toEqual([
     { id: 'local', kind: 'exec', settings: { program: '/bin/true' }, domains: ['example.test'] },
   ])
@@ -190,7 +190,7 @@ test('delete the certificate, its account and its provider', async ({ page }) =>
   await confirmDialog(page, { typed: 'local' })
 
   await applyAndConfirm(page)
-  const cfg = await (await page.request.get('/api/v1/config')).json()
+  const cfg = await savedConfig(page.request)
   expect(cfg.certificates ?? []).toHaveLength(0)
   expect(cfg.acme?.accounts ?? []).toHaveLength(0)
   expect(cfg.dnsProviders ?? []).toHaveLength(0)

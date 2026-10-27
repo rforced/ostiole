@@ -59,7 +59,7 @@ export function useAsync<T, A extends unknown[] = []>(
         if (queued) {
           const next = queued
           queued = null
-          run(...next)
+          void run(...next)
         }
       }
     })()
@@ -72,7 +72,7 @@ export function useAsync<T, A extends unknown[] = []>(
   function start() {
     if (!interval || timer) return
     timer = window.setInterval(() => {
-      if (document.visibilityState !== 'hidden') bare()
+      if (document.visibilityState !== 'hidden') void bare()
     }, interval)
   }
 
@@ -82,12 +82,12 @@ export function useAsync<T, A extends unknown[] = []>(
   }
 
   function shown() {
-    if (document.visibilityState === 'visible' && timer) bare()
+    if (document.visibilityState === 'visible' && timer) void bare()
   }
 
   if (interval || immediate) {
     onMounted(() => {
-      if (immediate) bare()
+      if (immediate) void bare()
       if (autostart) start()
       document.addEventListener('visibilitychange', shown)
     })

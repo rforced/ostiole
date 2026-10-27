@@ -26,7 +26,7 @@ const narrow = useNarrow()
 watch(
   () => auth.loggedIn,
   (on) => {
-    if (on) config.load()
+    if (on) void config.load()
   },
   { immediate: true },
 )

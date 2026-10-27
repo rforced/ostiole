@@ -55,12 +55,12 @@ const load = useAsync(
 let settle = 0
 watch(query, () => {
   window.clearTimeout(settle)
-  settle = window.setTimeout(load.run, SETTLE_MS)
+  settle = window.setTimeout(() => void load.run(), SETTLE_MS)
 })
 onBeforeUnmount(() => window.clearTimeout(settle))
 watch(live, (on) => {
   if (on) {
-    load.run()
+    void load.run()
     load.start()
   } else {
     load.stop()

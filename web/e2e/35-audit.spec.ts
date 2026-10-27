@@ -1,5 +1,7 @@
 import type { PlaywrightWorkerArgs } from '@playwright/test'
 
+import type { AuditLogPage, Revision } from '../src/lib/types.gen'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, enterUsername, login, readConfig } from './helpers'
 
@@ -64,7 +66,7 @@ test('History names who applied each configuration and who confirmed it', async 
   // An operator reads History but not who made it.
   const asBob = await bob.get('/api/v1/config/revisions')
   expect(asBob.ok()).toBe(true)
-  for (const r of await asBob.json()) expect(r.applied).toBeUndefined()
+  for (const r of (await asBob.json()) as Revision[]) expect(r.applied).toBeUndefined()
   expect((await bob.get('/api/v1/config/applied')).status()).toBe(403)
   expect((await bob.get('/api/v1/audit')).status()).toBe(403)
   await bob.dispose()
@@ -133,7 +135,9 @@ test('a revert names who asked for it', async ({ page }) => {
 
   const res = await page.request.get('/api/v1/audit?q=reverted')
   expect(res.ok()).toBe(true)
-  const { entries } = await res.json()
-  expect(entries[0].text).toBe('Reverted their apply')
-  expect(entries[0].by).toMatchObject({ name: 'admin', kind: 'account', role: 'admin' })
+  const { entries } = (await res.json()) as AuditLogPage
+  const first = entries?.[0]
+  if (!first) throw new Error('no audit entry for the revert')
+  expect(first.text).toBe('Reverted their apply')
+  expect(first.by).toMatchObject({ name: 'admin', kind: 'account', role: 'admin' })
 })

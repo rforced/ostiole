@@ -34,7 +34,7 @@ export function useDraftRows<T>(read: (draft: Config) => Promise<T[]>, { interva
     () => config.draft,
     () => {
       window.clearTimeout(timer)
-      timer = window.setTimeout(state.run, DEBOUNCE_MS)
+      timer = window.setTimeout(() => void state.run(), DEBOUNCE_MS)
     },
     { deep: true },
   )

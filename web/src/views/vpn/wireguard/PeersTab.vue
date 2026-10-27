@@ -51,7 +51,7 @@ const following = ref(true)
 const held = ref<{ status: Map<string, Tunnel>; at: number } | null>(null)
 watch(following, (on) => {
   held.value = on ? null : { status: props.live, at: Date.now() }
-  if (on) props.read.run()
+  if (on) void props.read.run()
 })
 
 /** A row's peer as its device reports it. */

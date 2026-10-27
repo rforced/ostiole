@@ -27,7 +27,7 @@ const load = useAsync(async (refresh: boolean = false) => {
 })
 // Reading the modem is an operator's: it has the router reach out.
 onMounted(() => {
-  if (!auth.readOnly) load.run(false)
+  if (!auth.readOnly) void load.run(false)
 })
 
 const stuckAt = computed(() => status.value?.provisioning?.find((s) => !s.ok) ?? null)

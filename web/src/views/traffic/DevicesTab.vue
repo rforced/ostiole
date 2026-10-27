@@ -99,12 +99,12 @@ const stream = useTrafficStream<unknown, TrafficEvent>({
   devices: (ev) => {
     if (!live.value) return
     latest.value = ev
-    read.run()
+    void read.run()
   },
-  reopened: () => read.run(),
+  reopened: () => void read.run(),
 })
 watch(live, (on) => {
-  if (on) read.run()
+  if (on) void read.run()
 })
 
 const rows = computed(() => state.value?.devices ?? [])

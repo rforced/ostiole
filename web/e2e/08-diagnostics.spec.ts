@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { applyAndConfirm, login, shot, sidebar } from './helpers'
+import { applyAndConfirm, login, savedConfig, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -111,6 +111,6 @@ test('the drives page sets how many readings the history keeps', async ({ page }
 
   await page.reload()
   await expect(keep).toHaveValue('5')
-  const { system } = await (await page.request.get('/api/v1/config')).json()
+  const { system } = await savedConfig(page.request)
   expect(system.keepDriveReadings).toBe(5)
 })

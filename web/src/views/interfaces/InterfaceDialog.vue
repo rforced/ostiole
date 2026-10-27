@@ -26,7 +26,7 @@ const props = defineProps({
   links: { type: Array as PropType<Link[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['saved'])
+const emit = defineEmits<{ saved: [iface: Interface] }>()
 
 const config = useConfigStore()
 const auth = useAuthStore()
@@ -133,7 +133,7 @@ watch(
     const src = props.iface ?? blank()
     form.value = {
       ...blank(),
-      ...JSON.parse(JSON.stringify(src)),
+      ...(JSON.parse(JSON.stringify(src)) as Interface),
       logDrops: src.logDrops === undefined ? 'inherit' : src.logDrops ? 'on' : 'off',
       ipv4: { address: '', gateway: '', ...src.ipv4, mode: src.ipv4?.mode ?? 'none' },
       ipv6: {
@@ -179,7 +179,7 @@ const upstreams = computed(() =>
 
 function save() {
   if (!zoneField.value?.commit()) return
-  const out: Interface = JSON.parse(JSON.stringify(form.value))
+  const out = JSON.parse(JSON.stringify(form.value)) as Interface
   const logDrops = form.value.logDrops
   if (logDrops === 'inherit') delete out.logDrops
   else out.logDrops = logDrops === 'on'

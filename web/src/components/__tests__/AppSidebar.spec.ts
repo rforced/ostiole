@@ -18,7 +18,7 @@ async function sidebar(path: string) {
     history: createMemoryHistory(),
     routes: [{ path: '/:any(.*)*', component: Page }],
   })
-  router.push(path)
+  await router.push(path)
   await router.isReady()
   const wrapper = mount(AppSidebar, { global: { plugins: [router] }, attachTo: document.body })
   return { router, wrapper }

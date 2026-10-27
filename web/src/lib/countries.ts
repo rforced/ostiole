@@ -9,10 +9,14 @@
  * from the source System › General › Fetched aliases names.
  */
 
-/** @typedef {{code: string, name: string, region: string}} Country */
+/** A country by its ISO 3166 code, and the region it is grouped under. */
+export interface Country {
+  code: string
+  name: string
+  region: string
+}
 
-/** @type {Country[]} */
-export const COUNTRIES = [
+export const COUNTRIES: Country[] = [
   { code: 'af', name: 'Afghanistan', region: 'Asia' },
   { code: 'al', name: 'Albania', region: 'Europe' },
   { code: 'dz', name: 'Algeria', region: 'Africa' },

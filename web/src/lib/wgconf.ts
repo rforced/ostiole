@@ -44,7 +44,7 @@ export function deviceFile({ privateKey, addresses, dns = [], peer }: DeviceFile
 }
 
 /** An address as a number and its width in bits, or null. */
-export function parseAddress(text: unknown): Address | null {
+export function parseAddress(text: string | null | undefined): Address | null {
   const s = String(text ?? '').trim()
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) {
     const parts = s.split('.').map(Number)
@@ -59,7 +59,7 @@ export function parseAddress(text: unknown): Address | null {
   const tail = halves.length === 2 ? groups(halves[1] ?? '') : []
   const missing = 8 - head.length - tail.length
   if ((halves.length === 2 && missing < 1) || (halves.length === 1 && missing !== 0)) return null
-  const all = [...head, ...new Array(halves.length === 2 ? missing : 0).fill('0'), ...tail]
+  const all = [...head, ...new Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail]
   if (all.some((g) => !/^[0-9a-f]{1,4}$/i.test(g))) return null
   return { value: all.reduce((acc, g) => (acc << 16n) | BigInt(parseInt(g, 16)), 0n), bits: 128 }
 }
@@ -86,7 +86,7 @@ export function formatAddress({ value, bits }: Address) {
 }
 
 /** "10.66.0.1/24" as its address and prefix length, or null. */
-export function parsePrefix(text: unknown): Prefix | null {
+export function parsePrefix(text: string | null | undefined): Prefix | null {
   const [addr, len] = String(text ?? '').split('/')
   const a = parseAddress(addr)
   if (!a) return null
@@ -147,7 +147,7 @@ export function deviceAddresses(allowedIps: string[], tunnelAddresses: string[])
 }
 
 /** The network a prefix covers, as text: "10.66.0.1/24" gives "10.66.0.0/24". */
-export function networkOf(text: unknown) {
+export function networkOf(text: string | null | undefined) {
   const p = parsePrefix(text)
   if (!p) return ''
   const hostBits = BigInt(p.bits - p.prefix)
@@ -155,7 +155,7 @@ export function networkOf(text: unknown) {
 }
 
 /** Whether an address can be reached from the internet: not private, loopback or link-local. */
-export function isPublic(text: unknown) {
+export function isPublic(text: string | null | undefined) {
   const a = parseAddress(text)
   if (!a) return false
   const inside = (net: string) => {

@@ -34,7 +34,7 @@ function send() {
     interface: iface.value,
     mac: mac.value.trim().toLowerCase().replaceAll('-', ':'),
   }
-  wake(target, `${target.mac} on ${target.interface}`, 'once')
+  void wake(target, `${target.mac} on ${target.interface}`, 'once')
 }
 </script>
 

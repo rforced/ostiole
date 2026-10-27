@@ -16,7 +16,7 @@ const props = defineProps({
   /** Off for a reason other than being busy, e.g. nothing to check. */
   disabled: { type: Boolean, default: false },
 })
-defineEmits(['click'])
+defineEmits<{ click: [] }>()
 
 const now = ref(Date.now())
 let tick = 0

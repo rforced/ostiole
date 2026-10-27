@@ -36,12 +36,14 @@ function onChange(value: unknown) {
       v-for="opt in options"
       :key="opt.value"
       :value="opt.value"
+      as-child
       :aria-label="opt.label"
-      :title="opt.label"
       class="flex items-center justify-center rounded p-1.5 text-ink-muted transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none data-[state=on]:bg-surface data-[state=on]:text-ink data-[state=on]:shadow-sm"
       :class="{ 'flex-1': block }"
     >
-      <component :is="opt.icon" class="size-4" aria-hidden="true" />
+      <button :title="opt.label">
+        <component :is="opt.icon" class="size-4" aria-hidden="true" />
+      </button>
     </ToggleGroupItem>
   </ToggleGroupRoot>
 </template>

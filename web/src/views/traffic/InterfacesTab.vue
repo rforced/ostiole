@@ -54,7 +54,7 @@ const stream = useTrafficStream<TrafficEvent>({
     if (live.value) take(ev)
     else held = [...held, ev].slice(-300)
   },
-  reopened: () => read.run(),
+  reopened: () => void read.run(),
 })
 
 // Off, the charts hold and the seconds wait; on again, they are drawn.
@@ -70,7 +70,7 @@ watch(live, (on) => {
 let timer = 0
 onMounted(() => {
   timer = window.setInterval(() => {
-    if (live.value && win.value !== '5m' && document.visibilityState !== 'hidden') read.run()
+    if (live.value && win.value !== '5m' && document.visibilityState !== 'hidden') void read.run()
   }, REREAD_MS)
 })
 onBeforeUnmount(() => window.clearInterval(timer))

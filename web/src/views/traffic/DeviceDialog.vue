@@ -59,8 +59,8 @@ watch(
       data.value = null
       top.value = null
     }
-    read.run()
-    readTop.run()
+    void read.run()
+    void readTop.run()
   },
   { immediate: true },
 )

@@ -16,7 +16,7 @@ defineProps({
   replacing: { type: Boolean, default: false },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['done'])
+const emit = defineEmits<{ done: [] }>()
 
 /** The secret the router made and the otpauth address that carries it. */
 const setup = ref<TotpStartReply | null>(null)

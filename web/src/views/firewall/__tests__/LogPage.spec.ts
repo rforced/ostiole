@@ -59,15 +59,21 @@ const matched = (w: VueWrapper) => rows(w).map((r) => must(r.findAll('td')[2]).t
  * values.
  */
 function serve(held: FwlogEntry[]) {
-  vi.mocked(api.log.entries).mockImplementation(async (query: object = {}) => {
+  vi.mocked(api.log.entries).mockImplementation((query: object = {}) => {
     const params: Record<string, unknown> = { ...query }
+    const q = typeof params.q === 'string' ? params.q : ''
     const shown = held.filter((e) => {
       if (params.show && e.action) {
         if (params.show === 'blocked' ? e.action === 'accept' : e.action !== 'accept') return false
       }
-      return matches(String(params.q ?? ''), fwlogValues(e))
+      return matches(q, fwlogValues(e))
     })
-    return { entries: shown, more: false, held: held.length, oldest: held.at(-1)?.time }
+    return Promise.resolve({
+      entries: shown,
+      more: false,
+      held: held.length,
+      oldest: held.at(-1)?.time,
+    })
   })
 }
 
@@ -234,9 +240,9 @@ describe('LogPage', () => {
     useAuthStore().user = { username: 'root', role: 'admin' } as Session
     const held = [...log]
     const w = await open(held)
-    vi.mocked(api.log.clear).mockImplementation(async () => {
+    vi.mocked(api.log.clear).mockImplementation(() => {
       held.splice(0)
-      return { cleared: true }
+      return Promise.resolve({ cleared: true })
     })
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     await must(w.findAll('button').find((b) => b.text() === 'Clear')).trigger('click')

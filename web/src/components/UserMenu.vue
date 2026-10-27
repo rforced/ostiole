@@ -16,7 +16,7 @@ import { useConfirmStore } from '@/stores/confirm'
 
 /** The signed-in account at the foot of the sidebar, and what to do with it. */
 defineOptions({ inheritAttrs: false })
-const emit = defineEmits(['navigate'])
+const emit = defineEmits<{ navigate: [] }>()
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -47,7 +47,7 @@ async function logout() {
   )
     return
   await auth.logout()
-  router.push({ name: 'login' })
+  void router.push({ name: 'login' })
 }
 
 const trigger = ref<HTMLElement | null>(null)

@@ -1,9 +1,9 @@
 import type { Page } from '@playwright/test'
 
-import type { Config } from '../src/lib/types.gen'
+import type { Config, StatusReply } from '../src/lib/types.gen'
 
 import { expect, test } from './fixtures'
-import { login, readConfig, shot } from './helpers'
+import { getJSON, login, readConfig, savedConfig, shot } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -16,11 +16,11 @@ const headers = { 'X-Requested-With': 'ostiole' }
 
 /** What the router has saved, which only a confirm changes. */
 async function saved(page: Page): Promise<Config> {
-  return (await page.request.get('/api/v1/config')).json()
+  return savedConfig(page.request)
 }
 
 async function pendingApply(page: Page) {
-  return (await (await page.request.get('/api/v1/status')).json()).pending ?? null
+  return (await getJSON<StatusReply>(page.request, '/api/v1/status')).pending ?? null
 }
 
 test('Revert now puts the previous rules back and keeps the change to fix', async ({ page }) => {

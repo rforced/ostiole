@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed } from 'vue'
 
 import SectionCard from '@/components/SectionCard.vue'
 import { formatCount, formatWhen } from '@/lib/format'
+import type { BlockingSummary } from '@/lib/types.gen'
 
 /**
  * DNS blocking, as far as the dashboard can tell: what is loaded, what it
@@ -11,7 +13,7 @@ import { formatCount, formatWhen } from '@/lib/format'
  */
 const props = defineProps({
   /** The blocking summary from GET /overview. */
-  blocking: { type: Object, default: () => ({}) },
+  blocking: { type: Object as PropType<Partial<BlockingSummary>>, default: () => ({}) },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
 })

@@ -126,7 +126,7 @@ async function inspect(url: string) {
 }
 
 function inspectAll() {
-  for (const url of urls.value) inspect(url)
+  for (const url of urls.value) void inspect(url)
 }
 
 /** One line per URL that has been read or is being read. */

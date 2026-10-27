@@ -23,7 +23,7 @@ async function menu() {
       { path: '/:any(.*)*', component: Page },
     ],
   })
-  router.push('/firewall/rules')
+  await router.push('/firewall/rules')
   await router.isReady()
   const wrapper = mount(UserMenu, { global: { plugins: [router] }, attachTo: document.body })
   await wrapper.get('button').trigger('click')
@@ -76,8 +76,9 @@ describe('UserMenu', () => {
   it('signs out from the trigger once the menu has closed', async () => {
     const { router, wrapper } = await menu()
     let seen: Element | null = null
-    logout.mockImplementation(async () => {
+    logout.mockImplementation(() => {
       seen = document.activeElement
+      return Promise.resolve()
     })
     item('Sign out')?.click()
     await flushPromises()

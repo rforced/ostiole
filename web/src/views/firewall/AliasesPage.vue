@@ -119,7 +119,11 @@ const ruleZone = computed(
  * The rule is a draft like any other until it is applied.
  */
 function blockWith(a: Alias) {
-  router.push({ path: '/firewall/rules', query: { block: a.name }, hash: `#${ruleZone.value}` })
+  void router.push({
+    path: '/firewall/rules',
+    query: { block: a.name },
+    hash: `#${ruleZone.value}`,
+  })
 }
 
 function add() {

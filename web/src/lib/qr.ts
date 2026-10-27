@@ -59,13 +59,13 @@ function gfMultiply(x: number, y: number) {
 
 /** The generator polynomial of a degree, highest term dropped, as coefficients. */
 function rsDivisor(degree: number) {
-  const out = new Array(degree).fill(0)
+  const out = new Array<number>(degree).fill(0)
   out[degree - 1] = 1
   let root = 1
   for (let i = 0; i < degree; i += 1) {
     for (let j = 0; j < out.length; j += 1) {
-      out[j] = gfMultiply(out[j], root)
-      if (j + 1 < out.length) out[j] ^= out[j + 1]
+      out[j] = gfMultiply(out[j] ?? 0, root)
+      if (j + 1 < out.length) out[j] = (out[j] ?? 0) ^ (out[j + 1] ?? 0)
     }
     root = gfMultiply(root, 0x02)
   }
@@ -78,7 +78,7 @@ function rsDivisor(degree: number) {
  */
 export function reedSolomon(data: number[], degree: number): number[] {
   const divisor = rsDivisor(degree)
-  const out: number[] = new Array(degree).fill(0)
+  const out: number[] = new Array<number>(degree).fill(0)
   for (const b of data) {
     const factor = b ^ (out.shift() as number)
     out.push(0)
@@ -185,8 +185,8 @@ class Grid {
   constructor(version: number) {
     this.version = version
     this.size = version * 4 + 17
-    this.dark = Array.from({ length: this.size }, () => new Array(this.size).fill(false))
-    this.fixed = Array.from({ length: this.size }, () => new Array(this.size).fill(false))
+    this.dark = Array.from({ length: this.size }, () => new Array<boolean>(this.size).fill(false))
+    this.fixed = Array.from({ length: this.size }, () => new Array<boolean>(this.size).fill(false))
   }
 
   set(x: number, y: number, dark: boolean) {

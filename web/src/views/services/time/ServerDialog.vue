@@ -14,7 +14,7 @@ const props = defineProps({
   /** Every host listed now, so the same one is not added twice. */
   hosts: { type: Array as PropType<string[]>, default: () => [] },
 })
-const emit = defineEmits(['save'])
+const emit = defineEmits<{ save: [server: NTPServer, previousHost: string] }>()
 const open = defineModel('open', { type: Boolean, default: false })
 
 const form = ref(blank())

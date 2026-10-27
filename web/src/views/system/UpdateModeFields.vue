@@ -31,7 +31,11 @@ const props = defineProps({
   defaultCheckSchedule: { type: String, default: '0 4 * * *' },
   defaultInstallSchedule: { type: String, default: '30 4 * * 0' },
 })
-const emit = defineEmits(['update:mode', 'update:checkSchedule', 'update:installSchedule'])
+const emit = defineEmits<{
+  'update:mode': [mode: string]
+  'update:checkSchedule': [schedule: string]
+  'update:installSchedule': [schedule: string]
+}>()
 
 const MODES = [
   { value: 'all', label: 'Automatic (All)', hint: 'Install everything that is newer.' },

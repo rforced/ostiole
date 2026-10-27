@@ -190,7 +190,7 @@ describe('TunnelDialog round trip', () => {
     const tunnel = wg0()
     delete must(tunnel.wireguard).peers
     const { wrapper, config } = open({ tunnel, zones: [{ name: 'lan' }, { name: 'wg0' }] })
-    config.saved = JSON.parse(JSON.stringify(config.draft))
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(config.dirty).toBe(false)

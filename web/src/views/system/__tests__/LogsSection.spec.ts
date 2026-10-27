@@ -12,7 +12,7 @@ import { configOf, sessionOf, draftOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: {
-    logFiles: vi.fn(async () => ({ dir: '/var/log/ostiole', enabled: false, logs: [] })),
+    logFiles: vi.fn(() => Promise.resolve({ dir: '/var/log/ostiole', enabled: false, logs: [] })),
     clearLogs: vi.fn(),
   },
 }))
@@ -115,7 +115,7 @@ describe('LogsSection', () => {
     expect(draftOf(config).system.logging).toEqual({ level: 'info', files: { enabled: true } })
   })
 
-  it('is an operator’s to change and locked for a viewer', async () => {
+  it('is an operator’s to change and locked for a viewer', () => {
     useAuthStore().user = sessionOf({ username: 'operator', role: 'operator' })
     let { wrapper } = open()
     expect(wrapper.find('fieldset[disabled]').exists()).toBe(false)

@@ -112,7 +112,7 @@ async function finish() {
   // The configuration the wizard applied never went through the draft.
   await Promise.all([system.refresh(), config.resync()])
   finishing.value = false
-  router.replace('/')
+  void router.replace('/')
 }
 
 function reverted() {

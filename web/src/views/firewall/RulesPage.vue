@@ -172,7 +172,7 @@ onMounted(() => {
   const name = route.query.block
   if (typeof name !== 'string' || !name) return
   const alias = config.aliases.find((a) => a.name === name)
-  router.replace({ path: route.path, hash: route.hash })
+  void router.replace({ path: route.path, hash: route.hash })
   if (!alias) return
   editing.value = {
     id: '',

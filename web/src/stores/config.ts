@@ -62,7 +62,8 @@ import { certificateProvider, providerFor } from '@/lib/providers'
 import { deviceName } from '@/lib/wol'
 import { useToastStore } from '@/stores/toast'
 
-const clone = <T>(v: T): T => (v === null || v === undefined ? v : JSON.parse(JSON.stringify(v)))
+const clone = <T>(v: T): T =>
+  v === null || v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T)
 
 /** Sets one field named at run time on a block whose keys the caller does not know. */
 const setField = (block: object, key: string, value: unknown) => {
@@ -99,13 +100,9 @@ function moveInZone<T extends { id: string; zone?: string }>(list: T[], id: stri
 
 /** JSON with object keys in one order: a dialog rebuilds what it saves. */
 function canonical(v: unknown) {
-  return JSON.stringify(v, (_, x) =>
+  return JSON.stringify(v, (_, x: unknown) =>
     x && typeof x === 'object' && !Array.isArray(x)
-      ? Object.fromEntries(
-          Object.keys(x)
-            .sort()
-            .map((k) => [k, x[k]]),
-        )
+      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
       : x,
   )
 }
@@ -1787,7 +1784,7 @@ export const useConfigStore = defineStore('config', () => {
         changes.value = []
         return
       }
-      diffTimer = window.setTimeout(refreshChanges, DIFF_DEBOUNCE_MS)
+      diffTimer = window.setTimeout(() => void refreshChanges(), DIFF_DEBOUNCE_MS)
     },
     { deep: true },
   )

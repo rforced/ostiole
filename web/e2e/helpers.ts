@@ -56,6 +56,15 @@ export async function applyAndConfirm(page: Page) {
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 }
 
+/** Reads a JSON API reply as T, the shape the Go side documents for that path. */
+export async function getJSON<T>(api: APIRequestContext, path: string) {
+  const res = await api.get(path)
+  return (await res.json()) as T
+}
+
+/** The configuration the router has saved. */
+export const savedConfig = (api: APIRequestContext) => getJSON<Config>(api, '/api/v1/config')
+
 /**
  * The saved configuration and its revision, which an apply sends back as
  * baseRevision. The API context is signed in.
@@ -64,7 +73,8 @@ export async function readConfig(api: APIRequestContext) {
   const res = await api.get('/api/v1/config')
   expect(res.ok(), await res.text()).toBe(true)
   const baseRevision = (res.headers().etag ?? '').replace(/^(W\/)?"|"$/g, '')
-  return { config: await res.json(), baseRevision }
+  const config = (await res.json()) as Config
+  return { config, baseRevision }
 }
 
 /**

@@ -21,7 +21,7 @@ const props = defineProps({
   description: { type: String, default: '' },
   busy: { type: Boolean, default: false },
 })
-const emit = defineEmits(['confirm'])
+const emit = defineEmits<{ confirm: [] }>()
 const auth = useAuthStore()
 const config = useConfigStore()
 

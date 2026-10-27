@@ -109,7 +109,7 @@ function save() {
   const t = props.tunnel
   if (!t?.openvpn) return
   // What this dialog does not show stays as it was.
-  const iface: Interface = JSON.parse(JSON.stringify(t))
+  const iface = JSON.parse(JSON.stringify(t)) as Interface
   const o = iface.openvpn
   if (!o) return
   if (f.remotes !== formatRemotes(t.openvpn.remotes)) {

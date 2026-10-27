@@ -25,7 +25,7 @@ const props = defineProps({
    */
   settle: { type: Function as PropType<(() => Promise<string>) | null>, default: null },
 })
-const emit = defineEmits(['confirmed', 'reverted'])
+const emit = defineEmits<{ confirmed: []; reverted: [] }>()
 
 const auth = useAuthStore()
 const system = useSystemStore()
@@ -51,7 +51,8 @@ async function ended() {
   if (outcome.value) return
   error.value = ''
   outcome.value = result
-  emit(result === 'confirmed' ? 'confirmed' : 'reverted')
+  if (result === 'confirmed') emit('confirmed')
+  else emit('reverted')
 }
 
 /**
@@ -65,14 +66,16 @@ async function unanswered(e: unknown) {
   else error.value = errorMessage(e)
 }
 
+async function checkPending() {
+  const status = await system.refresh()
+  if (status && !status.pending && !outcome.value && !busy.value) await ended()
+}
+
 onMounted(() => {
   tick = window.setInterval(() => {
     now.value = Date.now()
   }, 250)
-  poll = window.setInterval(async () => {
-    const status = await system.refresh()
-    if (status && !status.pending && !outcome.value && !busy.value) await ended()
-  }, 2000)
+  poll = window.setInterval(() => void checkPending(), 2000)
 })
 onBeforeUnmount(() => {
   window.clearInterval(tick)

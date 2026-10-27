@@ -20,7 +20,7 @@ import {
   measured,
   probeFigures,
 } from '@/lib/gateways'
-import type { Gateway } from '@/lib/types.gen'
+import type { Gateway, GatewayProbe } from '@/lib/types.gen'
 import { streamLost } from '@/lib/stream'
 import { WINDOWS } from '@/lib/traffic'
 
@@ -67,7 +67,7 @@ watch(
       report.value = null
       rows.value = null
     }
-    read.run()
+    void read.run()
   },
   { immediate: true },
 )
@@ -81,16 +81,16 @@ function listen() {
   const es = new EventSource('/api/v1/gateways/stream')
   source = es
   es.onopen = () => (streamError.value = '')
-  es.onmessage = (m) => {
-    let p
+  es.onmessage = (m: MessageEvent<string>) => {
+    let p: GatewayProbe
     try {
-      p = JSON.parse(m.data)
+      p = JSON.parse(m.data) as GatewayProbe
     } catch {
       return
     }
     if (p.gateway !== props.gateway?.name || !rows.value) return
     if (!families.value.includes(p.family)) {
-      read.run()
+      void read.run()
       return
     }
     rows.value = addProbe(rows.value, families.value, p, '5m')
@@ -107,7 +107,7 @@ watch(open, (on) => {
   clearInterval(timer)
   if (on) {
     timer = setInterval(() => {
-      if (win.value !== '5m' && document.visibilityState !== 'hidden') read.run()
+      if (win.value !== '5m' && document.visibilityState !== 'hidden') void read.run()
     }, REREAD_MS)
   }
 })

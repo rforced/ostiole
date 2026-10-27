@@ -129,14 +129,14 @@ export function historyRows(report: {
 }) {
   const fams = FAMILIES.filter((f) => report.families.some((r) => r.family === f))
   const width = 1 + fams.length * 4
-  const rows = new Map()
+  const rows = new Map<number | null | undefined, Array<number | null | undefined>>()
   fams.forEach((family, k) => {
     const r = report.families.find((x) => x.family === family)
     if (!r) return
     for (const [t, mean, low, high, loss] of r.points) {
       let row = rows.get(t)
       if (!row) {
-        row = Array(width).fill(undefined)
+        row = Array<number | null | undefined>(width).fill(undefined)
         row[0] = t
         rows.set(t, row)
       }
@@ -146,7 +146,7 @@ export function historyRows(report: {
       row[1 + fams.length * 3 + k] = loss
     }
   })
-  return { families: fams, rows: [...rows.values()].sort((a, b) => a[0] - b[0]) }
+  return { families: fams, rows: [...rows.values()].sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0)) }
 }
 
 /**

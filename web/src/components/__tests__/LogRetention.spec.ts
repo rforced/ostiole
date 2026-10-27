@@ -71,7 +71,7 @@ async function card({
       modelValue: model.value,
       'onUpdate:modelValue': (v: { entries?: number }) => {
         model.value = v
-        wrapper.setProps({ modelValue: v })
+        void wrapper.setProps({ modelValue: v })
       },
     },
   })

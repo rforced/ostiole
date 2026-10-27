@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-import type { LiveLink } from '../src/lib/types.gen'
+import type { LiveLink, ServicesStatus } from '../src/lib/types.gen'
 
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, login, reconfigure, shot } from './helpers'
@@ -96,7 +96,7 @@ test('the badge agrees with the relay', async ({ page }) => {
     await page.goto('/services/discovery')
     const res = await page.request.get('/api/v1/services/status')
     expect(res.ok()).toBe(true)
-    const status = await res.json()
+    const status = (await res.json()) as ServicesStatus
     await expect(header(page).locator('.badge')).toHaveText(
       status.discoveryRunning ? 'running' : 'stopped',
       { timeout: 2_000 },

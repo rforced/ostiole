@@ -107,14 +107,14 @@ const clear = useAsync(async () => {
   await read.run()
 })
 onMounted(() => {
-  read.run()
-  readDevices.run()
+  void read.run()
+  void readDevices.run()
 })
 watch([win, device], () => read.run())
 let settle = 0
 watch(query, () => {
   window.clearTimeout(settle)
-  settle = window.setTimeout(() => read.run(), SETTLE_MS)
+  settle = window.setTimeout(() => void read.run(), SETTLE_MS)
 })
 watch(
   () => config.saved?.traffic?.destinations?.enabled,
@@ -125,12 +125,12 @@ watch(
 // again while Live is on.
 const stream = useTrafficStream({
   devices: () => {
-    if (live.value) read.run()
+    if (live.value) void read.run()
   },
-  reopened: () => read.run(),
+  reopened: () => void read.run(),
 })
 watch(live, (on) => {
-  if (on) read.run()
+  if (on) void read.run()
 })
 
 const running = computed(() => Boolean(page.value?.enabled))

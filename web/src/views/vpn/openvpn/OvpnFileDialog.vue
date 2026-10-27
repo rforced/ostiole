@@ -6,7 +6,8 @@ import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import ZoneField, { NEW_ZONE } from '@/components/ZoneField.vue'
+import ZoneField from '@/components/ZoneField.vue'
+import { NEW_ZONE } from '@/components/zones'
 import type { Interface, OpenVPN } from '@/lib/types.gen'
 import { nextOvpnName, parseOvpn } from '@/lib/ovpnconf'
 import { useConfigStore } from '@/stores/config'
@@ -16,7 +17,7 @@ const props = defineProps({
   blocksOnly: { type: Boolean, default: false },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['blocks'])
+const emit = defineEmits<{ blocks: [blocks: Partial<OpenVPN>] }>()
 
 const config = useConfigStore()
 const text = ref('')

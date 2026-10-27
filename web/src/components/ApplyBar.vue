@@ -84,11 +84,11 @@ watch(
   () => JSON.stringify(drift.value),
   () => {
     driftLines.value = null
-    if (drift.value && showChanges.value) readDrift()
+    if (drift.value && showChanges.value) void readDrift()
   },
 )
 watch(showChanges, (open) => {
-  if (open && drift.value && !driftLines.value) readDrift()
+  if (open && drift.value && !driftLines.value) void readDrift()
 })
 
 /**
@@ -102,7 +102,7 @@ watch(
   (shown) => {
     showChanges.value = false
     window.clearInterval(poll ?? undefined)
-    poll = shown ? window.setInterval(() => system.refresh(), DRIFT_POLL_MS) : null
+    poll = shown ? window.setInterval(() => void system.refresh(), DRIFT_POLL_MS) : null
   },
   { immediate: true },
 )
@@ -158,7 +158,7 @@ async function apply() {
   error.value = ''
   issues.value = []
   try {
-    const draft = JSON.parse(JSON.stringify(config.draft))
+    const draft = JSON.parse(JSON.stringify(config.draft)) as Config
     const ofDrift = drift.value !== null
     await api.config.check(draft)
     const res = await applyWithConfirm(draft, config.base, CONFIRM_SECONDS)

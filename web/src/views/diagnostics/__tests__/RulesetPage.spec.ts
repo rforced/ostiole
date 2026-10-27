@@ -2,6 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import ConfirmButton from '@/components/ConfirmButton.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
 import type { HostReport } from '@/lib/types.gen'
 import { type DeepPartial, fixture, must } from '@/test/fixtures'
@@ -63,7 +65,7 @@ describe('RulesetPage', () => {
       output: 'cleared ip filter',
       status: report(),
     })
-    const buttons = wrapper.findAllComponents({ name: 'ConfirmButton' })
+    const buttons = wrapper.findAllComponents(ConfirmButton)
     // One sweep for the unowned table, one "clear anyway" for Docker's.
     expect(buttons).toHaveLength(2)
     expect(must(buttons[0]).props('label')).toBe('Clear leftovers')
@@ -77,13 +79,13 @@ describe('RulesetPage', () => {
   it('offers nothing to press on a daemon that is not root', async () => {
     const wrapper = await page({ root: false })
     expect(wrapper.text()).toContain('ip filter')
-    expect(wrapper.findAllComponents({ name: 'ConfirmButton' })).toHaveLength(0)
+    expect(wrapper.findAllComponents(ConfirmButton)).toHaveLength(0)
   })
 
   it('shows why a flush failed', async () => {
     const wrapper = await page()
     vi.mocked(api.host.flushLegacy).mockRejectedValue(new Error('not permitted'))
-    must(wrapper.findAllComponents({ name: 'ConfirmButton' })[0]).vm.$emit('confirm')
+    must(wrapper.findAllComponents(ConfirmButton)[0]).vm.$emit('confirm')
     await flushPromises()
     expect(wrapper.find('[role="alert"]').text()).toContain('not permitted')
   })
@@ -91,7 +93,7 @@ describe('RulesetPage', () => {
   it('reads the kernel again on Refresh, and says why a read failed', async () => {
     const wrapper = await page()
     vi.mocked(api.host.status).mockRejectedValue(new Error('nft is not installed'))
-    wrapper.findComponent({ name: 'RefreshButton' }).vm.$emit('click')
+    wrapper.findComponent(RefreshButton).vm.$emit('click')
     await flushPromises()
     expect(api.host.status).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[role="alert"]').text()).toContain('nft is not installed')

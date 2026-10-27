@@ -75,7 +75,7 @@ export function isCustomized(layout: Layout) {
  * refuses storage is no worse off.
  */
 export function loadLayout() {
-  let raw = null
+  let raw: unknown = null
   try {
     raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null')
   } catch {

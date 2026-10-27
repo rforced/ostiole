@@ -6,7 +6,7 @@ import type { Page } from '@playwright/test'
 import type { Config } from '../src/lib/types.gen'
 
 import { expect, test } from './fixtures'
-import { applyAndConfirm, confirmDialog, login, reconfigure, shot } from './helpers'
+import { applyAndConfirm, confirmDialog, login, reconfigure, savedConfig, shot } from './helpers'
 import type { RunningServer } from './server'
 
 test.describe.configure({ mode: 'serial' })
@@ -18,14 +18,14 @@ test.describe.configure({ mode: 'serial' })
 /** Has addresses answer as said, beside the next hops the seed gave. */
 function answers(server: RunningServer, addresses: Record<string, { silent: boolean }>) {
   const file = join(server.dir, 'probes.json')
-  const { hops } = JSON.parse(readFileSync(file, 'utf8'))
+  const { hops } = JSON.parse(readFileSync(file, 'utf8')) as { hops: unknown }
   writeFileSync(file, JSON.stringify({ hops, addresses }))
 }
 
 const card = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 
 async function wanGateway(page: Page) {
-  const config: Config = await (await page.request.get('/api/v1/config')).json()
+  const config: Config = await savedConfig(page.request)
   const gateway = config.gateways?.[0]
   if (!gateway) throw new Error('the seed has no gateway')
   return gateway

@@ -14,7 +14,7 @@ defineProps({
   rpId: { type: String, default: '' },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['done'])
+const emit = defineEmits<{ done: [] }>()
 
 const name = ref('')
 const password = ref('')

@@ -4,6 +4,7 @@ import {
   applyAndConfirm,
   confirmDialog,
   enterUsername,
+  getJSON,
   login,
   shot,
   sidebar,
@@ -149,8 +150,10 @@ test('mint an API token and use it to scrape metrics', async ({ page, request })
   expect(apply.status()).toBe(403)
 
   // The description of the API is public and lists the roles.
-  const spec = await (await request.get('/api/v1/openapi.json')).json()
-  expect(spec.paths['/api/v1/apply'].post['x-required-role']).toBe('operator')
+  const spec = await getJSON<{
+    paths: Record<string, { post?: Record<string, string> } | undefined>
+  }>(request, '/api/v1/openapi.json')
+  expect(spec.paths['/api/v1/apply']?.post?.['x-required-role']).toBe('operator')
 
   const row = section.getByRole('row').filter({ hasText: 'monitoring' })
   await row.getByRole('button', { name: 'Delete' }).click()

@@ -25,7 +25,7 @@ const props = defineProps({
   /** How many charts to hold room for until then. */
   placeholders: { type: Number, default: 1 },
 })
-const emit = defineEmits(['read'])
+const emit = defineEmits<{ read: [] }>()
 
 /**
  * Every link, not only those followed: the card is drawn from the shape
@@ -59,7 +59,7 @@ useTrafficStream({
     }
     end.value = t
   },
-  reopened: () => read.run(),
+  reopened: () => void read.run(),
 })
 
 /** Each followed link and its chart, once read. */

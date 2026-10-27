@@ -211,17 +211,16 @@ function event(over: DeepPartial<WaflogEntry> = {}) {
 async function events(list: WaflogEntry[], draft = config(), memTotal = 8_000_000_000) {
   // The router searches and narrows the way the page's values say: the Go
   // side is tested against the same values.
-  vi.mocked(api.proxy.events).mockImplementation(
-    async (params: { verdict?: string; q?: string } = {}) =>
-      ({
-        entries: list.filter(
-          (e) =>
-            (!params.verdict || e.verdict === params.verdict) &&
-            matches(params.q ?? '', eventValues(e)),
-        ),
-        held: list.length,
-        more: false,
-      }) satisfies WafEventsPage,
+  vi.mocked(api.proxy.events).mockImplementation((params: { verdict?: string; q?: string } = {}) =>
+    Promise.resolve({
+      entries: list.filter(
+        (e) =>
+          (!params.verdict || e.verdict === params.verdict) &&
+          matches(params.q ?? '', eventValues(e)),
+      ),
+      held: list.length,
+      more: false,
+    } satisfies WafEventsPage),
   )
   vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal }))
   vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
@@ -491,9 +490,9 @@ describe('EventsTab', () => {
   it('clears the router’s events', async () => {
     const held = [event()]
     const { wrapper } = await events(held)
-    vi.mocked(api.proxy.clearEvents).mockImplementation(async () => {
+    vi.mocked(api.proxy.clearEvents).mockImplementation(() => {
       held.splice(0)
-      return { cleared: true }
+      return Promise.resolve({ cleared: true })
     })
     const clear = wrapper.findComponent(ClearLogButton)
     expect(clear.props()).toMatchObject({ name: 'WAF events', noun: 'event', journal: true })

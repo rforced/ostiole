@@ -4,13 +4,20 @@ import { ApiError, UNAUTHORIZED_EVENT, api } from '@/lib/api'
 import type { AssertionResponse, AttestationResponse } from '@/lib/types.gen'
 import { configOf, fixture, must } from '@/test/fixtures'
 
+interface Sent {
+  method: string
+  credentials: string
+  headers: Record<string, string>
+  body?: string
+}
+
 function mockFetch(
   status: number,
   body?: unknown,
   headers: Record<string, string> = { 'Content-Type': 'application/json' },
 ) {
   const fn = vi
-    .fn()
+    .fn<(url: string, init: Sent) => Promise<Response>>()
     .mockResolvedValue(
       new Response(body === undefined ? null : JSON.stringify(body), { status, headers }),
     )
@@ -40,7 +47,7 @@ describe('api', () => {
     expect(init.credentials).toBe('same-origin')
     expect(init.headers['X-Requested-With']).toBe('ostiole')
     expect(init.headers['Content-Type']).toBe('application/json')
-    expect(JSON.parse(init.body)).toEqual({ username: 'admin', password: 'pw' })
+    expect(JSON.parse(must(init.body))).toEqual({ username: 'admin', password: 'pw' })
   })
 
   it('throws ApiError with server message and issues', async () => {
@@ -65,7 +72,7 @@ describe('api', () => {
       code: 'stale',
     })
     const err = await rejection(api.config.apply(configOf({ version: 3 }), 'ab12', 60))
-    expect(JSON.parse(must(fetch.mock.calls[0])[1].body)).toEqual({
+    expect(JSON.parse(must(must(fetch.mock.calls[0])[1].body))).toEqual({
       config: { version: 3 },
       confirmTimeoutSeconds: 60,
       baseRevision: 'ab12',
@@ -78,7 +85,7 @@ describe('api', () => {
   it('sends the tag the status repeats while the apply awaits confirmation', async () => {
     const fetch = mockFetch(200, { pending: true, deadline: '2026-10-19T23:13:27Z' })
     await api.config.apply(configOf({ version: 3 }), 'ab12', 60, 'apply-x1')
-    expect(JSON.parse(must(fetch.mock.calls[0])[1].body).tag).toBe('apply-x1')
+    expect(JSON.parse(must(must(fetch.mock.calls[0])[1].body))).toMatchObject({ tag: 'apply-x1' })
   })
 
   it('dispatches the unauthorized event on 401, except for credential endpoints', async () => {

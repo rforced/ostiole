@@ -19,7 +19,7 @@ function open(system = {}) {
 }
 
 vi.mock('@/lib/api', () => ({
-  api: { logLimits: vi.fn(async () => ({ aliasEntries: 5000000 })) },
+  api: { logLimits: vi.fn(() => Promise.resolve({ aliasEntries: 5000000 })) },
 }))
 
 describe('FetchedAliasesSection', () => {

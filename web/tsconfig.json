@@ -22,6 +22,8 @@
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"],
   "vueCompilerOptions": {
-    "checkUnknownComponents": true
+    "strictTemplates": true,
+    "fallthroughAttributes": true,
+    "dataAttributes": ["data-*", "aria-*"]
   }
 }

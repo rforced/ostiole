@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { NEW_ZONE } from '@/components/zones'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -65,10 +66,10 @@ const mates = computed(() =>
 )
 
 /**
- * Turns a pending new zone into a real one in the draft.
- * @returns {boolean} false when the name will not do, which it says
+ * Turns a pending new zone into a real one in the draft; false when the
+ * name will not do, which it says.
  */
-function commit() {
+function commit(): boolean {
   if (!creating.value) return true
   const name = newName.value.trim()
   if (!/^[a-z][a-z0-9_]{0,30}$/.test(name)) {
@@ -86,14 +87,6 @@ function commit() {
 }
 
 defineExpose({ commit })
-</script>
-
-<script lang="ts">
-/**
- * The "New zone…" choice while it is still pending. A real zone name is
- * [a-z][a-z0-9_]*, so the plus can never collide with one.
- */
-export const NEW_ZONE = '+new'
 </script>
 
 <template>

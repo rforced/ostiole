@@ -13,7 +13,7 @@ const props = defineProps({
   passkey: { type: Object as PropType<Passkey | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
-const emit = defineEmits(['done'])
+const emit = defineEmits<{ done: [] }>()
 
 const name = ref('')
 const error = ref('')

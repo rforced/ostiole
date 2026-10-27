@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends boolean | string | number | undefined">
 import { computed, useId } from 'vue'
 
 /**
@@ -8,26 +8,34 @@ import { computed, useId } from 'vue'
  * value its group has chosen, and its hint describes the choice rather
  * than naming it.
  */
-const props = defineProps({
-  label: { type: String, required: true },
-  hint: { type: String, default: '' },
-  variant: {
-    type: String,
-    default: 'checkbox',
-    validator: (v: string) => ['checkbox', 'switch', 'radio'].includes(v),
+const props = withDefaults(
+  defineProps<{
+    label: string
+    hint?: string
+    variant?: 'checkbox' | 'switch' | 'radio'
+    disabled?: boolean
+    id?: string
+    /** For a screen reader when the visible label is only "Enabled". */
+    ariaLabel?: string
+    /** A radio's group, and the value it stands for. */
+    name?: string
+    value?: T
+  }>(),
+  {
+    hint: '',
+    variant: 'checkbox',
+    disabled: false,
+    id: '',
+    ariaLabel: '',
+    name: '',
+    value: undefined,
   },
-  disabled: { type: Boolean, default: false },
-  id: { type: String, default: '' },
-  /** For a screen reader when the visible label is only "Enabled". */
-  ariaLabel: { type: String, default: '' },
-  /** A radio's group, and the value it stands for. */
-  name: { type: String, default: '' },
-  value: { type: [String, Number], default: '' },
-})
-const model = defineModel<boolean | string | number>({
-  type: [Boolean, String, Number],
-  default: false,
-})
+)
+const model = defineModel<T>({ required: true })
+
+function choose() {
+  if (props.value !== undefined) model.value = props.value
+}
 
 const uid = useId()
 const inputId = computed(() => props.id || uid)
@@ -47,7 +55,7 @@ const isRadio = computed(() => props.variant === 'radio')
       :checked="model === value"
       :disabled="disabled"
       :aria-describedby="hint || $slots.hint ? `${inputId}-hint` : undefined"
-      @change="model = value"
+      @change="choose"
     />
     <input
       v-else

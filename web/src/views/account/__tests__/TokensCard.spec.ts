@@ -2,8 +2,10 @@ import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import ConfirmButton from '@/components/ConfirmButton.vue'
 import { type Token, api } from '@/lib/api'
 import TokensCard from '@/views/account/TokensCard.vue'
+import TokenDialog from '@/views/system/accounts/TokenDialog.vue'
 import { fixture } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
@@ -24,7 +26,7 @@ async function minted() {
   )
   const wrapper = mount(TokensCard, { global: { stubs }, attachTo: document.body })
   await flushPromises()
-  wrapper.findComponent(stubs.TokenDialog).vm.$emit('create', { name: 'ci' })
+  wrapper.findComponent(TokenDialog).vm.$emit('create', { name: 'ci' })
   await flushPromises()
   return wrapper
 }
@@ -59,11 +61,12 @@ describe('TokensCard', () => {
   // Plain HTTP on the LAN has no clipboard API; the old copy command does it.
   it('falls back to the copy command over plain HTTP', async () => {
     vi.stubGlobal('isSecureContext', false)
-    document.execCommand = vi.fn().mockReturnValue(true)
+    const exec = vi.fn().mockReturnValue(true)
+    document.execCommand = exec
     const wrapper = await minted()
     await copyButton(wrapper).trigger('click')
     await flushPromises()
-    expect(document.execCommand).toHaveBeenCalledWith('copy')
+    expect(exec).toHaveBeenCalledWith('copy')
     expect(window.getSelection()?.toString()).toBe('ost_secret')
     expect(copyButton(wrapper).text()).toBe('Copied')
   })
@@ -82,7 +85,7 @@ describe('TokensCard', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('grafite')
     expect(wrapper.findAll('button').some((b) => b.text() === 'Add token')).toBe(true)
-    const del = wrapper.findComponent(stubs.ConfirmButton)
+    const del = wrapper.findComponent(ConfirmButton)
     expect(del.props('typed')).toBe('grafite')
     del.vm.$emit('confirm')
     await flushPromises()

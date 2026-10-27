@@ -295,7 +295,7 @@ function showDevice(peer: WireGuardPeer, privateKey: string) {
     presharedKey: peer.presharedKey,
   }
   deviceForm.value = { host: '', route: 'networks', keepalive: 0 }
-  loadCandidates()
+  void loadCandidates()
 }
 
 /**

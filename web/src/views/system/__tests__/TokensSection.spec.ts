@@ -1,6 +1,7 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent } from 'vue'
 
 import { api } from '@/lib/api'
 import type { Token } from '@/lib/types.gen'
@@ -13,7 +14,10 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const stubs = {
-  ConfirmButton: { props: ['typed'], template: '<button type="button">Delete</button>' },
+  ConfirmButton: defineComponent({
+    props: { typed: { type: String, default: '' } },
+    template: '<button type="button">Delete</button>',
+  }),
 }
 
 async function mounted() {

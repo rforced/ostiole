@@ -3,12 +3,12 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
-import type { Config, CronStatus, Removed, RestoreResponse } from '@/lib/types.gen'
+import type { CronStatus, Removed, RestoreResponse } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RemoteBackupSection from '@/views/system/RemoteBackupSection.vue'
-import { configOf, draftOf, fixture, must, sessionOf, type DeepPartial } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual('@/lib/api')
@@ -153,7 +153,7 @@ describe('RemoteBackupSection', () => {
           aliases: 0,
           gateways: 1,
         },
-        config: config() as DeepPartial<Config>,
+        config: config(),
         changes: [],
       }),
     )
@@ -188,7 +188,7 @@ describe('RemoteBackupSection', () => {
           aliases: 0,
           gateways: 1,
         },
-        config: config() as DeepPartial<Config>,
+        config: config(),
         changes: [],
       }),
     )

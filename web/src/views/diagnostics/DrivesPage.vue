@@ -86,13 +86,13 @@ async function start(drive: Drive, kind: string) {
 }
 
 function abort(drive: Drive) {
-  act(drive, 'abort', async () => {
+  void act(drive, 'abort', async () => {
     replaceDrive(await api.diagnostics.abortSelfTest(drive.name))
   })
 }
 
 function report(drive: Drive) {
-  act(drive, 'report', async () => {
+  void act(drive, 'report', async () => {
     const { blob, name } = await api.diagnostics.driveReport(drive.name)
     // The API is behind a CSRF header, so a plain link cannot fetch it.
     const url = URL.createObjectURL(blob)

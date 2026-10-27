@@ -165,7 +165,7 @@ function words(s: string) {
 }
 
 /** udp4, udp6 and udp as udp; tcp, tcp-client and the rest as tcp; else null. */
-function protoOf(p: unknown) {
+function protoOf(p: string | null | undefined) {
   const s = String(p ?? '').toLowerCase()
   if (/^udp[46]?$/.test(s)) return 'udp'
   if (/^tcp[46]?(-client)?$/.test(s)) return 'tcp'

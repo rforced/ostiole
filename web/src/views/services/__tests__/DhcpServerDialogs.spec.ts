@@ -48,12 +48,12 @@ async function mountDialog(component: Component, server: DHCPServer | DHCPv6Serv
 }
 
 /** The DNS registration row: its label, and the box the label is for. */
-function registration(w: VueWrapper) {
+function registration(w: Pick<VueWrapper, 'findAll' | 'get'>) {
   const label = w.findAll('label').find((l) => l.text().includes('DNS registration'))
   return label && { label, box: w.get<HTMLInputElement>(`[id="${label.attributes('for')}"]`) }
 }
 
-function registered(w: VueWrapper) {
+function registered(w: Pick<VueWrapper, 'findAll' | 'get'>) {
   const row = registration(w)
   if (!row) throw new TypeError('no DNS registration row')
   return row

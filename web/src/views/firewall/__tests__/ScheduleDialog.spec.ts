@@ -19,7 +19,7 @@ const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'
 function open(schedule: Schedule) {
   const cfg: Config = { ...emptyConfig(), schedules: [schedule] }
   const config = useConfigStore()
-  config.saved = JSON.parse(JSON.stringify(cfg))
+  config.saved = JSON.parse(JSON.stringify(cfg)) as typeof cfg
   config.replaceDraft(cfg)
   const wrapper = mount(ScheduleDialog, {
     props: { open: true, schedule: must(draftOf(config).schedules)[0] },

@@ -2,8 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { Interface } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { must } from '@/test/fixtures'
+import { configOf, must, type DeepPartial } from '@/test/fixtures'
 import OvpnTunnelDialog from '@/views/vpn/openvpn/OvpnTunnelDialog.vue'
 
 const stubs = {
@@ -31,11 +32,11 @@ const TUNNEL = {
     routes: ['10.8.0.0/24'],
     keepalive: 10,
   },
-}
+} satisfies DeepPartial<Interface>
 
 async function open() {
   const config = useConfigStore()
-  const cfg = {
+  const cfg = configOf({
     version: 12,
     zones: [
       { name: 'wan', external: true },
@@ -46,9 +47,9 @@ async function open() {
       TUNNEL,
     ],
     rules: [],
-  }
-  config.saved = JSON.parse(JSON.stringify(cfg))
-  config.replaceDraft(JSON.parse(JSON.stringify(cfg)))
+  })
+  config.saved = JSON.parse(JSON.stringify(cfg)) as typeof cfg
+  config.replaceDraft(JSON.parse(JSON.stringify(cfg)) as typeof cfg)
   const tunnel = must(config.interfaces.find((i) => i.name === 'ovpn0'))
   const wrapper = mount(OvpnTunnelDialog, {
     props: { open: false, tunnel },

@@ -15,7 +15,7 @@ async function shell() {
     history: createMemoryHistory(),
     routes: [{ path: '/:any(.*)*', component: Page }],
   })
-  router.push('/')
+  await router.push('/')
   await router.isReady()
   const wrapper = mount(AppTopBar, { global: { plugins: [router] }, attachTo: document.body })
   return { router, wrapper }

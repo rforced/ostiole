@@ -31,7 +31,7 @@ function lay(wrapper: VueWrapper, width: number) {
     scrollWidth: { value: 300, configurable: true },
     scrollLeft: {
       get: () => left,
-      set: (v) => {
+      set: (v: number) => {
         left = v
       },
       configurable: true,
