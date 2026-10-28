@@ -95,6 +95,45 @@ func (g jf) search() string { return g.pick(jfSearches...) }
 // jfDeviceNames are names people give a device on the dashboard.
 var jfDeviceNames = []string{"Living room TV 2", "Sam's TV (2)", "Büro 3"}
 
+// jfProviders are the names of the metadata, image, subtitle, lyrics and
+// segment providers Jellyfin and its common plugins bring, as a library's
+// settings list them.
+var jfProviders = []string{"TheMovieDb", "The Open Movie Database", "TheTVDB", "AniDB", "AniList", "MusicBrainz", "TheAudioDB",
+	"Embedded Image Extractor", "Image Extractor", "Screen Grabber", "Missing Episode Fetcher", "Nfo", "Local Genre/Tag",
+	"ListenBrainz Similarity Provider", "Open Subtitles", "Intro Skipper", "Studio Images", "Fanart", "Comic Vine", "Google Books",
+	"Comic Book Archive Cover Extractor", "EPUB Metadata", "Open Packaging Format", "LrcLyricProvider", "TxtLyricProvider"}
+
+// libraryOptions are a library's settings as the dashboard saves them, the
+// fields filled as on a server in use, its folders made up.
+func (g jf) libraryOptions(paths ...string) map[string]any {
+	providers := func() []string {
+		ps := slices.Clone(jfProviders)
+		g.r.Shuffle(len(ps), func(i, j int) { ps[i], ps[j] = ps[j], ps[i] })
+		return ps[:1+g.r.IntN(5)]
+	}
+	var infos, types []map[string]any
+	for _, p := range paths {
+		infos = append(infos, map[string]any{"Path": p})
+	}
+	for _, kind := range []string{"Series", "Season", "Episode", "Movie", "MusicAlbum"} {
+		types = append(types, map[string]any{"Type": kind, "MetadataFetchers": providers(), "MetadataFetcherOrder": providers(),
+			"ImageFetchers": providers(), "ImageFetcherOrder": providers(), "SimilarItemProviders": []string{"Local Genre/Tag"},
+			"SimilarItemProviderOrder": providers(), "ImageOptions": []any{map[string]any{"Type": "Backdrop", "Limit": 3, "MinWidth": 1280}}})
+	}
+	return map[string]any{"Enabled": true, "EnableArchiveMediaFiles": false, "EnablePhotos": true, "EnableRealtimeMonitor": false,
+		"EnableLUFSScan": true, "EnableChapterImageExtraction": false, "EnableTrickplayImageExtraction": true, "EnableInternetProviders": true,
+		"PathInfos": infos, "SaveLocalMetadata": false, "AutomaticRefreshIntervalDays": 30, "PreferredMetadataLanguage": g.pick("en", "pt-BR", ""),
+		"MetadataCountryCode": g.pick("US", "DE", ""), "SeasonZeroDisplayName": g.pick("Specials", "Season 0", "Extras & Specials"),
+		"MetadataSavers": []string{"Nfo"}, "DisabledLocalMetadataReaders": []string{}, "LocalMetadataReaderOrder": []string{"Nfo"},
+		"DisabledSubtitleFetchers": []string{}, "SubtitleFetcherOrder": []string{"Open Subtitles"},
+		"DisabledMediaSegmentProviders": []string{"Intro Skipper"}, "MediaSegmentProviderOrder": []string{"Intro Skipper"},
+		"SkipSubtitlesIfEmbeddedSubtitlesPresent": false, "SubtitleDownloadLanguages": []string{"eng", "ger"}, "RequirePerfectSubtitleMatch": true,
+		"SaveSubtitlesWithMedia": true, "SaveLyricsWithMedia": false, "DisabledLyricFetchers": []string{}, "LyricFetcherOrder": providers(),
+		"PreferNonstandardArtistsTag": false, "UseCustomTagDelimiters": true, "CustomTagDelimiters": []string{"/", "|", ";", `\`, "&", ","},
+		"DelimiterWhitelist": []string{"Jo & the Kite-Liners", "Marigold/Static"}, "AutomaticallyAddToCollection": false,
+		"AllowEmbeddedSubtitles": "AllowAll", "TypeOptions": types}
+}
+
 // jfNames are artists, genres, people and studios, which part of the API
 // names in the path. Each begins with a command's name, which CRS 4.30
 // takes for a command there.
@@ -576,6 +615,13 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					rs = append(rs, jfRequest{"POST", "/Devices/Options?id=" + dev.deviceID, js, vwJSON(map[string]any{"CustomName": name}), false, web})
 				}
 			}
+			// It saves a library's settings and adds a library.
+			for _, paths := range [][]string{{"/data/shows"}, {"/srv/media/TV Shows", "/mnt/disk2/Anime (Subbed)"}, {"/media/Kids Films & Cartoons"}, {"/data/Música"}} {
+				rs = append(rs,
+					jfRequest{"POST", "/Library/VirtualFolders/LibraryOptions", js, vwJSON(map[string]any{"Id": u.id(), "LibraryOptions": u.libraryOptions(paths...)}), false, web},
+					jfRequest{"POST", "/Library/VirtualFolders?name=" + uriComponent("TV Shows") + "&collectionType=tvshows&refreshLibrary=true", js,
+						vwJSON(map[string]any{"LibraryOptions": u.libraryOptions(paths...)}), false, web})
+			}
 			for _, r := range rs {
 				if status := jfSend(t, plain, r); status != http.StatusOK {
 					t.Errorf("%s %s %.80q (%s): %d", r.method, r.path, r.body, r.client.userAgent, status)
@@ -630,7 +676,16 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		p[field] = value
 		return vwJSON(map[string]any{"DeviceProfile": p})
 	}
+	library := func(path, field string, value any) jfRequest {
+		o := g.libraryOptions("/data/shows")
+		o[field] = value
+		return jfRequest{"POST", path, js, vwJSON(map[string]any{"Id": g.id(), "LibraryOptions": o}), false, c}
+	}
+	const libraryOptions = "/Library/VirtualFolders/LibraryOptions"
 	inText := []jfAttack{
+		{1, library(libraryOptions, "PathInfos", []any{map[string]any{"Path": "/data/shows; cat /etc/passwd"}})},
+		{1, library(libraryOptions, "SeasonZeroDisplayName", "<script>alert(1)</script>")},
+		{1, library("/Library/VirtualFolders?name=x", "DelimiterWhitelist", []string{"x' UNION SELECT Password FROM Users--"})},
 		{1, jfRequest{"GET", "/Items?searchTerm=" + url.QueryEscape("x' UNION SELECT Password FROM Users--") + "&recursive=true", "", "", false, c}},
 		{1, jfRequest{"GET", "/Items?searchTerm=" + url.QueryEscape("<script>alert(document.cookie)</script>"), "", "", false, c}},
 		{1, jfRequest{"GET", "/Items?searchTerm=" + url.QueryEscape("; cat /etc/passwd"), "", "", false, c}},
@@ -699,6 +754,10 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		// A device's new name leaves its id to the check of shapes.
 		{3, jfRequest{"POST", "/Devices/Options?id=" + url.QueryEscape("a);(b"), js, vwJSON(map[string]any{"CustomName": "Living room TV 2"}), false, c}},
 		{3, jfRequest{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "((((((((("), false, c}},
+		// A provider's name is not taken for a command only while no
+		// operator can follow it, and only in a library's settings.
+		{2, library(libraryOptions, "SubtitleFetcherOrder", []string{"Open Subtitles|local x"})},
+		{2, library("/System/Configuration", "SubtitleFetcherOrder", []string{"Screen Grabber"})},
 		{2, jfRequest{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c}},
 		// Outside the arguments the set knows, text is read as CRS reads it.
 		{2, jfRequest{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c}},
