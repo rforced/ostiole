@@ -99,6 +99,8 @@ const (
 	TailscaleLogin    = "tailscale-login"
 	TailscaleLogout   = "tailscale-logout"
 	CronRun           = "cron-run"           // Target: the job
+	ServiceRestart    = "service-restart"    // Target: the service; Detail: "failed" when it did not come back
+	ServiceStart      = "service-start"      // Target: the service; Detail: "failed" when it did not start
 	CertificateExport = "certificate-export" // Target: the certificate
 	LeftoversClear    = "leftovers-clear"    // Detail: the tables
 	BlocklistImport   = "blocklist-import"   // Target: the list
@@ -224,6 +226,16 @@ func (e *Event) Sentence() string {
 		return "Signed the router out of Tailscale"
 	case CronRun:
 		return "Ran the cron job " + t
+	case ServiceRestart:
+		if d == "failed" {
+			return "Restarted " + t + ", which did not come back"
+		}
+		return "Restarted " + t
+	case ServiceStart:
+		if d == "failed" {
+			return "Tried to start " + t + ", which did not start"
+		}
+		return "Started " + t
 	case CertificateExport:
 		return "Downloaded the certificate " + t + " with its key"
 	case LeftoversClear:

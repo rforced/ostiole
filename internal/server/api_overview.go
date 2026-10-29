@@ -319,8 +319,9 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 var serviceUnits = []string{services.Unit, services.UnboundUnit, services.PPPoEUnit, services.UPnPUnit,
 	services.TailscaleUnit, services.OpenVPNUnit, services.ProxyUnit, services.NTPUnit, services.WirelessUnit}
 
-// readUnits asks systemd about every unit the dashboard reports on at
-// once: the services' tiles, the network's and the competing services.
+// readUnits asks systemd about every unit the dashboard and System ›
+// Services report on at once: the services' tiles, the PPPoE sessions,
+// the network's and the competing services.
 func (a *api) readUnits(ctx context.Context, cfg *model.Config) install.UnitStates {
 	if a.units == nil {
 		return install.UnitStates{}
@@ -332,6 +333,9 @@ func (a *api) readUnits(ctx context.Context, cfg *model.Config) install.UnitStat
 		}
 		for _, n := range openvpnNames(cfg) {
 			names = append(names, services.OpenVPNUnitFor(n))
+		}
+		for _, n := range pppoeNames(cfg) {
+			names = append(names, services.PPPoEUnitFor(n))
 		}
 	}
 	return install.ReadUnits(ctx, a.units, append(names, install.CompetitorUnits()...)...)

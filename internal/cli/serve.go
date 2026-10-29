@@ -326,6 +326,11 @@ at your own.`,
 					Log:     slog.Default(),
 				},
 			}
+			// Only root restarts units. Anyone else asking the host's
+			// systemd would raise a password prompt on a desktop's polkit.
+			if os.Geteuid() == 0 {
+				deps.Control = install.ExecSystemctl{}
+			}
 			// Every loop starts again after a panic rather than taking the
 			// daemon with it: several parse what the internet sends.
 			log := slog.Default()

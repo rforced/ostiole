@@ -1,11 +1,13 @@
 import { RouterLinkStub, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { formatRate } from '@/lib/format'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import type { GatewayStatus, GatewayStrip, WirelessClient } from '@/lib/types.gen'
-import { fixture, must } from '@/test/fixtures'
+import { useAuthStore } from '@/stores/auth'
+import { fixture, must, sessionOf } from '@/test/fixtures'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
 import RecentBlocksCard from '@/views/dashboard/RecentBlocksCard.vue'
 import RecentLeasesCard from '@/views/dashboard/RecentLeasesCard.vue'
@@ -490,6 +492,7 @@ describe('WirelessCard', () => {
 
 describe('ServicesCard', () => {
   const stubs = { RouterLink: RouterLinkStub }
+  beforeEach(() => setActivePinia(createPinia()))
   /** The line under a term, spaces as a reader hears them. */
   function line(term: string, props: Record<string, unknown>) {
     const w = mount(ServicesCard, { props, global: { stubs } })
@@ -518,6 +521,17 @@ describe('ServicesCard', () => {
     expect(dhcpLine({ leases: 1, capacity: 100, servers: 2 })).toBe('1 of 100 leases · 2 servers')
     expect(dnsLine({ overrides: 1 })).toBe('lan · 1 host override')
     expect(dnsLine({ overrides: 2 })).toBe('lan · 2 host overrides')
+  })
+
+  it('points at System › Services for those who may restart', () => {
+    const links = (role: string) => {
+      useAuthStore().user = sessionOf({ username: role, role })
+      return mount(ServicesCard, { global: { stubs } })
+        .findAllComponents(RouterLinkStub)
+        .map((l) => l.props('to'))
+    }
+    expect(links('operator')).toContain('/system/services')
+    expect(links('viewer')).not.toContain('/system/services')
   })
 })
 

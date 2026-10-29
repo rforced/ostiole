@@ -322,6 +322,11 @@ export const NAV: NavItem[] = [
         label: 'Operating system',
         view: () => import('@/views/system/HostPage.vue'),
       },
+      {
+        path: 'services',
+        label: 'Services',
+        view: () => import('@/views/system/ServicesPage.vue'),
+      },
       { path: 'updates', label: 'Updates', view: () => import('@/views/system/UpdatesPage.vue') },
       {
         path: 'configuration',

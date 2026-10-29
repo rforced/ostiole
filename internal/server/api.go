@@ -169,6 +169,9 @@ type api struct {
 	devices namers
 	tables  TableLister
 	units   install.Systemctl
+	// control restarts and starts units on System › Services; nil when
+	// this daemon cannot.
+	control install.Systemctl
 	// host is how the operating system underneath is reported on and prepared.
 	host     host.Deps
 	gateways GatewayStatuser
@@ -221,6 +224,7 @@ func (a *api) register(mux *router) {
 	a.registerTraffic(mux)
 	a.registerGateways(mux)
 	a.registerCrons(mux)
+	a.registerServices(mux)
 	a.registerSysUpdate(mux)
 	a.registerHost(mux)
 	a.registerNotify(mux)

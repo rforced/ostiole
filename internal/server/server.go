@@ -180,6 +180,9 @@ type Deps struct {
 	// Units answers systemd state queries (service health, competitor
 	// detection) for the dashboard; nil leaves those states unknown.
 	Units install.Systemctl
+	// Control restarts and starts the units System › Services lists. It is
+	// set only for a daemon running as root; nil leaves the page read-only.
+	Control install.Systemctl
 	// SysStat samples CPU, memory and disk for the dashboard; nil hides
 	// that endpoint.
 	SysStat *sysstat.Sampler
@@ -264,6 +267,7 @@ func build(d Deps) (http.Handler, *api) {
 		shaping:         d.Shaping,
 		tables:          d.Tables,
 		units:           d.Units,
+		control:         d.Control,
 		sysstat:         d.SysStat,
 		drives:          d.Drives,
 		driveHealth:     d.DriveHealth,

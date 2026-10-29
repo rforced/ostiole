@@ -2426,6 +2426,30 @@ export interface CronRunReply {
   error?: string
 }
 
+export interface ServicesReply {
+  units: ServiceUnit[] | null
+  control: boolean
+}
+
+export interface ServiceUnit {
+  name: string
+  unit: string
+  state: string
+  want: boolean
+  detail?: string
+  since?: string
+  restarts: number
+  failure?: string
+  effect?: string
+  actions: string[] | null
+}
+
+export interface ServiceActionReply {
+  unit: string
+  restarting?: boolean
+  error?: string
+}
+
 export interface BackupRequest {
   note?: string
   users?: boolean

@@ -355,3 +355,22 @@ test('the host and its leftover rules are reported, and nothing changes without 
   await expect(leftovers.getByRole('row').filter({ hasText: 'inet ostiole' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Clear/ })).toHaveCount(0)
 })
+
+test('the services are listed, and nothing restarts without root', async ({ page }) => {
+  await login(page)
+  await page.getByRole('link', { name: 'Restart under System › Services' }).click()
+  await expect(page).toHaveURL(/\/system\/services$/)
+  const services = page.getByRole('region', { name: 'Services' })
+  for (const name of ['Ostiole', 'DHCP and DNS', 'Network']) {
+    await expect(services.getByRole('row').filter({ hasText: name }).first()).toBeVisible()
+  }
+  await expect(services).toContainText(
+    'This daemon is not running as root, so it cannot restart services.',
+  )
+  await expect(services.getByRole('button', { name: /^(Restart|Start)$/ })).toHaveCount(0)
+  await page.screenshot({ path: shot('44-system-services'), fullPage: true })
+  const refused = await page.request.post('/api/v1/system/services/ostiole.service/restart', {
+    headers: { 'X-Requested-With': 'ostiole' },
+  })
+  expect(refused.status()).toBe(503)
+})

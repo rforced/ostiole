@@ -5,6 +5,10 @@ import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { formatCount } from '@/lib/format'
 import type { ServiceState } from '@/lib/types.gen'
+import { stateWord } from '@/lib/units'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 defineProps({
   /** Unit states from GET /overview. */
@@ -16,13 +20,6 @@ defineProps({
   /** How many units to hold room for until then. */
   placeholders: { type: Number, default: 3 },
 })
-
-/** The service pages' words: off when the configuration leaves it off. */
-function word(s: ServiceState) {
-  if (s.state === 'active') return 'running'
-  if (s.state === 'inactive') return s.want ? 'stopped' : 'off'
-  return s.state
-}
 </script>
 
 <template>
@@ -46,7 +43,7 @@ function word(s: ServiceState) {
       <template v-for="s in services" :key="s.name">
         <dt>{{ s.name }}</dt>
         <dd>
-          <StatusBadge :state="word(s)" />
+          <StatusBadge :state="stateWord(s)" />
           <span v-if="s.detail && s.state !== 'active'" class="ml-2 text-ink-muted">
             {{ s.detail }}
           </span>
@@ -78,8 +75,11 @@ function word(s: ServiceState) {
       </dd>
       <dd v-else class="text-ink-muted">off</dd>
     </dl>
-    <p class="mt-3">
+    <p class="mt-3 flex flex-wrap gap-x-4 gap-y-1">
       <RouterLink to="/services" class="link">Manage DHCP and DNS</RouterLink>
+      <RouterLink v-if="!auth.readOnly" to="/system/services" class="link">
+        Restart under System › Services
+      </RouterLink>
     </p>
   </SectionCard>
 </template>

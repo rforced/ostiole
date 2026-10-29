@@ -78,6 +78,8 @@ var accountAPITypes = []reflect.Type{
 	reflect.TypeFor[rebootReply](),
 	reflect.TypeFor[cron.Status](),
 	reflect.TypeFor[cronRunReply](),
+	reflect.TypeFor[ServicesReply](),
+	reflect.TypeFor[serviceActionReply](),
 	reflect.TypeFor[backupRequest](),
 	reflect.TypeFor[restoreRequest](),
 	reflect.TypeFor[restoreResponse](),

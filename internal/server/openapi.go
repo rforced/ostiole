@@ -288,6 +288,10 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/crons":           {summary: "The operator's crons, and the work Ostiole does on its own account.", role: auth.RoleViewer},
 	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now. Command and update crons need an administrator.", role: auth.RoleOperator},
 
+	"GET /api/v1/system/services":                 {summary: "The units Ostiole runs, with when each started, how often systemd restarted it, how it last failed and what may be done to it now.", role: auth.RoleViewer},
+	"POST /api/v1/system/services/{unit}/restart": {summary: "Restart one of the units the list offers it for. Ostiole itself answers 202 and restarts after the reply.", role: auth.RoleOperator},
+	"POST /api/v1/system/services/{unit}/start":   {summary: "Start a unit the configuration wants that is not running.", role: auth.RoleOperator},
+
 	"GET /api/v1/host":               {summary: "What this router is: distribution, kernel, Ostiole's units, the daemons it has, who owns the addresses, and leftover rulesets.", role: auth.RoleViewer},
 	"POST /api/v1/host/legacy/flush": {summary: "Clear the rulesets an older firewall left in the kernel.", role: auth.RoleAdmin},
 

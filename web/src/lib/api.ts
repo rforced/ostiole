@@ -122,6 +122,8 @@ import type {
   SelfTestRequest,
   ServerTestResult,
   ServerTrafficDestinations,
+  ServiceActionReply,
+  ServicesReply,
   ServicesStatus,
   SessionResponse,
   SessionRow,
@@ -709,6 +711,14 @@ export const api = {
   crons: {
     list: () => get<CronStatus[]>('/crons'),
     run: (id: string) => post<CronRunReply>(`/crons/${encodeURIComponent(id)}/run`),
+  },
+  /** The units Ostiole runs, and restarting or starting one of them. */
+  systemServices: {
+    list: () => get<ServicesReply>('/system/services'),
+    restart: (unit: string) =>
+      post<ServiceActionReply>(`/system/services/${encodeURIComponent(unit)}/restart`),
+    start: (unit: string) =>
+      post<ServiceActionReply>(`/system/services/${encodeURIComponent(unit)}/start`),
   },
   notifications: {
     /** How mail and the webhook have done, and what went out lately. */

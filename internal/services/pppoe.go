@@ -63,8 +63,8 @@ func (p *PPPoE) Name() string { return "pppoe" }
 // PeerFile is the name of the peer file for a session.
 func PeerFile(iface string) string { return PPPoEPrefix + iface }
 
-// unitFor is the instance of the templated unit that runs one session.
-func unitFor(iface string) string {
+// PPPoEUnitFor is the instance of the templated unit that runs one session.
+func PPPoEUnitFor(iface string) string {
 	return strings.Replace(PPPoEUnit, "@.", "@"+iface+".", 1)
 }
 
@@ -226,7 +226,7 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 			continue
 		}
 		iface := strings.TrimPrefix(name, PPPoEPrefix)
-		if err := systemctl(ctx, p.cmd(), "stop the session on "+iface, "disable", "--now", unitFor(iface)); err != nil {
+		if err := systemctl(ctx, p.cmd(), "stop the session on "+iface, "disable", "--now", PPPoEUnitFor(iface)); err != nil {
 			return err
 		}
 		if err := os.Remove(filepath.Join(p.dir(), name)); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -236,7 +236,7 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 
 	for _, name := range sortedNames(files) {
 		iface := strings.TrimPrefix(name, PPPoEPrefix)
-		unit := unitFor(iface)
+		unit := PPPoEUnitFor(iface)
 		changed := current[name] != files[name]
 		if changed {
 			// 0600: the provider's password is in here.
