@@ -34,14 +34,17 @@ export async function signOut(page: Page) {
  * The labels are the sidebar's, outermost first.
  */
 export async function sidebar(page: Page, ...pages: string[]) {
-  const menu = page.getByRole('navigation', { name: 'Main' })
+  let scope = page.getByRole('navigation', { name: 'Main' })
   for (const name of pages) {
-    // A section is a button that opens its pages, and a second click
-    // would close them again.
-    const row = menu
-      .getByRole('button', { name, exact: true })
-      .or(menu.getByRole('link', { name, exact: true }))
-    if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+    const section = scope.getByRole('button', { name, exact: true })
+    const link = scope.getByRole('link', { name, exact: true })
+    await section.or(link).first().waitFor()
+    if (await section.count()) {
+      // A second click would close the section again. Its pages are looked
+      // for in its own list: with System open, Services is a page there too.
+      if ((await section.getAttribute('aria-expanded')) !== 'true') await section.click()
+      scope = page.locator(`#${await section.getAttribute('aria-controls')}`)
+    } else await link.click()
   }
 }
 

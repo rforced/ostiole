@@ -164,7 +164,7 @@ describe('ResolverTab', () => {
     config.loaded = true
     const wrapper = mount(ResolverTab)
     await flushPromises()
-    const row = wrapper.findAll('tr').find((r) => r.text().includes('ts.net'))
+    const row = wrapper.findAll('tr').find((r) => r.findAll('td').at(0)?.text() === 'ts.net')
     expect(row?.text()).toContain('100.100.100.100')
     expect(wrapper.findAll('button').some((b) => b.text().includes('Add domain'))).toBe(true)
   })
