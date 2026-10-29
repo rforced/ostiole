@@ -83,6 +83,7 @@ var tdProse = []string{
 	"> Done is better than perfect.\n\nStill, the shelf is crooked. Fix it this weekend & sand the edges.",
 	"Notes from the call: budget's fine (≈ €1,200), deadline is the 14th, Jo will send the draft.",
 	"Mañana: médico a las 10, después la farmacia.",
+	"Results are at http://localhost:8000/runs/a5gvidze/files?path=pump_transient_3112, the old ones at [the lab box](http://127.0.0.1:8080/runs/7).",
 }
 
 // tdSearches are what people type into the search box.
@@ -766,6 +767,9 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{2, push(map[string]any{"endpoint": "https://push.example.com/a", "Endpoint": "https://attacker.example/x.txt", "keys": keys})},
 		{1, push(map[string]any{"endpoint": g.endpoint(), "keys": map[string]any{"p256dh": "1 UNION SELECT password FROM users", "auth": g.b64url(16)}})},
 		{2, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "endpoint": "https://attacker.example/x.txt"})},
+		// Text may link to the machine itself, which nothing fetches; a
+		// setting may not.
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "http://localhost:8000/x"})},
 		// A passkey's answer is base64url.
 		{1, signIn("signature", "x' OR 1=1--")},
 		{1, signIn("clientDataJSON", "<script>alert(1)</script>")},
