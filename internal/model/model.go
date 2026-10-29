@@ -787,6 +787,11 @@ type Interface struct {
 	// which have no business being a source address. The list is fetched
 	// and refreshed like a blocklist. It belongs on a WAN only.
 	BlockBogons bool `json:"blockBogons,omitempty"`
+	// AllowUnroutedIPv6 lets in IPv6 whose source the routes would not send
+	// back out this interface. Unset, an inside interface the router numbers
+	// itself drops it (BCP 38). Set it on a link that carries one direction
+	// of an asymmetric path.
+	AllowUnroutedIPv6 bool `json:"allowUnroutedIPv6,omitempty"`
 	// Shaping holds the queue for this line on the router, given how fast
 	// the line is. Unset leaves the interface as the kernel has it.
 	Shaping *Shaping `json:"shaping,omitempty"`

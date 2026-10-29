@@ -1460,6 +1460,17 @@ export const useConfigStore = defineStore('config', () => {
     p.zones = [...names]
   }
 
+  /** Let TCP with IPv4 options and IPv6 type 0 routing headers through, or drop them as by default. */
+  function setAllowIPOptions(allow: boolean) {
+    if (!allow) {
+      dropProtection('allowIPOptions')
+      return
+    }
+    const d = editable()
+    const p = d.protection ?? (d.protection = {})
+    p.allowIPOptions = true
+  }
+
   /** Go leaves an empty protection block out, so the draft does too. */
   function dropProtection(key: keyof Protection) {
     const d = editable()
@@ -1929,6 +1940,7 @@ export const useConfigStore = defineStore('config', () => {
     protection,
     setDefence,
     setProtectedZones,
+    setAllowIPOptions,
     load,
     discard,
     undoable,

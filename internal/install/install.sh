@@ -240,7 +240,7 @@ UNWANTED="bluez firewalld ufw iptables-services iptables-persistent netfilter-pe
 NetworkManager network-manager networkmanager cockpit* netplan.io dhcpcd dhcpcd-base connman ifupdown
 unattended-upgrades dnf-automatic yum-cron PackageKit packagekit
 snapd ModemManager modemmanager udisks2 upower fwupd multipath-tools device-mapper-multipath lxd-installer
-rsyslog syslog-ng apport whoopsie popularity-contest abrt* avahi avahi-daemon geoclue geoclue2 geoclue-2.0 reportbug
+rsyslog syslog-ng apport whoopsie popularity-contest abrt* kdump-tools kdump-utils kexec-tools avahi avahi-daemon geoclue geoclue2 geoclue-2.0 reportbug
 ntp ntpsec openntpd ntpd-rs"
 
 # Units of packages a router keeps for something else, so they are masked
@@ -298,6 +298,8 @@ units_for() {
 	apport) echo "apport.service" ;;
 	whoopsie) echo "whoopsie.service whoopsie.path" ;;
 	abrt*) echo "abrtd.service abrt-journal-core.service abrt-oops.service abrt-xorg.service abrt-vmcore.service" ;;
+	kdump-tools) echo "kdump-tools.service kdump-tools-dump.service" ;;
+	kdump-utils | kexec-tools) echo "kdump.service" ;;
 	avahi | avahi-daemon) echo "avahi-daemon.service avahi-daemon.socket" ;;
 	geoclue | geoclue2 | geoclue-2.0) echo "geoclue.service" ;;
 	popularity-contest | reportbug) echo "" ;;

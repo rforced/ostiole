@@ -300,6 +300,25 @@ function rate(limit: RateLimit | undefined) {
     </SectionCard>
 
     <SectionCard
+      title="IP options drop"
+      intro="Drops TCP that carries IPv4 options and IPv6 with a type 0 routing header, on every
+        interface whatever zones are chosen above. IGMP's Router Alert still passes."
+      :locked="auth.readOnly"
+    >
+      <template #actions>
+        <ToggleRow
+          id="prot-ipopts"
+          :model-value="!protection.allowIPOptions"
+          variant="switch"
+          label="Enabled"
+          aria-label="IP options drop enabled"
+          :disabled="auth.readOnly"
+          @update:model-value="config.setAllowIPOptions(!$event)"
+        />
+      </template>
+    </SectionCard>
+
+    <SectionCard
       title="Rules with a limit"
       :count="limited.length"
       intro="A limit is set on the rule that admits the traffic, so this shows rather than edits.

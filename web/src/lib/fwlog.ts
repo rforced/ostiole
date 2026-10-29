@@ -16,6 +16,9 @@ const KINDS: Record<string, (e: Omit<FwlogEntry, 'seq'>) => string> = {
   'protect-scanner': zoned('port scan'),
   'protect-synflood': zoned('connection flood'),
   'protect-icmpflood': zoned('ping flood'),
+  'block-ip-options': zoned('IP options'),
+  'block-routing-header': zoned('routing header'),
+  'block-spoofed': zoned('spoofed source'),
 }
 
 /**

@@ -126,6 +126,33 @@
       ]
     },
     {
+      "why": "an inside source the router would not route back to, named by its zone",
+      "entry": {
+        "seq": 13,
+        "time": "2026-09-26T14:02:06Z",
+        "kind": "block-spoofed",
+        "zone": "lan",
+        "action": "drop",
+        "in": "eth1",
+        "family": "ipv6",
+        "proto": "udp",
+        "src": "2001:db8:77::10",
+        "srcPort": 40000,
+        "dst": "2001:db8:ff::99",
+        "dstPort": 53,
+        "length": 62
+      },
+      "values": [
+        "drop",
+        "lan spoofed source",
+        "eth1",
+        "udp",
+        "2001:db8:77::10:40000",
+        "2001:db8:ff::99:53",
+        "62 B"
+      ]
+    },
+    {
       "why": "a prefix written before the verdict was",
       "entry": {
         "seq": 11,

@@ -8,6 +8,12 @@ table inet ostiole {
 		auto-merge
 		elements = { 192.168.1.40, 192.168.1.41 }
 	}
+	chain raw_prerouting {
+		type filter hook prerouting priority raw; policy accept;
+		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
+		rt type 0 counter drop comment "block-routing-header"
+		iifname "eth2" ip6 saddr != :: fib saddr . iif oif missing counter drop comment "block-spoofed"
+	}
 	chain input {
 		type filter hook input priority filter; policy drop;
 		iifname "lo" accept

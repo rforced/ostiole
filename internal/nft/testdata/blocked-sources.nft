@@ -28,6 +28,14 @@ table inet ostiole {
 		auto-merge
 		comment "prefixes IANA has not allocated"
 	}
+	chain raw_prerouting {
+		type filter hook prerouting priority raw; policy accept;
+		iifname { "eth0", "eth2" } ip protocol tcp ip hdrlength != 5 limit rate 10/second counter log prefix "ostiole:s:block-ip-options:drop: " group 1 comment "log:block-ip-options"
+		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
+		iifname { "eth0", "eth2" } rt type 0 limit rate 10/second counter log prefix "ostiole:s:block-routing-header:drop: " group 1 comment "log:block-routing-header"
+		rt type 0 counter drop comment "block-routing-header"
+		iifname "eth1" ip6 saddr != :: fib saddr . iif oif missing counter drop comment "block-spoofed"
+	}
 	chain input {
 		type filter hook input priority filter; policy drop;
 		iifname "lo" accept

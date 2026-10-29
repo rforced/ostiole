@@ -9,14 +9,17 @@ import (
 // kindLabels are what the Logs page calls what matched, for the kinds that
 // are not a rule. matchedLabel in web/src/lib/fwlog.ts is the other copy.
 var kindLabels = map[string]string{
-	"default-drop":      "default drop",
-	"block-private":     "private source",
-	"block-bogons":      "bogon source",
-	"block-dot":         "DNS over TLS",
-	"block-doh":         "DNS over HTTPS",
-	"protect-scanner":   "port scan",
-	"protect-synflood":  "connection flood",
-	"protect-icmpflood": "ping flood",
+	"default-drop":         "default drop",
+	"block-private":        "private source",
+	"block-bogons":         "bogon source",
+	"block-dot":            "DNS over TLS",
+	"block-doh":            "DNS over HTTPS",
+	"protect-scanner":      "port scan",
+	"protect-synflood":     "connection flood",
+	"protect-icmpflood":    "ping flood",
+	"block-ip-options":     "IP options",
+	"block-routing-header": "routing header",
+	"block-spoofed":        "spoofed source",
 }
 
 // Search hands a the values the Logs page shows for the entry, as it shows

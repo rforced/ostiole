@@ -1926,6 +1926,14 @@ describe('config store put back', () => {
     expect(config.dirty).toBe(false)
   })
 
+  it('drops allowIPOptions, and the block, when the IP options drops go back on', () => {
+    const config = seeded()
+    config.setAllowIPOptions(true)
+    expect(draftOf(config).protection).toEqual({ allowIPOptions: true })
+    config.setAllowIPOptions(false)
+    expect(config.dirty).toBe(false)
+  })
+
   it('drops a defence value set to nothing', () => {
     const config = seeded()
     config.setDefence('synFlood', { rate: 30, burst: 60 })

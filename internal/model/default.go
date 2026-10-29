@@ -78,12 +78,18 @@ func Starter(o StarterOptions) *Config {
 		})
 	}
 	if o.WAN != "" {
+		// Private sources are blocked from the start. A reply from a private
+		// upstream still passes, as the block sits after the state check;
+		// only unsolicited traffic from it stops. Management from the WAN
+		// keeps them, since the block sits before the anti-lockout rule and
+		// would lock out an operator on a private upstream network.
 		cfg.Interfaces = append(cfg.Interfaces, Interface{
-			Name:    o.WAN,
-			Zone:    "wan",
-			Enabled: true,
-			IPv4:    IPv4{Mode: AddrDHCP},
-			IPv6:    IPv6{Mode: AddrSLAAC},
+			Name:         o.WAN,
+			Zone:         "wan",
+			Enabled:      true,
+			IPv4:         IPv4{Mode: AddrDHCP},
+			IPv6:         IPv6{Mode: AddrSLAAC},
+			BlockPrivate: !o.ManagementFromWAN,
 		})
 		cfg.Gateways = append(cfg.Gateways, Gateway{Name: GatewayNameFor(o.WAN), Enabled: true, Interface: o.WAN})
 	}

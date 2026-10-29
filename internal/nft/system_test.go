@@ -181,9 +181,10 @@ func TestSystemRulesFull(t *testing.T) {
 		t.Errorf("zone tails = %v", tails)
 	}
 
-	// Nothing here is scoped to no zone at all.
+	// Nothing here is scoped to no zone at all but the replies and the raw
+	// chain, which runs ahead of the zones.
 	for _, r := range rows {
-		if r.Keys != nil && len(r.Zones) == 0 && !strings.HasPrefix(r.Description, "Replies") {
+		if r.Keys != nil && len(r.Zones) == 0 && !strings.HasPrefix(r.Description, "Replies") && r.Chain != RawChain {
 			t.Errorf("row %q counts packets but names no zone", r.Description)
 		}
 	}
@@ -195,9 +196,11 @@ func TestSystemRulesDNSEnforcement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The redirect happens before routing, so it is the first thing shown.
-	if rows[0].Action != "redirect" || rows[0].Chain != "nat_prerouting" {
-		t.Errorf("first row = %+v, want the DNS redirect", rows[0])
+	// The redirect happens before routing, so it is the first thing shown
+	// after the raw chain, which runs before connection tracking.
+	first := slices.IndexFunc(rows, func(r SystemRule) bool { return r.Chain != RawChain })
+	if first < 0 || rows[first].Action != "redirect" || rows[first].Chain != "nat_prerouting" {
+		t.Errorf("first row after the raw chain = %d of %+v, want the DNS redirect", first, rows)
 	}
 	for _, want := range []string{"DNS over TLS", "DNS over HTTPS servers", "Forward DNS queries to this router"} {
 		r, ok := findRow(rows, want)

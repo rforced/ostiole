@@ -112,6 +112,7 @@ export interface Interface {
   logDrops?: boolean
   blockPrivate?: boolean
   blockBogons?: boolean
+  allowUnroutedIPv6?: boolean
   shaping?: Shaping
 }
 
@@ -312,6 +313,7 @@ export interface Protection {
   synFlood?: RateLimit
   icmpFlood?: RateLimit
   portScan?: PortScan
+  allowIPOptions?: boolean
 }
 
 export interface PortScan {

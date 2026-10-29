@@ -20,8 +20,9 @@ import (
 // from input, with the counter keys of both.
 type SystemRule struct {
 	// Chain the rule is in. Rows are ordered by the hook the chain hangs
-	// off: nat_prerouting first, then input, block_dns (jumped to from
-	// forward), forward, and last the tail of the zone chain.
+	// off: raw_prerouting first, then nat_prerouting, input, block_dns
+	// (jumped to from forward), forward, and last the tail of the zone
+	// chain.
 	Chain string `json:"chain"`
 	// After marks the rows evaluated after the zone's own rules.
 	After bool `json:"after,omitempty"`
@@ -118,10 +119,13 @@ func SystemRules(cfg *model.Config, feeds map[string][]string) ([]SystemRule, er
 }
 
 // chainRank orders chains by the hook they hang off, so the rows read in
-// the order a packet meets them: NAT before routing, then the base chain,
-// with block_dns where forward jumps to it, and the zone tail last.
+// the order a packet meets them: the raw-priority chains ahead of
+// connection tracking, NAT before routing, then the base chain, with
+// block_dns where forward jumps to it, and the zone tail last.
 func chainRank(chain string) int {
 	switch chain {
+	case RawChain, "translate_guard":
+		return -1
 	case "nat_prerouting":
 		return 0
 	case "input":
@@ -283,11 +287,10 @@ func logKeys(logs bool, keys ...string) []string {
 	return keys
 }
 
-// systemLogLine is the sampled log in front of one of Ostiole's own drops
-// or rejects, under the kind the log's "s" prefix names and the verdict
-// that follows it.
-func systemLogLine(match, iifnames, kind, verdict string) string {
-	return sampledLog(match, iifnames, "ostiole:s:"+kind+":"+verdict+": ", "log:"+kind)
+// systemLogLine is the sampled log in front of one of Ostiole's own drops,
+// under the kind the log's "s" prefix names.
+func systemLogLine(match, iifnames, kind string) string {
+	return sampledLog(match, iifnames, "ostiole:s:"+kind+":drop: ", "log:"+kind)
 }
 
 // forwardedZones lists the zones whose traffic can arrive already

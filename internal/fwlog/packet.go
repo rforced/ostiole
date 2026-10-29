@@ -44,11 +44,14 @@ type Entry struct {
 // prefix shape spells them. Their prefix carries no zone, since three parts
 // leave no room for one; the listener fills it in from the interface.
 var SystemKinds = map[string]bool{
-	"block-dot":         true,
-	"block-doh":         true,
-	"protect-scanner":   true,
-	"protect-synflood":  true,
-	"protect-icmpflood": true,
+	"block-dot":            true,
+	"block-doh":            true,
+	"protect-scanner":      true,
+	"protect-synflood":     true,
+	"protect-icmpflood":    true,
+	"block-ip-options":     true,
+	"block-routing-header": true,
+	"block-spoofed":        true,
 }
 
 // ParsePrefix splits an nft log prefix the renderer produced. Each shape

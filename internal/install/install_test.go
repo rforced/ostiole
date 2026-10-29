@@ -109,8 +109,11 @@ func TestInstallAndUninstall(t *testing.T) {
 	run := &fakeRunner{}
 	sysctlFile := filepath.Join(t.TempDir(), "99-ostiole.conf")
 	btFile := filepath.Join(t.TempDir(), "ostiole-bluetooth.conf")
+	protoFile := filepath.Join(t.TempDir(), "modprobe.d", "ostiole-protocols.conf")
+	coreFile := filepath.Join(t.TempDir(), "coredump.conf.d", "ostiole.conf")
 	rep, err := Install(context.Background(), sc, lay,
-		Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile, BluetoothFile: btFile}, log)
+		Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile, BluetoothFile: btFile,
+			ProtocolsFile: protoFile, CoredumpFile: coreFile}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,6 +126,14 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 	if rep.Bluetooth != btFile || !run.ran("modprobe", "-r") {
 		t.Errorf("Bluetooth = %q, ran %v", rep.Bluetooth, run.calls)
+	}
+	// Nor for the socket families nobody routes, or for keeping a crashed
+	// program's memory.
+	if raw, err := os.ReadFile(protoFile); err != nil || !strings.Contains(string(raw), "install sctp /bin/false") {
+		t.Errorf("protocols file = %q, %v", raw, err)
+	}
+	if raw, err := os.ReadFile(coreFile); err != nil || !strings.Contains(string(raw), "Storage=none") {
+		t.Errorf("core dump file = %q, %v", raw, err)
 	}
 	// An install takes the clock to UTC along with everything else it
 	// takes over, and runs nothing else on the router.
@@ -177,7 +188,8 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 
 	// Re-install from the installed path is a no-op copy.
-	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-", BluetoothFile: "-"}, log); err != nil {
+	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-", BluetoothFile: "-",
+		ProtocolsFile: "-", CoredumpFile: "-"}, log); err != nil {
 		t.Fatal(err)
 	}
 
@@ -384,7 +396,8 @@ func TestFirewallUnitUnmanaged(t *testing.T) {
 func TestDefaultLeftovers(t *testing.T) {
 	t.Parallel()
 	left := DefaultLayout().Leftovers
-	for _, f := range []string{"/etc/sysctl.d/99-ostiole.conf", BluetoothConfFile, "/etc/sysusers.d/ostiole-proxy.conf"} {
+	for _, f := range []string{"/etc/sysctl.d/99-ostiole.conf", BluetoothConfFile, ProtocolsConfFile, CoredumpConfFile,
+		"/etc/sysusers.d/ostiole-proxy.conf"} {
 		if !slices.Contains(left.Files, f) {
 			t.Errorf("Files lacks %s: %v", f, left.Files)
 		}
@@ -665,7 +678,8 @@ func TestInstallKeepsWhereTheUIListens(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := func(listen string) Options {
-		return Options{Source: src, Listen: listen, Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-", BluetoothFile: "-"}
+		return Options{Source: src, Listen: listen, Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-", BluetoothFile: "-",
+			ProtocolsFile: "-", CoredumpFile: "-"}
 	}
 	install := func(o Options) {
 		t.Helper()

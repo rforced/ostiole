@@ -72,6 +72,11 @@ table inet ostiole {
 		timeout 1m
 		comment "rate per source for rule ssh-in"
 	}
+	chain raw_prerouting {
+		type filter hook prerouting priority raw; policy accept;
+		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
+		rt type 0 counter drop comment "block-routing-header"
+	}
 	chain input {
 		type filter hook input priority filter; policy drop;
 		iifname "lo" accept

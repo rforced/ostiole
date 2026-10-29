@@ -62,6 +62,7 @@ function blank(): InterfaceForm {
     logDrops: 'inherit',
     blockPrivate: false,
     blockBogons: false,
+    allowUnroutedIPv6: false,
   }
 }
 
@@ -165,6 +166,19 @@ const external = computed(
   () => config.zones.find((z) => z.name === form.value.zone)?.external ?? false,
 )
 
+/**
+ * The router holds IPv6 sources to the routes on an inside interface it
+ * numbers itself. Tunnels, PPPoE and a gateway's link are left out, as
+ * the renderer leaves them out.
+ */
+const sourceChecked = computed(() => {
+  const f = form.value
+  if (!f.zone || external.value) return false
+  if (f.ipv6.mode !== 'static' && f.ipv6.mode !== 'delegated') return false
+  if (f.wireguard || f.openvpn || f.tailscale || f.pppoe) return false
+  return !config.gateways.some((g) => g.interface === f.name)
+})
+
 /** An interface on a private network would cut itself off. */
 const privateItself = computed(() => {
   const addr = form.value.ipv4.address
@@ -185,6 +199,7 @@ function save() {
   else out.logDrops = logDrops === 'on'
   if (!out.blockPrivate) delete out.blockPrivate
   if (!out.blockBogons) delete out.blockBogons
+  if (!out.allowUnroutedIPv6) delete out.allowUnroutedIPv6
   if (out.ipv4.mode !== 'static') out.ipv4.address = ''
   if (out.ipv6.mode !== 'static') out.ipv6.address = ''
   if (out.ipv6.mode !== 'dhcp') out.ipv6.prefixHint = ''
@@ -440,6 +455,15 @@ function save() {
           Zone {{ form.zone }} is internal, so blocking by source address here drops legitimate
           traffic.
         </AppNotice>
+
+        <ToggleRow
+          v-if="sourceChecked"
+          id="if-ipv6-source"
+          :model-value="!form.allowUnroutedIPv6"
+          label="Check IPv6 sources against the routes"
+          hint="Drops IPv6 from sources the router would not send back out this interface. Turn it off for a link that carries one direction of an asymmetric path."
+          @update:model-value="form.allowUnroutedIPv6 = !$event"
+        />
       </fieldset>
     </form>
     <template #footer>

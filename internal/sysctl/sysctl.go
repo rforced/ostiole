@@ -35,6 +35,9 @@ var Forwarding = map[string]string{
 	// systemd-sysctl applies a pattern to each as it comes.
 	"net/ipv4/conf/*/send_redirects":   "0",
 	"net/ipv6/conf/*/accept_redirects": "0",
+	// Secure redirects only narrow which redirects are taken, and none
+	// are, so this is for the reader of the file as much as the kernel.
+	"net/ipv4/conf/*/secure_redirects": "0",
 	"net/ipv4/tcp_syncookies":          "1",
 }
 
@@ -89,13 +92,57 @@ var Hardening = map[string]string{
 	// Blind the JIT's constants against being sprayed into executable
 	// memory, for the programs that do get loaded.
 	"net/core/bpf_jit_harden": "2",
-	// A process may only ptrace its own descendants, so a compromised
-	// service cannot read the memory of another one running as the same
-	// user.
-	"kernel/yama/ptrace_scope": "1",
 	// Do not answer a ping sent to a broadcast address; it is an
 	// amplifier and nothing else.
 	"net/ipv4/icmp_echo_ignore_broadcasts": "1",
+	// The kernel's defaults, held against a distribution that changes
+	// them: no kernel log line for the bogus ICMP errors some routers
+	// send in answer to broadcasts, and no moving a half-open connection
+	// to another listener (CVE-2026-98432's second path).
+	"net/ipv4/icmp_ignore_bogus_error_responses": "1",
+	"net/ipv4/tcp_migrate_req":                   "0",
+	// A reset cannot end a connection that is waiting out TIME-WAIT
+	// (RFC 1337). Only the router's own connections have that state.
+	"net/ipv4/tcp_rfc1337": "1",
+	// Go has listened with multipath TCP by default since 1.24, which
+	// puts the UI and the proxy behind code no router needs; with it off
+	// Go listens with plain TCP. Forwarded multipath connections are
+	// plain TCP to this router and are not touched.
+	"net/mptcp/enabled": "0",
+	// Nothing replaces the running kernel without a reboot: no kexec,
+	// and with it no kdump, whose dump would hold all of memory. The
+	// install script removes kdump, which would fail at every boot. Like
+	// the BPF switch, it cannot be turned back until the next boot.
+	"kernel/kexec_load_disabled": "1",
+	// No magic SysRq from a keyboard or a serial console's break; root's
+	// /proc/sysrq-trigger still works.
+	"kernel/sysrq": "0",
+	// Only root profiles, on kernels that know 3; elsewhere it acts as 2.
+	"kernel/perf_event_paranoid": "3",
+	// Only a process with CAP_SYS_PTRACE attaches, so root keeps strace.
+	"kernel/yama/ptrace_scope": "2",
+	// Only root loads a line discipline (PPPoE is a socket, not one) or
+	// pushes keystrokes into another terminal.
+	"dev/tty/ldisc_autoload": "0",
+	"dev/tty/legacy_tiocsti": "0",
+	// Only root uses userfaultfd, which exploits use to stall the kernel
+	// in the middle of a copy.
+	"vm/unprivileged_userfaultfd": "0",
+	// No io_uring: nothing a router runs uses it, and it has carried a
+	// large share of the kernel's exploitable bugs.
+	"kernel/io_uring_disabled": "2",
+	// Debian's and Ubuntu's kernels can refuse user namespaces to
+	// everyone but root; the others cannot without refusing root too.
+	// Every unit Ostiole sandboxes refuses them on its own.
+	"kernel/unprivileged_userns_clone": "0",
+	// No creating open of somebody else's file or FIFO in a world- or
+	// group-writable sticky directory such as /tmp, unless the directory's
+	// owner owns it.
+	"fs/protected_fifos":   "2",
+	"fs/protected_regular": "2",
+	// A process that changed its credentials leaves no core: the
+	// resolvers' would hold the network's DNS names.
+	"fs/suid_dumpable": "0",
 }
 
 // optional marks keys a kernel may not have. They are persisted with
@@ -105,6 +152,17 @@ var optional = map[string]bool{
 	// Yama is a build option, and the JIT knob is only there with one.
 	"kernel/yama/ptrace_scope": true,
 	"net/core/bpf_jit_harden":  true,
+	// So are multipath TCP, kexec, SysRq, perf, the legacy TIOCSTI
+	// switch, userfaultfd and io_uring; the user namespace switch is a
+	// Debian patch.
+	"net/mptcp/enabled":                true,
+	"kernel/kexec_load_disabled":       true,
+	"kernel/sysrq":                     true,
+	"kernel/perf_event_paranoid":       true,
+	"dev/tty/legacy_tiocsti":           true,
+	"vm/unprivileged_userfaultfd":      true,
+	"kernel/io_uring_disabled":         true,
+	"kernel/unprivileged_userns_clone": true,
 }
 
 // All returns every setting Ostiole manages, keyed by /proc/sys path.
@@ -289,7 +347,7 @@ func (p Proc) read(key string) (int, error) {
 // Content renders the persisted sysctl.d file.
 func Content() string {
 	var b strings.Builder
-	b.WriteString("# Written by ostiole. Overwritten on install and on every apply.\n")
+	b.WriteString("# Written by ostiole. Overwritten on install and on every update.\n")
 	section(&b, "# Settings a router needs.", Forwarding)
 	section(&b, "# Appliance tuning. Capacity limits are left to the kernel,\n"+
 		"# which sizes them from installed memory.", Tuning)

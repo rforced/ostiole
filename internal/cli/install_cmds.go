@@ -60,8 +60,9 @@ a configuration is applied and confirmed the router runs a bootstrap
 ruleset: established connections, ICMP, its own DHCP replies and the
 management ports get in, nothing is forwarded.
 
-With --units-only it writes the units and the directories they open and
-reloads systemd, without asking: nothing is enabled or restarted. A
+With --units-only it writes the units, the directories they open, the
+sysctl file and the module and core dump drop-ins, and reloads systemd,
+without asking: nothing is enabled, loaded or restarted. A
 self-update runs it before restarting into the new binary. Releases up
 to 1.7.2 run a bare install there instead, with nobody to ask, so on a
 router that has its units that writes them too, and still fails for
@@ -122,7 +123,9 @@ want of --yes.`,
 			fmt.Fprintf(out, "  serve the web UI on:  %s\n", opts.Listen)
 			fmt.Fprintf(out, "  write service units:  %s\n", strings.Join(serviceUnits(), ", "))
 			fmt.Fprintf(out, "  persist:              router sysctls (%s), journal ceiling (%s)\n", sysctl.ConfFile, journald.ConfFile)
-			fmt.Fprintf(out, "  block:                Bluetooth (%s)\n", install.BluetoothConfFile)
+			fmt.Fprintf(out, "  block:                Bluetooth (%s), unused socket families (%s)\n",
+				install.BluetoothConfFile, install.ProtocolsConfFile)
+			fmt.Fprintf(out, "  keep no core dumps:   %s\n", install.CoredumpConfFile)
 			if opts.Timezone != "-" {
 				fmt.Fprintf(out, "  set the clock to:     %s\n", opts.Timezone)
 			}
@@ -233,11 +236,11 @@ want of --yes.`,
 	return cmd
 }
 
-// writeUnitsOnly is `install --units-only`: the units and the directories
-// they open, then a reload. A self-update runs it with nobody watching, so
-// the rest of an install stays out: the prompt, the firewall's restart
-// that loses UPnP mappings and counters, the sweep of other tables, a
-// network handover nobody is there to confirm.
+// writeUnitsOnly is `install --units-only`: the units, the directories
+// they open and the host files, then a reload. A self-update runs it with
+// nobody watching, so the rest of an install stays out: the prompt, the
+// firewall's restart that loses UPnP mappings and counters, the sweep of
+// other tables, a network handover nobody is there to confirm.
 func writeUnitsOnly(ctx context.Context, out io.Writer, sc install.Systemctl, lay install.Layout, opts install.Options, serviceUnits func(context.Context) error) error {
 	names, err := install.WriteUnits(ctx, sc, lay, opts)
 	if err != nil {
@@ -246,7 +249,13 @@ func writeUnitsOnly(ctx context.Context, out io.Writer, sc install.Systemctl, la
 	if err := serviceUnits(ctx); err != nil {
 		return fmt.Errorf("write the service units: %w", err)
 	}
-	fmt.Fprintf(out, "wrote %s and the service units\n", strings.Join(names, ", "))
+	if err := install.WriteHostFiles(opts); err != nil {
+		return fmt.Errorf("write the host files: %w", err)
+	}
+	if err := install.MaskKdump(ctx, sc); err != nil {
+		slog.Warn("could not mask kdump", "err", err)
+	}
+	fmt.Fprintf(out, "wrote %s, the service units and the host files\n", strings.Join(names, ", "))
 	return nil
 }
 

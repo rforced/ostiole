@@ -23,10 +23,18 @@ func TestStarterManagementFromWANIsTheZoneSwitch(t *testing.T) {
 	if err := on.Validate(); err != nil {
 		t.Errorf("validate: %v", err)
 	}
+	// The private block comes before anti-lockout, so with both on an
+	// operator behind a private upstream could not get back in.
+	if in, _ := on.Interface("eth0"); in.BlockPrivate {
+		t.Error("management from the WAN came with private sources blocked")
+	}
 
 	off := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
 	if wan, _ := off.Zone("wan"); wan.AntiLockout {
 		t.Error("the wan zone got anti-lockout without being asked")
+	}
+	if in, _ := off.Interface("eth0"); !in.BlockPrivate {
+		t.Error("a new WAN does not block private sources")
 	}
 }
 

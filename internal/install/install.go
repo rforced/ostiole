@@ -87,11 +87,12 @@ func DefaultLeftovers() Leftovers {
 			"ostiole-pppoe@.service", "ostiole-tailscaled.service", "ostiole-openvpn@.service"},
 		Files: []string{"/etc/dnsmasq.d/ostiole.*", "/etc/unbound/ostiole.conf", "/etc/chrony/ostiole.conf",
 			"/etc/chrony/.ostiole-check.conf", "/etc/miniupnpd/ostiole.conf", "/etc/ppp/peers/ostiole-*",
-			"/etc/sysusers.d/ostiole-proxy.conf", sysctl.ConfFile, BluetoothConfFile, journald.ConfFile},
+			"/etc/sysusers.d/ostiole-proxy.conf", sysctl.ConfFile, BluetoothConfFile, ProtocolsConfFile,
+			CoredumpConfFile, journald.ConfFile},
 		Unmask: slices.Concat([]string{"dnsmasq.service", "systemd-resolved.service", "unbound.service",
 			"miniupnpd.service", "tailscaled.service", "hostapd.service", "bluetooth.service",
 			"chronyd.service", "chrony.service", "chronyd-restricted.service", "systemd-timesyncd.service",
-			"ntpd.service", "ntpsec.service", "openntpd.service", "ntpd-rs.service"}, ScriptMaskOnly()),
+			"ntpd.service", "ntpsec.service", "openntpd.service", "ntpd-rs.service"}, KdumpUnits, ScriptMaskOnly()),
 		Resolv: "/etc/resolv.conf",
 		State: []string{"/var/lib/ostiole-proxy", "/var/lib/tailscale", "/var/cache/tailscale",
 			"/var/lib/dnsmasq/ostiole.leases", "/run/ostiole-openvpn"},
@@ -235,6 +236,11 @@ type Options struct {
 	// BluetoothFile is where the modprobe drop-in that blocks Bluetooth is
 	// written; empty means the default, "-" skips it (tests).
 	BluetoothFile string
+	// ProtocolsFile and CoredumpFile are where the drop-ins that block
+	// unused socket families and stored core dumps are written; empty
+	// means the default, "-" skips one (tests).
+	ProtocolsFile string
+	CoredumpFile  string
 }
 
 // Report describes what Install did.
@@ -378,6 +384,12 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 			}
 			log.Info("Bluetooth blocked", "file", rep.Bluetooth)
 		}
+	}
+	if err := writeDropIns(opts); err != nil {
+		log.Warn("could not block unused socket families and stored core dumps", "err", err)
+	}
+	if err := MaskKdump(ctx, sc); err != nil {
+		log.Warn("could not mask kdump", "err", err)
 	}
 	// A firewall's output is timestamps, and they are read next to other
 	// machines' timestamps, so Ostiole takes the clock to UTC along with

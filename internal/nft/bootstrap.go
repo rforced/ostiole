@@ -71,6 +71,14 @@ func minimal(title, tag string, ports []uint16, ifaces []string) string {
 	b.WriteString("table " + Table + "\n")
 	b.WriteString("delete table " + Table + "\n")
 	b.WriteString("table " + Table + " {\n")
+	// The management ports may be open to anyone here, so the raw drops
+	// are too, whatever a configuration would say about them.
+	b.WriteString("\tchain " + RawChain + " {\n")
+	b.WriteString("\t\ttype filter hook prerouting priority raw; policy accept;\n")
+	for _, d := range rawDrops {
+		b.WriteString("\t\t" + d.match + " drop comment \"" + tag + ":" + d.kind + "\"\n")
+	}
+	b.WriteString("\t}\n")
 	b.WriteString("\tchain input {\n")
 	b.WriteString("\t\ttype filter hook input priority filter; policy drop;\n")
 	b.WriteString("\t\tiif \"lo\" accept\n")

@@ -224,3 +224,58 @@ describe('InterfaceDialog vendor class', () => {
     expect(config.dirty).toBe(false)
   })
 })
+
+describe('InterfaceDialog IPv6 source check', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  // eth1 is in the saved configuration, so submitting is a change to it.
+  function edit(over: Partial<Interface> = {}, gateway = false) {
+    const config = useConfigStore()
+    const cfg = {
+      ...emptyConfig(),
+      version: 3,
+      zones: [{ name: 'lan' }, { name: 'wan', external: true }],
+      interfaces: [
+        iface({ zone: 'lan', ipv6: { mode: 'static', address: '2001:db8:1::1/64' }, ...over }),
+      ],
+      ...(gateway ? { gateways: [{ name: 'lan_gw', enabled: true, interface: 'eth1' }] } : {}),
+    }
+    config.saved = JSON.parse(JSON.stringify(cfg)) as typeof cfg
+    config.replaceDraft(cfg)
+    const wrapper = mount(InterfaceDialog, {
+      props: { open: true, iface: must(config.findInterface('eth1')) },
+      global: { stubs },
+    })
+    return { wrapper, config }
+  }
+
+  it('is on for an inside interface the router numbers, and an untouched save keeps the draft', async () => {
+    const { wrapper, config } = edit()
+    expect(wrapper.get<HTMLInputElement>('#if-ipv6-source').element.checked).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('is written only when switched off', async () => {
+    const { wrapper, config } = edit()
+    await wrapper.get('#if-ipv6-source').setValue(false)
+    await wrapper.get('form').trigger('submit')
+    expect(must(config.findInterface('eth1')).allowUnroutedIPv6).toBe(true)
+  })
+
+  it('is dropped when switched back on', async () => {
+    const { wrapper, config } = edit({ allowUnroutedIPv6: true })
+    await wrapper.get('#if-ipv6-source').setValue(true)
+    await wrapper.get('form').trigger('submit')
+    expect(must(config.findInterface('eth1'))).not.toHaveProperty('allowUnroutedIPv6')
+  })
+
+  it.each([
+    ['an external zone', { zone: 'wan' }, false],
+    ['SLAAC', { ipv6: { mode: 'slaac' } }, false],
+    ['a gateway link', {}, true],
+  ] as const)('is not offered on %s', (_, over, gateway) => {
+    const { wrapper } = edit(over, gateway)
+    expect(wrapper.find('#if-ipv6-source').exists()).toBe(false)
+  })
+})

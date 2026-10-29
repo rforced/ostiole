@@ -54,7 +54,9 @@ func TestProcApplyAndPersist(t *testing.T) {
 	// Hardening is persisted with the rest, and the keys a kernel may be
 	// built without are optional there too.
 	for _, want := range []string{"kernel.kptr_restrict = 2", "kernel.dmesg_restrict = 1",
-		"kernel.unprivileged_bpf_disabled = 1", "-kernel.yama.ptrace_scope = 1", "-net.core.bpf_jit_harden = 2"} {
+		"kernel.unprivileged_bpf_disabled = 1", "-kernel.yama.ptrace_scope = 2", "-net.core.bpf_jit_harden = 2",
+		"-net.mptcp.enabled = 0", "net.ipv4.tcp_migrate_req = 0", "-kernel.kexec_load_disabled = 1",
+		"-kernel.io_uring_disabled = 2", "-kernel.unprivileged_userns_clone = 0", "fs.suid_dumpable = 0"} {
 		if !strings.Contains(string(raw), want) {
 			t.Errorf("hardening %q missing from persisted content:\n%s", want, raw)
 		}

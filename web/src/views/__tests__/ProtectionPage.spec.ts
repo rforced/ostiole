@@ -135,6 +135,19 @@ describe('ProtectionPage', () => {
     expect(draftOf(config).protection?.portScan).toBeUndefined()
   })
 
+  it('drops IP options until switched off, and forgets the choice when switched back', async () => {
+    // The server leaves an empty protection block out (omitzero).
+    const saved: Config = draft()
+    delete saved.protection
+    const { wrapper, config } = await opened(saved)
+    const toggle = wrapper.find<HTMLInputElement>('#prot-ipopts')
+    expect(toggle.element.checked).toBe(true)
+    await toggle.setValue(false)
+    expect(draftOf(config).protection).toEqual({ allowIPOptions: true })
+    await toggle.setValue(true)
+    expect(config.dirty).toBe(false)
+  })
+
   it('lists the rules that hold their traffic to a rate', () => {
     const { wrapper } = page()
     const text = wrapper.text()

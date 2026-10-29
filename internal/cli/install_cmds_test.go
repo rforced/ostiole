@@ -46,7 +46,10 @@ func TestInstallUnitsOnlyWritesTheUnitsAndNothingElse(t *testing.T) {
 	sc := &recordingSystemctl{}
 	services := 0
 	var out bytes.Buffer
-	err := writeUnitsOnly(t.Context(), &out, sc, lay, install.Options{}, func(context.Context) error {
+	host := install.Options{SysctlFile: filepath.Join(root, "sysctl.d", "99-ostiole.conf"),
+		ProtocolsFile: filepath.Join(root, "modprobe.d", "ostiole-protocols.conf"),
+		CoredumpFile:  filepath.Join(root, "coredump.conf.d", "ostiole.conf")}
+	err := writeUnitsOnly(t.Context(), &out, sc, lay, host, func(context.Context) error {
 		services++
 		return nil
 	})
@@ -65,12 +68,17 @@ func TestInstallUnitsOnlyWritesTheUnitsAndNothingElse(t *testing.T) {
 	if info, err := os.Stat(lay.BackupDir); err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("backup dir = %v, %v", info, err)
 	}
-	// An update brings the networkd drop-in to a router installed before it.
-	if _, err := os.Stat(filepath.Join(lay.NetworkdConfDir, install.NetworkdConfFile)); err != nil {
-		t.Errorf("networkd drop-in: %v", err)
+	// An update brings the networkd drop-in to a router installed before it,
+	// and the host files: they load and restart nothing.
+	for _, f := range []string{filepath.Join(lay.NetworkdConfDir, install.NetworkdConfFile),
+		host.SysctlFile, host.ProtocolsFile, host.CoredumpFile} {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("host file: %v", err)
+		}
 	}
-	if !slices.Equal(sc.calls, []string{"daemon-reload"}) {
-		t.Errorf("systemctl calls = %q, want only daemon-reload", sc.calls)
+	// A mask starts and stops nothing.
+	if !slices.Equal(sc.calls, []string{"daemon-reload", "mask kdump.service kdump-tools.service"}) {
+		t.Errorf("systemctl calls = %q, want only daemon-reload and the kdump mask", sc.calls)
 	}
 	if services != 1 {
 		t.Errorf("service units written %d times", services)
@@ -78,7 +86,7 @@ func TestInstallUnitsOnlyWritesTheUnitsAndNothingElse(t *testing.T) {
 	if _, err := os.Stat(lay.ConfigDir); err == nil {
 		t.Error("the configuration directory was made")
 	}
-	if got := out.String(); got != "wrote ostiole-firewall.service, ostiole.service and the service units\n" {
+	if got := out.String(); got != "wrote ostiole-firewall.service, ostiole.service, the service units and the host files\n" {
 		t.Errorf("output = %q", got)
 	}
 }

@@ -51,6 +51,7 @@ func (r *renderer) render() {
 	r.line("table " + Table + " {")
 	r.indent++
 	r.sets()
+	r.chainRaw()
 	r.chainInput()
 	r.chainForward()
 	r.chainOutput()

@@ -150,6 +150,7 @@ function guards(c: Interface | null) {
   const out: string[] = []
   if (c.blockPrivate) out.push('blocks private')
   if (c.blockBogons) out.push('blocks bogons')
+  if (c.allowUnroutedIPv6) out.push('unrouted IPv6 in')
   if (c.logDrops === true) out.push('logs drops')
   if (c.logDrops === false) out.push('drops quietly')
   return out
