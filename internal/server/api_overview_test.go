@@ -1116,3 +1116,26 @@ func TestWarnsWhenTheLogsWereNotReadBack(t *testing.T) {
 		t.Errorf("warned without a skipped read-back: %+v", w)
 	}
 }
+
+// What the kernel refused, at an apply or the hourly check, stays on the
+// dashboard until one of them writes everything.
+func TestWarnsWhenKernelSettingsCouldNotBeWritten(t *testing.T) {
+	t.Parallel()
+	a := &api{memTotal: func() uint64 { return 8 << 30 }}
+	find := func(st engine.Status) *Warning {
+		for _, w := range a.warnings(context.Background(), starter(), st, nil, nil, install.UnitStates{}) {
+			if w.Kind == "kernel-settings" {
+				return &w
+			}
+		}
+		return nil
+	}
+	w := find(engine.Status{Sysctl: "net/mptcp/enabled: permission denied"})
+	if w == nil || w.Title != "Kernel settings could not be written" ||
+		w.Detail != "The kernel refused net/mptcp/enabled: permission denied. The next apply, restart or hourly check tries again." {
+		t.Errorf("warning = %+v", w)
+	}
+	if w := find(engine.Status{}); w != nil {
+		t.Errorf("warned with nothing refused: %+v", w)
+	}
+}

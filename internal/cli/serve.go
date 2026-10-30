@@ -410,6 +410,9 @@ at your own.`,
 					followRelease(ctx, eng, proxy, log)
 				})
 				deps.Proxy = proxy
+				go panics.Loop(ctx, log, "kernel settings", func(ctx context.Context) {
+					healSysctl(ctx, eng, log)
+				})
 				deps.Wireless = services.NewWireless(g.configDir)
 				ntp := services.NewNTP()
 				deps.NTP = ntp
@@ -1043,6 +1046,31 @@ func followRelease(ctx context.Context, eng *engine.Engine, proxy *services.Prox
 		case <-ctx.Done():
 			return
 		case <-time.After(wait):
+		}
+	}
+}
+
+// sysctlHealEvery is how often the kernel settings are read for drift.
+const sysctlHealEvery = time.Hour
+
+// healSysctl puts back, each hour, the kernel settings something else
+// moved since the start or the last apply wrote them. While they hold it
+// only reads.
+func healSysctl(ctx context.Context, eng *engine.Engine, log *slog.Logger) {
+	t := time.NewTicker(sysctlHealEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		moved, err := eng.HealSysctl()
+		for _, d := range moved {
+			log.Warn("a kernel setting had changed; put it back", "key", d.Key, "found", d.Found, "set", d.Want)
+		}
+		if err != nil {
+			log.Warn("could not put kernel settings back; the next apply, restart or hourly check tries again", "err", err)
 		}
 	}
 }

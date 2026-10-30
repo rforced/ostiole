@@ -1,10 +1,13 @@
 package sysctl
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestProcApplyAndPersist(t *testing.T) {
@@ -232,5 +235,120 @@ func TestNoCapacityLimits(t *testing.T) {
 		if dotted := strings.ReplaceAll(key, "/", "."); strings.Contains(Content(), dotted) {
 			t.Errorf("%s is in the drop-in, where systemd-sysctl runs too early to write it", dotted)
 		}
+	}
+}
+
+// fakeKernel lays out /proc/sys files under a temporary root, each written
+// in the past so that a write shows in its time.
+func fakeKernel(t *testing.T, files map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	past := time.Date(2020, 6, 1, 12, 0, 0, 0, time.UTC)
+	for k, v := range files {
+		p := filepath.Join(root, k)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, past, past); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func written(t *testing.T, root, key string) bool {
+	t.Helper()
+	fi, err := os.Stat(filepath.Join(root, key))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fi.ModTime().Year() != 2020
+}
+
+// The hourly check reads; it writes nothing while every setting holds,
+// and a table size the kernel rounded is no setting that moved.
+func TestHealWritesNothingWhileTheSettingsHold(t *testing.T) {
+	t.Parallel()
+	files := map[string]string{ConntrackMaxKey: "1000000", ConntrackBucketsKey: "250368"}
+	for k, v := range All() {
+		files[strings.ReplaceAll(k, "*", "eth0")] = v
+	}
+	maps.Copy(files, map[string]string{ConntrackAcctKey: "1", ConntrackEventsKey: "1"})
+	root := fakeKernel(t, files)
+	moved, err := (Proc{Root: root}).Heal(Settings{ConntrackMax: 1_000_000})
+	if err != nil || len(moved) != 0 {
+		t.Fatalf("Heal = %+v, %v; want nothing moved", moved, err)
+	}
+	for k := range files {
+		if written(t, root, k) {
+			t.Errorf("%s was written though it held", k)
+		}
+	}
+}
+
+// Only what moved is written back, an interface's own setting under a
+// pattern included, and a ceiling that moved takes its table size along.
+func TestHealPutsBackOnlyWhatMoved(t *testing.T) {
+	t.Parallel()
+	root := fakeKernel(t, map[string]string{
+		"net/ipv4/ip_forward":                  "0",
+		"vm/swappiness":                        "5",
+		"net/mptcp/enabled":                    "1",
+		"net/ipv4/conf/all/send_redirects":     "0",
+		"net/ipv4/conf/eth0.10/send_redirects": "1",
+		ConntrackAcctKey:                       "1",
+		ConntrackMaxKey:                        "262144",
+		ConntrackBucketsKey:                    "65536",
+	})
+	moved, err := (Proc{Root: root}).Heal(Settings{ConntrackMax: 1_000_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Drift{
+		{Key: "net/ipv4/conf/eth0.10/send_redirects", Found: "1", Want: "0"},
+		{Key: "net/ipv4/ip_forward", Found: "0", Want: "1"},
+		{Key: "net/mptcp/enabled", Found: "1", Want: "0"},
+		{Key: ConntrackMaxKey, Found: "262144", Want: "1000000"},
+	}
+	if !slices.Equal(moved, want) {
+		t.Errorf("moved = %+v\nwant %+v", moved, want)
+	}
+	for key, value := range map[string]string{"net/ipv4/ip_forward": "1", "net/mptcp/enabled": "0",
+		"net/ipv4/conf/eth0.10/send_redirects": "0", ConntrackMaxKey: "1000000", ConntrackBucketsKey: "250000"} {
+		if raw, _ := os.ReadFile(filepath.Join(root, key)); strings.TrimSpace(string(raw)) != value {
+			t.Errorf("%s = %q, want %s", key, raw, value)
+		}
+	}
+	for _, key := range []string{"vm/swappiness", "net/ipv4/conf/all/send_redirects", ConntrackAcctKey} {
+		if written(t, root, key) {
+			t.Errorf("%s was written though it held", key)
+		}
+	}
+}
+
+// A setting the kernel will not take back is reported by its key, the
+// others still go back. The kernel's own release file refuses every
+// writer, root too.
+func TestHealSaysWhatItCouldNotPutBack(t *testing.T) {
+	t.Parallel()
+	root := fakeKernel(t, map[string]string{"net/ipv4/ip_forward": "0"})
+	if err := os.MkdirAll(filepath.Join(root, "net/mptcp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/proc/sys/kernel/osrelease", filepath.Join(root, "net/mptcp/enabled")); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := (Proc{Root: root}).Heal(Settings{})
+	if err == nil || !strings.HasPrefix(err.Error(), "net/mptcp/enabled: ") || strings.Contains(err.Error(), "/proc/sys") {
+		t.Errorf("err = %v, want one naming net/mptcp/enabled alone", err)
+	}
+	if len(moved) != 2 {
+		t.Errorf("moved = %+v, want ip_forward and mptcp", moved)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(root, "net/ipv4/ip_forward")); strings.TrimSpace(string(raw)) != "1" {
+		t.Errorf("ip_forward = %q, want it put back beside the failure", raw)
 	}
 }

@@ -84,6 +84,7 @@ const KINDS = [
       { value: 'logs', label: 'The logs could take more than half the memory' },
       { value: 'remote-backup-failed', label: 'A remote backup fails' },
       { value: 'kernel-unsupported', label: 'The kernel is too old' },
+      { value: 'kernel-settings', label: 'Kernel settings cannot be written' },
       { value: 'update-available', label: 'A new Ostiole release' },
       { value: 'os-updates', label: 'Package updates need attention' },
     ],

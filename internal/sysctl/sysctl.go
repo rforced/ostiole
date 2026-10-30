@@ -5,6 +5,7 @@ package sysctl
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -273,21 +274,96 @@ func (p Proc) Apply(s Settings) error {
 	maps.Copy(want, conntrack(s))
 	var errs []error
 	for key, value := range want {
-		paths := []string{filepath.Join(p.root(), key)}
-		if strings.Contains(key, "*") {
-			paths, _ = filepath.Glob(paths[0])
-		}
-		for _, path := range paths {
-			err := os.WriteFile(path, []byte(value+"\n"), 0o644) //nolint:gosec // sysfs files, mode is ignored
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", strings.TrimPrefix(path, p.root()+"/"), err))
+		for _, path := range p.paths(key) {
+			if err := p.write(path, value); err != nil {
+				errs = append(errs, err)
 			}
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// Drift is a setting the kernel no longer holds as Ostiole wrote it.
+type Drift struct {
+	// Key is the /proc/sys path, an interface's own for a pattern.
+	Key   string
+	Found string
+	Want  string
+}
+
+// Healer is an Applier that can put back only what moved.
+type Healer interface {
+	Heal(Settings) ([]Drift, error)
+}
+
+// Heal reads every setting Apply writes and writes back only those the
+// kernel no longer holds, so a router whose settings held is left
+// untouched. Keys the kernel lacks are skipped, as Apply skips them. The
+// table size is not compared, since the kernel rounds what it is given;
+// it is written again with a ceiling that moved.
+func (p Proc) Heal(s Settings) ([]Drift, error) {
+	want := All()
+	tracked := conntrack(s)
+	maps.Copy(want, tracked)
+	delete(want, ConntrackBucketsKey)
+	var moved []Drift
+	var errs []error
+	for _, key := range slices.Sorted(maps.Keys(want)) {
+		for _, path := range p.paths(key) {
+			raw, err := os.ReadFile(path)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			rel := strings.TrimPrefix(path, p.root()+"/")
+			if err != nil {
+				errs = append(errs, keyErr(rel, err))
+				continue
+			}
+			found := strings.TrimSpace(string(raw))
+			if found == want[key] {
+				continue
+			}
+			moved = append(moved, Drift{Key: rel, Found: found, Want: want[key]})
+			if err := p.write(path, want[key]); err != nil {
+				errs = append(errs, err)
+			}
+			if key == ConntrackMaxKey {
+				if err := p.write(filepath.Join(p.root(), ConntrackBucketsKey), tracked[ConntrackBucketsKey]); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+	}
+	return moved, errors.Join(errs...)
+}
+
+// paths are the files a key names, every match for a pattern.
+func (p Proc) paths(key string) []string {
+	path := filepath.Join(p.root(), key)
+	if !strings.Contains(key, "*") {
+		return []string{path}
+	}
+	matches, _ := filepath.Glob(path)
+	return matches
+}
+
+// write sets one file. One that is not there, a key this kernel lacks or
+// an interface gone since the glob, is no error.
+func (p Proc) write(path, value string) error {
+	err := os.WriteFile(path, []byte(value+"\n"), 0o644) //nolint:gosec // sysfs files, mode is ignored
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return keyErr(strings.TrimPrefix(path, p.root()+"/"), err)
+}
+
+// keyErr names the key a read or write failed on, without the path the
+// error already carries.
+func keyErr(key string, err error) error {
+	if pe, ok := errors.AsType[*fs.PathError](err); ok {
+		err = pe.Err
+	}
+	return fmt.Errorf("%s: %w", key, err)
 }
 
 // conntrack renders the accounting and the events, and the ceiling when

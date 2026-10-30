@@ -900,6 +900,7 @@ export interface StatusReply {
   fallback?: FallbackStatus
   recovered?: Recovered
   ssh?: string
+  sysctl?: string
   drift?: DriftStatus
 }
 

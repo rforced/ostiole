@@ -66,11 +66,21 @@ func (f sshFake) Apply(_ context.Context, passwords bool) error {
 }
 
 // kernelFake keeps a conntrack ceiling the way the kernel does: it changes
-// only when something writes one.
+// only when something writes one. A heal reports drift and fails with
+// healErr.
 type kernelFake struct {
 	*hostCalls
-	mu  sync.Mutex
-	now sysctl.Settings
+	mu      sync.Mutex
+	now     sysctl.Settings
+	drift   []sysctl.Drift
+	healErr error
+}
+
+func (f *kernelFake) Heal(s sysctl.Settings) ([]sysctl.Drift, error) {
+	f.add("heal %d", s.ConntrackMax)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.drift, f.healErr
 }
 
 func (f *kernelFake) Apply(s sysctl.Settings) error {
@@ -326,5 +336,60 @@ func TestStatusSaysWhenSSHDoesNotFollow(t *testing.T) {
 	}
 	if st, _ := e.Status(ctx); st.SSH != "" {
 		t.Errorf("status SSH after a followed apply = %q", st.SSH)
+	}
+}
+
+// The hourly check heals against the ceiling in force: the confirmed one,
+// or the one an unconfirmed apply put in. What it could not put back is
+// in the status until a heal or an apply writes everything.
+func TestHealSysctlFollowsTheCeilingInForce(t *testing.T) {
+	t.Parallel()
+	calls := &hostCalls{}
+	kernel := &kernelFake{hostCalls: calls, now: kernelOwn}
+	e, _ := hostEngine(t, store.New(t.TempDir()), calls, kernel)
+	ctx := context.Background()
+	saved := cfg("saved")
+	saved.System.ConntrackMax = 500_000
+	if _, err := e.Apply(ctx, saved, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	calls.take()
+
+	moved := []sysctl.Drift{{Key: "net/mptcp/enabled", Found: "1", Want: "0"}}
+	kernel.drift, kernel.healErr = moved, errors.Join(errors.New("net/mptcp/enabled: permission denied"), errors.New("kernel/sysrq: permission denied"))
+	got, err := e.HealSysctl()
+	if err == nil || !reflect.DeepEqual(got, moved) {
+		t.Errorf("HealSysctl = %+v, %v", got, err)
+	}
+	if got, want := calls.take(), []string{"heal 500000"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("heal asked for %q, want %q", got, want)
+	}
+	if st, _ := e.Status(ctx); st.Sysctl != "net/mptcp/enabled: permission denied; kernel/sysrq: permission denied" {
+		t.Errorf("status Sysctl = %q", st.Sysctl)
+	}
+
+	if _, err := e.Apply(ctx, unconfirmed(), ApplyOptions{ConfirmTimeout: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	e.pending.timer.Stop()
+	if st, _ := e.Status(ctx); st.Sysctl != "" {
+		t.Errorf("status Sysctl after an apply wrote everything = %q", st.Sysctl)
+	}
+	kernel.drift, kernel.healErr = nil, nil
+	calls.take()
+	if _, err := e.HealSysctl(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := calls.take(), []string{"heal 1000000"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("heal in the window asked for %q, want %q", got, want)
+	}
+}
+
+// Without a kernel that can be read back there is nothing to heal.
+func TestHealSysctlWithoutAHealer(t *testing.T) {
+	t.Parallel()
+	e := New(store.New(t.TempDir()), &fakeRunner{}, nil, slog.New(slog.DiscardHandler))
+	if moved, err := e.HealSysctl(); moved != nil || err != nil {
+		t.Errorf("HealSysctl = %+v, %v", moved, err)
 	}
 }

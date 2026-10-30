@@ -795,6 +795,13 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: st.SSH + ".",
 		})
 	}
+	if st.Sysctl != "" {
+		out = append(out, Warning{
+			Kind: "kernel-settings", Level: "warn",
+			Title:  "Kernel settings could not be written",
+			Detail: "The kernel refused " + st.Sysctl + ". The next apply, restart or hourly check tries again.",
+		})
+	}
 	if a.tables != nil {
 		if tables, err := a.tables.ListTables(ctx); err == nil {
 			var foreign []string

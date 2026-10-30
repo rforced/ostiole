@@ -13,6 +13,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -91,6 +92,9 @@ type Engine struct {
 	// sshErr is why sshd does not do what the last apply or revert asked of
 	// it, for the dashboard.
 	sshErr string
+	// sysctlErr is what the last apply or hourly check could not write
+	// into the kernel, for the dashboard.
+	sysctlErr string
 	// retimed is the offset Retime last loaded the ruleset at, until the
 	// next load: were the offset not to be noted, it would load again
 	// every hour.
@@ -235,8 +239,45 @@ func (e *Engine) applySysctl(cfg *model.Config, before *sysctl.Settings) {
 	if s.ConntrackMax == 0 && before != nil {
 		s = *before
 	}
-	if err := e.sysctl.Apply(s); err != nil {
+	err := e.sysctl.Apply(s)
+	e.noteSysctl(err)
+	if err != nil {
 		e.log.Warn("could not set router sysctls; forwarding may not work", "err", err)
+	}
+}
+
+// HealSysctl puts back the kernel settings something else moved since the
+// start or the last apply wrote them, and says which. While they hold it
+// writes nothing. It holds the apply lock and the store's, so a ceiling an
+// apply is changing is not taken for one that moved.
+func (e *Engine) HealSysctl() ([]sysctl.Drift, error) {
+	h, ok := e.sysctl.(sysctl.Healer)
+	if !ok {
+		return nil, nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	unlock, err := e.store.Lock()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	var s sysctl.Settings
+	if e.pending != nil {
+		s.ConntrackMax = e.pending.cfg.System.ConntrackMax
+	} else if cfg, err := e.store.Load(); err == nil {
+		s.ConntrackMax = cfg.System.ConntrackMax
+	}
+	moved, err := h.Heal(s)
+	e.noteSysctl(err)
+	return moved, err
+}
+
+// noteSysctl keeps what the kernel refused for the dashboard, on one line.
+func (e *Engine) noteSysctl(err error) {
+	e.sysctlErr = ""
+	if err != nil {
+		e.sysctlErr = strings.ReplaceAll(err.Error(), "\n", "; ")
 	}
 }
 
@@ -917,6 +958,9 @@ type Status struct {
 	// SSH is why sshd does not let people in the way the last apply or
 	// revert asked.
 	SSH string `json:"ssh,omitempty"`
+	// Sysctl is what the last apply or hourly check could not write into
+	// the kernel.
+	Sysctl string `json:"sysctl,omitempty"`
 }
 
 // Status reports whether configuration exists, whether the table is in the
@@ -927,12 +971,12 @@ func (e *Engine) Status(ctx context.Context) (Status, error) {
 	if p := e.pending; p != nil {
 		pending = &PendingStatus{Since: p.since, Deadline: p.deadline, Remaining: time.Until(p.deadline).Truncate(time.Second), Tag: p.tag}
 	}
-	recovered, sshErr := e.recovered, e.sshErr
+	recovered, sshErr, sysctlErr := e.recovered, e.sshErr, e.sysctlErr
 	e.mu.Unlock()
 
 	st := Status{
 		Configured: e.store.Exists(), Pending: pending, Network: "none", Fallback: e.readFallback(),
-		Recovered: recovered, SSH: sshErr,
+		Recovered: recovered, SSH: sshErr, Sysctl: sysctlErr,
 	}
 	if e.net != nil {
 		st.Network = e.net.Name()
