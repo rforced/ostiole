@@ -138,6 +138,14 @@ func (g td) aiRequests() []tdRequest {
 		tdBody("POST", api+"/tokens", map[string]any{"name": g.pick("Claude Code on the laptop", "Sam's agent (read only)"),
 			"scope": g.pick("read", "write"), "space_mode": "some", "space_ids": []string{space, g.id()}, "expires_in_days": 90, "ack": true}),
 		tdBody("PATCH", api+"/admin/agent-access", map[string]any{"enabled": true, "mcp_access": g.pick("off", "lan", "any")}),
+		tdBody("POST", api+"/ai/spaces/"+space+"/ask", map[string]any{"job_id": g.id(), "question": g.pick(tdQuestions...), "tz": g.pick(tdZones...)}),
+		tdBody("POST", api+"/ai/spaces/"+space+"/summary", map[string]any{"job_id": g.id(), "window": g.pick("since_visit", "last_30", "all"),
+			"tz": g.pick(tdZones...)}),
+		{method: "POST", path: api + "/ai/spaces/" + space + "/visit"},
+		{method: "DELETE", path: api + "/ai/spaces/" + space + "/summary"},
+		tdBody("POST", api+"/ai/rescue", map[string]any{"job_id": g.id(), "tz": g.pick(tdZones...), "hint": g.agentText()}),
+		{method: "POST", path: api + "/ai/rescue/card/dismiss"},
+		tdBody("PUT", api+"/ai/settings", map[string]any{"ask_notes": true, "rescue_notes": false, "briefing_time": g.clock()}),
 	}
 }
 
