@@ -65,7 +65,8 @@ var tdTitles = []string{"Eat potato’s", "Call the plumber about the sink", "Re
 	"Read “The Lantern Keeper”", "Plan Sam's 40th (surprise!)", "Café run: oat milk, beans", "Garden & yard", "Work — Q4",
 	"Who's bringing what?", "Sleep by 11", "Top 3 this week", "Watch the tide tables", "Kill the weeds (again)", "Echo Lake trip, day 2",
 	"Pay rent / utilities", "50% off — ends Friday", "Ask: \"can we move it?\"", "Mi lista de la compra", "Büro aufräumen", "週末の買い物",
-	"Set a time to find my keys", "Watch the retrieval logs", "Watch this, then nice work"}
+	"Set a time to find my keys", "Watch the retrieval logs", "Watch this, then nice work", "Share one event with a non-user (.ics download)",
+	"Attach the file (PDF) to the claim"}
 
 // tdProse is what goes in notes, comments and the journal: Markdown with
 // lists, links, emphasis and code, and plain sentences.
@@ -84,6 +85,7 @@ var tdProse = []string{
 	"Notes from the call: budget's fine (≈ €1,200), deadline is the 14th, Jo will send the draft.",
 	"Mañana: médico a las 10, después la farmacia.",
 	"Results are at http://localhost:8000/runs/a5gvidze/files?path=pump_transient_3112, the old ones at [the lab box](http://127.0.0.1:8080/runs/7).",
+	"Ask the user (Sam) before you confirm (or move) anything.",
 }
 
 // tdPlaces are where an event happens, as people type it.
@@ -735,7 +737,8 @@ type tdAttack struct {
 // password goes, and in the session cookie. Text, which the set reads as
 // paranoia 1 does, keeps what CRS alone refuses there but a command run
 // under another or after a backtick, which plain sentences and Markdown
-// code spell.
+// code spell, a link to the machine itself, a word and a bracket, and a
+// semicolon and a word.
 func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := td{vw{rand.New(rand.NewPCG(7, 22))}}
@@ -778,6 +781,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/ai/capture/break-down", map[string]any{"task_id": task, "hint": "1' OR '1'='1' --"})},
 		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "label": "<img src=x onerror=alert(1)>"})},
 		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "extra": map[string]any{"stop": "x' UNION SELECT password FROM users--"}})},
+		{1, g.mcp(false, "ping", map[string]any{"_meta": map[string]any{"io.modelcontextprotocol/clientInfo": map[string]any{"description": "<script>alert(1)</script>"}}})},
+		{1, g.mcp(true, "initialize", map[string]any{"clientInfo": map[string]any{"name": "x", "websiteUrl": "http://169.254.169.254/latest/meta-data/"}})},
 	}
 	attacks := []tdAttack{
 		// Without a character only the rules that count them see. Where
@@ -815,6 +820,11 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		// Text may link to the machine itself, which nothing fetches; a
 		// setting may not.
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "http://localhost:8000/x"})},
+		// So may a word and a bracket, or a semicolon and a word.
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "user(x)"})},
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "stat(x)"})},
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "atob(x)"})},
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "x;offline"})},
 		// A passkey's answer is base64url.
 		{1, signIn("signature", "x' OR 1=1--")},
 		{1, signIn("clientDataJSON", "<script>alert(1)</script>")},
@@ -847,6 +857,10 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{3, g.mcp(false, "ping", map[string]any{"_meta": map[string]any{"com.example/trace": "a);(b"}})},
 		{4, g.mcp(false, "notifications/initialized", map[string]any{"_meta": map[string]any{"com.example/trace": "a);(b"}})},
 		{4, g.mcp(false, "notifications/initialized", map[string]any{"_meta": map[string]any{"com.example/a);(b": 1}})},
+		{1, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
+			"_meta": map[string]any{"claudecode/toolUseId": "1' OR '1'='1"}})},
+		{1, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
+			"_meta": map[string]any{"claudecode/.claude": 1}})},
 		{1, g.mcp(false, "tools/call' UNION SELECT password FROM users--", nil)},
 		// The same with only brackets, which fewer rules read.
 		{3, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "due": "2026-10-13);("})},

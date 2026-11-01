@@ -18,6 +18,8 @@ var tdAgentText = []string{
 	"Draft the reply:\n\n```\nHi Jo, the 14th works. Bring the receipts.\n```\n\n- [ ] confirm the room",
 	"Follow-up from the call (2026-10-19): the quote's \"final\" price is €1,200 -- ask whether delivery is in it.",
 	"## Steps\n1. Sand the shelf\n2. Paint it\n3. Hang it 🔨",
+	"Eval 2026-10-31: the small model spells a title's 3 as three. Needs a paid eval (EVAL_CONFIRM=1, check -estimate first).",
+	"Shift-click ranges, a select mode on phones; offline queueing per item; one Undo for the batch.",
 }
 
 func (g td) agentText() string { return g.pick(append(tdAgentText, tdProse...)...) }
@@ -45,7 +47,9 @@ func (g td) mcp(legacy bool, method string, params map[string]any) tdRequest {
 			meta = map[string]any{}
 		}
 		meta["io.modelcontextprotocol/protocolVersion"] = "2026-07-28"
-		meta["io.modelcontextprotocol/clientInfo"] = map[string]any{"name": agent[0], "title": agent[0], "version": "2.1.0"}
+		if meta["io.modelcontextprotocol/clientInfo"] == nil {
+			meta["io.modelcontextprotocol/clientInfo"] = map[string]any{"name": agent[0], "title": agent[0], "version": "2.1.0"}
+		}
 		meta["io.modelcontextprotocol/clientCapabilities"] = map[string]any{"roots": map[string]any{"listChanged": true}, "elicitation": map[string]any{}}
 		params["_meta"] = meta
 		header["MCP-Protocol-Version"] = "2026-07-28"
@@ -61,6 +65,21 @@ func (g td) mcp(legacy bool, method string, params map[string]any) tdRequest {
 
 func (g td) tool(legacy bool, name string, args map[string]any) tdRequest {
 	return g.mcp(legacy, "tools/call", map[string]any{"name": name, "arguments": args})
+}
+
+// claudeCode is a call from Claude Code since 2.1, which says what it is
+// and where its site is, and names each tool's call by an id of its own.
+func (g td) claudeCode(method string, params map[string]any) tdRequest {
+	if params == nil {
+		params = map[string]any{}
+	}
+	meta := map[string]any{"io.modelcontextprotocol/clientInfo": map[string]any{"name": "claude-code", "title": "Claude Code", "version": "2.1.0",
+		"description": "Anthropic's agentic coding tool", "websiteUrl": "https://claude.com/claude-code"}}
+	if method == "tools/call" {
+		meta["claudecode/toolUseId"] = "toolu_01" + g.b64url(18)
+	}
+	params["_meta"] = meta
+	return g.mcp(false, method, params)
 }
 
 func (g td) minute() string { return g.day() + "T" + g.clock() }
@@ -92,10 +111,17 @@ func (g td) mcpRequests(legacy bool) []tdRequest {
 		g.tool(legacy, "move_task", map[string]any{"task_id": task, "position": "first"}),
 		g.tool(legacy, "move_task", map[string]any{"task_id": task, "top_level": true}),
 	}
+	if !legacy {
+		rs = append(rs, g.claudeCode("server/discover", nil), g.claudeCode("tools/list", nil),
+			g.claudeCode("tools/call", map[string]any{"name": "create_task", "arguments": map[string]any{"title": g.title(), "notes": g.agentText()}}),
+			g.claudeCode("tools/call", map[string]any{"name": "update_task", "arguments": map[string]any{"task_id": task, "version": 2,
+				"notes_append": g.agentText()}}))
+	}
 	if legacy {
 		rs = append(rs, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18",
 			"capabilities": map[string]any{"roots": map[string]any{"listChanged": true}, "sampling": map[string]any{}},
-			"clientInfo":   map[string]any{"name": agent[0], "title": agent[0], "version": "0.3.30"}}))
+			"clientInfo": map[string]any{"name": agent[0], "title": agent[0], "version": "0.3.30", "description": "Plans and edits code",
+				"websiteUrl": "https://agent.example.org/docs"}}))
 	}
 	return rs
 }
