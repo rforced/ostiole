@@ -103,6 +103,9 @@ var jfProviders = []string{"TheMovieDb", "The Open Movie Database", "TheTVDB", "
 	"ListenBrainz Similarity Provider", "Open Subtitles", "Intro Skipper", "Studio Images", "Fanart", "Comic Vine", "Google Books",
 	"Comic Book Archive Cover Extractor", "EPUB Metadata", "Open Packaging Format", "LrcLyricProvider", "TxtLyricProvider"}
 
+// jfMusicBrainz is where the MusicBrainz plugin's settings are saved.
+const jfMusicBrainz = "/Plugins/8c95c4d2-e50c-4fb0-a4f3-6c06ff0f9a1a/Configuration"
+
 // libraryOptions are a library's settings as the dashboard saves them, the
 // fields filled as on a server in use, its folders made up.
 func (g jf) libraryOptions(paths ...string) map[string]any {
@@ -622,6 +625,11 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					jfRequest{"POST", "/Library/VirtualFolders?name=" + uriComponent("TV Shows") + "&collectionType=tvshows&refreshLibrary=true", js,
 						vwJSON(map[string]any{"LibraryOptions": u.libraryOptions(paths...)}), false, web})
 			}
+			// It saves the MusicBrainz plugin's settings, with the plugin's
+			// own server or a copy at home.
+			for _, server := range []string{"https://musicbrainz.org", "http://192.0.2.10:5000", "https://musicbrainz.home.example/"} {
+				rs = append(rs, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": server, "RateLimit": "1", "ReplaceArtistName": false}), false, web})
+			}
 			for _, r := range rs {
 				if status := jfSend(t, plain, r); status != http.StatusOK {
 					t.Errorf("%s %s %.80q (%s): %d", r.method, r.path, r.body, r.client.userAgent, status)
@@ -758,6 +766,13 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		// operator can follow it, and only in a library's settings.
 		{2, library(libraryOptions, "SubtitleFetcherOrder", []string{"Open Subtitles|local x"})},
 		{2, library("/System/Configuration", "SubtitleFetcherOrder", []string{"Screen Grabber"})},
+		// The checks for links skip only the one MusicBrainz server, at a
+		// server's root on a host not this machine's, on the plugin's path.
+		{1, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": "http://127.0.0.2:5000", "RateLimit": "1"}), false, c}},
+		{2, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": "ftp://musicbrainz.example.org", "RateLimit": "1"}), false, c}},
+		{2, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": "https://musicbrainz.example.org/x.txt", "RateLimit": "1"}), false, c}},
+		{2, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": "https://musicbrainz.org", "server": "https://attacker.example", "RateLimit": "1"}), false, c}},
+		{2, jfRequest{"POST", "/Plugins/" + g.uuid() + "/Configuration", js, vwJSON(map[string]any{"Server": "https://musicbrainz.org"}), false, c}},
 		{2, jfRequest{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c}},
 		// Outside the arguments the set knows, text is read as CRS reads it.
 		{2, jfRequest{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c}},
