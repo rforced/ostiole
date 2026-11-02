@@ -66,7 +66,7 @@ var tdTitles = []string{"Eat potato’s", "Call the plumber about the sink", "Re
 	"Who's bringing what?", "Sleep by 11", "Top 3 this week", "Watch the tide tables", "Kill the weeds (again)", "Echo Lake trip, day 2",
 	"Pay rent / utilities", "50% off — ends Friday", "Ask: \"can we move it?\"", "Mi lista de la compra", "Büro aufräumen", "週末の買い物",
 	"Set a time to find my keys", "Watch the retrieval logs", "Watch this, then nice work", "Share one event with a non-user (.ics download)",
-	"Attach the file (PDF) to the claim"}
+	"Attach the file (PDF) to the claim", "Install the app on the old router for Sam /personal #", "Ask about the shared shelf toggle #"}
 
 // tdProse is what goes in notes, comments and the journal: Markdown with
 // lists, links, emphasis and code, and plain sentences.
@@ -86,6 +86,10 @@ var tdProse = []string{
 	"Mañana: médico a las 10, después la farmacia.",
 	"Results are at http://localhost:8000/runs/a5gvidze/files?path=pump_transient_3112, the old ones at [the lab box](http://127.0.0.1:8080/runs/7).",
 	"Ask the user (Sam) before you confirm (or move) anything.",
+	"Read-only roots for ffmpeg through x/sys/unix. The token is in ~/.config/agent/token; ~/.claude/settings.json stays as it is.",
+	"The agent from ~/.jetbrains/acp.json (no AGENTS.md) reads CLAUDE.md too.",
+	"Short texts skip the model (by design). The plan (capture.md:64) says one line goes through split-into-lines. Code: isShort (split.ts:29-33), used by organise() (session.ts:387); test capture.test.ts:97.",
+	"It reported \"resync count 2\", and frame 3 was tasks.changed. It then passed `go test -race -count=2` alone.",
 }
 
 // tdPlaces are where an event happens, as people type it.
@@ -207,6 +211,8 @@ func (g td) requests() []tdRequest {
 		tdGet(api + "/journal/days/" + day),
 		tdGet(api + "/day-plan/" + day),
 		tdGet(api + "/search" + tdQuery("q", g.pick(tdSearches...), "limit", "8", "kinds", "task,goal")),
+		tdGet(api + "/spaces/" + space + "/recall?" + url.Values{"title": {g.title()}, "label": {g.pick("ai", "friend", "Q4 — work"), "fea"}}.Encode()),
+		tdGet(api + "/tasks/" + task + "/recall" + tdQuery("title", g.title())),
 		tdGet(api + "/spaces?archived=true"),
 		tdGet(api + "/spaces/" + space + "/labels"),
 		tdGet(api + "/notifications" + tdQuery("unread", "true", "limit", "20")),
@@ -651,6 +657,7 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 				send(tdBody("POST", "/api/v1/tasks", map[string]any{"id": g.id(), "space_id": g.id(), "kind": "task", "title": title}), "")
 				send(tdBody("PATCH", "/api/v1/spaces/"+g.id(), map[string]any{"name": title}), "")
 				send(tdGet("/api/v1/search"+tdQuery("q", title, "limit", "8")), "")
+				send(tdGet("/api/v1/spaces/"+g.id()+"/recall?"+url.Values{"title": {title}, "label": {title, "ai"}}.Encode()), "")
 			}
 			for _, text := range tdProse {
 				send(tdBody("PATCH", "/api/v1/tasks/"+g.id(), map[string]any{"notes": text, "version": 3}), "")
@@ -769,6 +776,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/tasks/"+task+"/comments", map[string]any{"body": `"><svg onload=alert(1)>`})},
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "<img src=x onerror=alert(1)>", "color": "moss"})},
 		{1, tdGet(api + "/search" + tdQuery("q", "x' UNION SELECT password FROM users--"))},
+		{1, tdGet(api + "/spaces/" + space + "/recall" + tdQuery("title", "<script>alert(1)</script>"))},
+		{1, tdGet(api + "/spaces/" + space + "/recall?" + url.Values{"title": {"x"}, "label": {"ai", "x' UNION SELECT password FROM users--"}}.Encode())},
 		{1, tdBody("POST", api+"/import/tasks", map[string]any{"space_id": space, "source": "todoist", "items": []any{
 			map[string]any{"kind": "task", "title": "x", "notes": "1' OR '1'='1' --", "comments": []string{"<script>alert(1)</script>"}}}})},
 		{1, g.tool(false, "create_task", map[string]any{"title": "<script>alert(document.cookie)</script>"})},
@@ -825,6 +834,13 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "stat(x)"})},
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "atob(x)"})},
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "x;offline"})},
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": ".config/x"})},
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "(a)(b);"})},
+		{2, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "\"in a.b=c"})},
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "json(x)"})},
+		// Only recall's labels may come more than once.
+		{3, tdGet(api + "/spaces/" + space + "/recall?" + url.Values{"title": {"x"}, "label": {"ai", "fea"}, "q": {"a", "b"}}.Encode())},
+		{3, tdGet(api + "/search?" + url.Values{"q": {"x"}, "label": {"a", "b"}}.Encode())},
 		// A passkey's answer is base64url.
 		{1, signIn("signature", "x' OR 1=1--")},
 		{1, signIn("clientDataJSON", "<script>alert(1)</script>")},
