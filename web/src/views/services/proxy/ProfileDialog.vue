@@ -26,6 +26,7 @@ const APPLICATIONS = [
   'vaultwarden',
   'jellyfin',
   'tendrils',
+  'cavu',
 ]
 
 /** An empty number is the default, which its placeholder shows. */

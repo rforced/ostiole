@@ -168,7 +168,7 @@ type WAFProfile struct {
 	InboundThreshold  int `json:"inboundThreshold,omitempty"`
 	OutboundThreshold int `json:"outboundThreshold,omitempty"`
 	// Applications names the exclusion sets loaded: wordpress, nextcloud,
-	// phpbb, xenforo, vaultwarden, jellyfin, tendrils.
+	// phpbb, xenforo, vaultwarden, jellyfin, tendrils, cavu.
 	Applications []string `json:"applications,omitempty"`
 	// BodyLimitMB is the largest request body taken, all of it inspected;
 	// 0 is 12. A larger one is refused unless PassLargeBodies.
@@ -210,7 +210,7 @@ var WAFModes = []string{"", "detect", "block"}
 
 // WAFApplications are the exclusion sets a profile can load, in the order
 // the UI offers them.
-var WAFApplications = []string{"wordpress", "nextcloud", "phpbb", "xenforo", "vaultwarden", "jellyfin", "tendrils"}
+var WAFApplications = []string{"wordpress", "nextcloud", "phpbb", "xenforo", "vaultwarden", "jellyfin", "tendrils", "cavu"}
 
 // ProxyProtocols send the client's address ahead of the stream.
 var ProxyProtocols = []string{"", "v1", "v2"}
