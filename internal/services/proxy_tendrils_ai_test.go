@@ -20,6 +20,10 @@ var tdAgentText = []string{
 	"## Steps\n1. Sand the shelf\n2. Paint it\n3. Hang it 🔨",
 	"Eval 2026-10-31: the small model spells a title's 3 as three. Needs a paid eval (EVAL_CONFIRM=1, check -estimate first).",
 	"Shift-click ranges, a select mode on phones; offline queueing per item; one Undo for the batch.",
+	"A new site for the club, begun 2026-09-12.\n\n**Why:** volunteers keep it up after the handoff.\n**How to apply:** each feature must work from the admin pages. Decisions: `docs/decisions/`.",
+	"- 2026-10-14: 40 people on the list; the payment link is still the old one (`/join`).\n- Sign-in sends a one-time email (ADR 0012); the code lasts ten minutes.",
+	"Exports an ebook (`.epub`) that needs a last look. Time and memory: 12 to 40 s, 1.2 GB.\n\n> Batch mode with no window: pass the file and the format.",
+	"Pricing: $30 a year (200 pages a month, more on request). Old maps and letters (\"public domain\") need no licence.",
 }
 
 func (g td) agentText() string { return g.pick(append(tdAgentText, tdProse...)...) }
