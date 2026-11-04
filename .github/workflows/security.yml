@@ -5,7 +5,7 @@ on:
     branches: [dev]
   pull_request:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -52,7 +52,10 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
-      - run: bun audit
+      # glob and minimatch are fixed only in majors that eslint,
+      # typescript-eslint and js-beautify do not allow yet. Both are
+      # dev-only and match only patterns from this repository's config.
+      - run: bun audit --ignore=GHSA-3g3m-2fjr-6pw4 --ignore=GHSA-g3hv-75wg-m249
 
   gitleaks:
     name: gitleaks
