@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -84,6 +85,82 @@ func TestProxyRefusesNamesNoSiteClaims(t *testing.T) {
 	for _, sni := range []string{"", "other.example.com"} {
 		if names, err := handshake(secure, sni); !refused(err) {
 			t.Errorf("a handshake naming %q got a certificate for %v (%v); want it refused", sni, names, err)
+		}
+	}
+}
+
+// Nothing the proxy sends names the software behind it: not a site's
+// answer, the early hint before it, or a refusal.
+func TestProxyResponsesNameNoSoftware(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	hints := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Link", "</app.css>; rel=preload")
+		w.WriteHeader(http.StatusEarlyHints)
+		w.Header().Del("Link")
+		w.Header().Set("Server", "upstream/1.0")
+		_, _ = io.WriteString(w, "site")
+	}))
+	t.Cleanup(hints.Close)
+	leaky := answer(t, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version")
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled:   true,
+		HTTPPort:  freePort(t),
+		HTTPSPort: freePort(t),
+		Pools: []model.ProxyPool{
+			{ID: "web", Upstreams: []model.ProxyUpstream{{Address: hints.Listener.Addr().String()}}},
+			{ID: "leaky", Upstreams: []model.ProxyUpstream{{Address: leaky}}},
+		},
+		Profiles: []model.WAFProfile{{ID: "block", Mode: "block", InspectResponses: true}},
+		Sites: []model.ProxySite{
+			{ID: "status", Enabled: true, PlainHTTP: true, Hosts: []string{"status.example.com"}, Pool: "web"},
+			{ID: "leak", Enabled: true, PlainHTTP: true, Hosts: []string{"leak.example.com"}, Pool: "leaky", WAF: "block"},
+		},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, answer(t, "solver"), map[string][]string{
+		model.SelfCertificate: {"status.example.com", "leak.example.com"},
+	})
+
+	for _, tc := range []struct {
+		host     string
+		statuses []int
+	}{
+		{"status.example.com", []int{http.StatusEarlyHints, http.StatusOK}},
+		// The WAF refuses the upstream's answer after it was read.
+		{"leak.example.com", []int{http.StatusForbidden}},
+		{"nothing.example.com", []int{http.StatusForbidden}},
+		// Caddy refuses a host that could climb a path before any route runs.
+		{"..", []int{http.StatusBadRequest}},
+	} {
+		conn, err := net.Dial("tcp", plain)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+		fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", tc.host)
+		br := bufio.NewReader(conn)
+		var got []int
+		for {
+			resp, err := http.ReadResponse(br, nil)
+			if err != nil {
+				t.Fatalf("Host %q: %v", tc.host, err)
+			}
+			got = append(got, resp.StatusCode)
+			for _, name := range []string{"Server", "Via"} {
+				if v := resp.Header.Values(name); len(v) > 0 {
+					t.Errorf("Host %q: the %d names %s %q", tc.host, resp.StatusCode, name, v)
+				}
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			if resp.StatusCode >= http.StatusOK {
+				break
+			}
+		}
+		_ = conn.Close()
+		if !slices.Equal(got, tc.statuses) {
+			t.Errorf("Host %q: got %v, want %v", tc.host, got, tc.statuses)
 		}
 	}
 }

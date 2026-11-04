@@ -224,16 +224,17 @@ func (p *Proxy) tlsApp(pr model.Proxy) *tlsApp {
 	return &tlsApp{Certificates: tlsCertificates{LoadFiles: pairs}, DisableOCSPStapling: true}
 }
 
-// serverHeaderRoute takes the Server header off every response, the
-// upstream's included. Caddy sets its own before any handler runs, so
-// the removal is deferred to the moment the response is written. While
+// serverHeaderRoute takes the Server and Via headers off every response,
+// the upstream's included. Caddy sets its own Server before any handler
+// runs and reverse_proxy adds "Via: 1.1 Caddy", so the removal is
+// deferred to the moment the response is written. While
 // requests are logged, it puts the user agent on each request's line, the
 // one header the line keeps, and what the server behind the proxy
 // answered, null when none did.
 func serverHeaderRoute(records bool) httpRoute {
 	handle := []jsonMap{{
 		"handler":  "headers",
-		"response": jsonMap{"deferred": true, "delete": []string{"Server"}},
+		"response": jsonMap{"deferred": true, "delete": []string{"Server", "Via"}},
 	}}
 	if records {
 		handle = append(handle,

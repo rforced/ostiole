@@ -84,7 +84,8 @@
                   "response": {
                     "deferred": true,
                     "delete": [
-                      "Server"
+                      "Server",
+                      "Via"
                     ]
                   }
                 },
@@ -316,7 +317,8 @@
                   "response": {
                     "deferred": true,
                     "delete": [
-                      "Server"
+                      "Server",
+                      "Via"
                     ]
                   }
                 },
