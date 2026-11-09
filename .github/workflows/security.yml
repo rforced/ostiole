@@ -96,7 +96,7 @@ jobs:
       - name: actionlint
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
       - name: zizmor
-        run: pipx run zizmor==1.31.1 --persona=regular --no-progress .github/workflows/
+        run: pipx run zizmor==1.32.0 --persona=regular --no-progress .github/workflows/
       - name: shellcheck
         # Found rather than globbed: scripts/ holds only ci/ in a clean
         # checkout, and an unmatched glob is passed through as a filename.
