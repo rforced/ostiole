@@ -1,0 +1,22 @@
+# - internal/bodyprocessors/multipart.go: parts were read with NextPart,
+#   which decodes a part sent with Content-Transfer-Encoding
+#   quoted-printable and hides that header. Backends are handed the raw
+#   bytes, so a payload written with =XX escapes or soft line breaks got
+#   past rules that match the raw form. Parts are read with NextRawPart.
+#   Upstream: PR #1759 (2026-10-14), open at 08aa511.
+diff --git a/internal/bodyprocessors/multipart.go b/internal/bodyprocessors/multipart.go
+index 7391f7b..c500044 100644
+--- a/internal/bodyprocessors/multipart.go
++++ b/internal/bodyprocessors/multipart.go
+@@ -44,7 +44,10 @@ func (mbp *multipartBodyProcessor) ProcessRequest(reader io.Reader, v plugintype
+ 	multipartFilenameLanguageCol := v.MultipartFilenameLanguage()
+ 	multipartNameCol := v.MultipartName()
+ 	for {
+-		p, err := mr.NextPart()
++		// Changed by Ostiole: NextPart decodes a quoted-printable part, which
++		// backends are handed raw, so rules read a string the backend never
++		// sees (upstream PR #1759).
++		p, err := mr.NextRawPart()
+ 		if err == io.EOF {
+ 			break
+ 		}

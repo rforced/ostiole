@@ -8,5 +8,19 @@
 # (github.com/corazawaf/coraza/security/advisories) are checked by hand.
 #
 # Changes, each marked "Changed by Ostiole" in the source:
-# - None.
+# - internal/bodyprocessors/multipart.go: parts were read with NextPart,
+#   which decodes a part sent with Content-Transfer-Encoding
+#   quoted-printable and hides that header. Backends are handed the raw
+#   bytes, so a payload written with =XX escapes or soft line breaks got
+#   past rules that match the raw form. Parts are read with NextRawPart.
+#   Upstream: PR #1759 (2026-10-14), open at 08aa511.
+# - internal/collections, internal/bodyprocessors, internal/cookies,
+#   internal/url, internal/corazawaf and http: collections were Go maps, so
+#   ARGS, cookies, headers and their _NAMES came out in a new order on every
+#   evaluation, and a chain reading its parent's last match (TX:0-9,
+#   MATCHED_VAR) could deny a request on one transaction and pass it on the
+#   next (CRS 942130, 942131, 942521). A Map keeps its keys in insertion
+#   order, and the parsers add in input order. coraza-caddy feeds headers
+#   itself, from a map, so header order under it is still unsorted.
+#   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 08aa511.
 v3.8.2-0.20261029104012-08aa51147300

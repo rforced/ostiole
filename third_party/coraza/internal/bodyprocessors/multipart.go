@@ -10,6 +10,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/corazawaf/coraza/v3/experimental/plugins/plugintypes"
@@ -44,7 +45,10 @@ func (mbp *multipartBodyProcessor) ProcessRequest(reader io.Reader, v plugintype
 	multipartFilenameLanguageCol := v.MultipartFilenameLanguage()
 	multipartNameCol := v.MultipartName()
 	for {
-		p, err := mr.NextPart()
+		// Changed by Ostiole: NextPart decodes a quoted-printable part, which
+		// backends are handed raw, so rules read a string the backend never
+		// sees (upstream PR #1759).
+		p, err := mr.NextRawPart()
 		if err == io.EOF {
 			break
 		}
@@ -62,7 +66,17 @@ func (mbp *multipartBodyProcessor) ProcessRequest(reader io.Reader, v plugintype
 		}
 		partName := p.FormName()
 		duplicateHeader := false
-		for key, values := range p.Header {
+		// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
+		// p.Header is a map, so sort the names to give every evaluation the
+		// same order (corazawaf/coraza#1815).
+		var namesBuf [8]string
+		names := namesBuf[:0]
+		for key := range p.Header {
+			names = append(names, key)
+		}
+		slices.Sort(names)
+		for _, key := range names {
+			values := p.Header[key]
 			if len(values) > 1 {
 				duplicateHeader = true
 			}

@@ -57,8 +57,11 @@ func (i *rwInterceptor) WriteHeader(statusCode int) {
 
 	i.wroteHeader = true
 
-	for k, vv := range i.w.Header() {
-		for _, v := range vv {
+	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
+	h := i.w.Header()
+	var keysBuf [32]string
+	for _, k := range sortedHeaderKeys(h, keysBuf[:0]) {
+		for _, v := range h[k] {
 			i.tx.AddResponseHeader(k, v)
 		}
 	}

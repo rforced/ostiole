@@ -1,0 +1,848 @@
+# - internal/collections, internal/bodyprocessors, internal/cookies,
+#   internal/url, internal/corazawaf and http: collections were Go maps, so
+#   ARGS, cookies, headers and their _NAMES came out in a new order on every
+#   evaluation, and a chain reading its parent's last match (TX:0-9,
+#   MATCHED_VAR) could deny a request on one transaction and pass it on the
+#   next (CRS 942130, 942131, 942521). A Map keeps its keys in insertion
+#   order, and the parsers add in input order. coraza-caddy feeds headers
+#   itself, from a map, so header order under it is still unsorted.
+#   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 08aa511.
+diff --git a/http/interceptor.go b/http/interceptor.go
+index c14615e..f0d75b7 100644
+--- a/http/interceptor.go
++++ b/http/interceptor.go
+@@ -57,8 +57,11 @@ func (i *rwInterceptor) WriteHeader(statusCode int) {
+ 
+ 	i.wroteHeader = true
+ 
+-	for k, vv := range i.w.Header() {
+-		for _, v := range vv {
++	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++	h := i.w.Header()
++	var keysBuf [32]string
++	for _, k := range sortedHeaderKeys(h, keysBuf[:0]) {
++		for _, v := range h[k] {
+ 			i.tx.AddResponseHeader(k, v)
+ 		}
+ 	}
+diff --git a/http/middleware.go b/http/middleware.go
+index 06e44d3..8723a8a 100644
+--- a/http/middleware.go
++++ b/http/middleware.go
+@@ -10,6 +10,7 @@ import (
+ 	"fmt"
+ 	"io"
+ 	"net/http"
++	"slices"
+ 	"strconv"
+ 	"strings"
+ 
+@@ -22,6 +23,18 @@ import (
+ // Most implementations of Coraza will probably use http.Request objects
+ // so this will implement all phase 0, 1 and 2 variables
+ // Note: This function will stop after an interruption
++// sortedHeaderKeys appends the names in h to buf in sorted order. net/http
++// keeps headers in a map, so the order they arrived in is lost; sorting gives
++// rules the same order on every transaction, which a chained rule reading the
++// captures of its parent's last match depends on (corazawaf/coraza#1815).
++func sortedHeaderKeys(h http.Header, buf []string) []string {
++	for k := range h {
++		buf = append(buf, k)
++	}
++	slices.Sort(buf)
++	return buf
++}
++
+ // Note: Do not manually fill any request variables
+ func processRequest(tx types.Transaction, req *http.Request) (*types.Interruption, error) {
+ 	var (
+@@ -39,8 +52,10 @@ func processRequest(tx types.Transaction, req *http.Request) (*types.Interruptio
+ 	// There is no socket access in the request object, so we neither know the server client nor port.
+ 	tx.ProcessConnection(client, cport, "", 0)
+ 	tx.ProcessURI(req.URL.String(), req.Method, req.Proto)
+-	for k, vr := range req.Header {
+-		for _, v := range vr {
++	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++	var keysBuf [32]string
++	for _, k := range sortedHeaderKeys(req.Header, keysBuf[:0]) {
++		for _, v := range req.Header[k] {
+ 			tx.AddRequestHeader(k, v)
+ 		}
+ 	}
+diff --git a/internal/bodyprocessors/json.go b/internal/bodyprocessors/json.go
+index 680152c..f2197e2 100644
+--- a/internal/bodyprocessors/json.go
++++ b/internal/bodyprocessors/json.go
+@@ -31,7 +31,8 @@ func (js *jsonBodyProcessor) ProcessRequest(reader io.Reader, v plugintypes.Tran
+ 	ss := s.String()
+ 	// Process with recursion limit
+ 	col := v.ArgsPost()
+-	data, truncated, err := readJSON(ss, bpo.RequestBodyRecursionLimit, bpo.ArgumentLimit)
++	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++	args, truncated, err := readJSON(ss, bpo.RequestBodyRecursionLimit, bpo.ArgumentLimit)
+ 	// The collection is populated before checking the error to still perform a best effort inspection of the payload.
+ 	//
+ 	// Add, not SetIndex: col is case-insensitive by default (and RESPONSE_ARGS
+@@ -42,10 +43,11 @@ func (js *jsonBodyProcessor) ProcessRequest(reader io.Reader, v plugintypes.Tran
+ 	// neither call knows about the other key. Add always appends, so both
+ 	// values survive under the collision exactly like a same-case collision
+ 	// already does. See GHSA-5gj4-9gm7-2fx2.
+-	for key, values := range data {
+-		for _, value := range values {
+-			col.Add(key, value)
+-		}
++	//
++	// args is in document order, so rules see the arguments in the same order
++	// on every evaluation (corazawaf/coraza#1815).
++	for _, a := range args {
++		col.Add(a.key, a.value)
+ 	}
+ 	if truncated {
+ 		v.ArgumentsLimitReached().(*collections.Single).Set("1")
+@@ -73,14 +75,12 @@ func (js *jsonBodyProcessor) ProcessResponse(reader io.Reader, v plugintypes.Tra
+ 	ss := s.String()
+ 	// Process with recursion limit
+ 	col := v.ResponseArgs()
+-	data, truncated, err := readJSON(ss, bpo.ResponseBodyRecursionLimit, bpo.ArgumentLimit)
++	args, truncated, err := readJSON(ss, bpo.ResponseBodyRecursionLimit, bpo.ArgumentLimit)
+ 	// The collection is populated before checking the error to still perform a best effort inspection of the payload.
+ 	// See the comment in ProcessRequest: Add rather than SetIndex avoids a
+ 	// case-insensitive collision silently overwriting one value (GHSA-5gj4-9gm7-2fx2).
+-	for key, values := range data {
+-		for _, value := range values {
+-			col.Add(key, value)
+-		}
++	for _, a := range args {
++		col.Add(a.key, a.value)
+ 	}
+ 	if truncated {
+ 		v.ArgumentsLimitReached().(*collections.Single).Set("1")
+@@ -119,18 +119,17 @@ const flattenBytesFloor = 4096
+ // errFlattenBudget stops the walk once the flattened form outgrows its budget.
+ var errFlattenBudget = errors.New("flattened json exceeds its byte budget")
+ 
+-// readJSON flattens s into a map[string][]string, stopping once argumentLimit
+-// values have been collected (argumentLimit <= 0 means no limit). Without
+-// this, a small body decoding to a wide flat structure (e.g. a JSON array of
+-// millions of scalars) grows this map -- and, through it, ARGS_POST/
+-// RESPONSE_ARGS -- without bound regardless of SecArgumentsLimit, exhausting
+-// memory on a single request. See GHSA-3ww9-vw83-9w5x.
++// readJSON flattens s into key, value pairs in document order, stopping once
++// argumentLimit values have been collected (argumentLimit <= 0 means no
++// limit). Without this, a small body decoding to a wide flat structure (e.g.
++// a JSON array of millions of scalars) grows the result -- and, through it,
++// ARGS_POST/RESPONSE_ARGS -- without bound regardless of SecArgumentsLimit,
++// exhausting memory on a single request. See GHSA-3ww9-vw83-9w5x.
+ //
+ // Array-length entries have their own cap of argumentLimit. truncated reports
+ // either cap; outgrowing the byte budget is an error, since raising
+ // SecArgumentsLimit does not help with it.
+-func readJSON(s string, maxRecursion int, argumentLimit int) (res map[string][]string, truncated bool, err error) {
+-	res = make(map[string][]string)
++func readJSON(s string, maxRecursion int, argumentLimit int) (res []jsonArg, truncated bool, err error) {
+ 	key := []byte("json")
+ 
+ 	byteBudget := max(len(s)*flattenBytesFactor, flattenBytesFloor)
+@@ -143,15 +142,15 @@ func readJSON(s string, maxRecursion int, argumentLimit int) (res map[string][]s
+ 	// rejected -- byteBudget is what keeps that walk short.
+ 	json := gjson.Parse(s)
+ 	usedBytes := 0
+-	// argCount tracks the total number of values collected, not len(res):
+-	// a key collision (see GHSA-5gj4-9gm7-2fx2) appends more than one value
++	// argCount tracks the total number of values collected, not distinct
++	// keys: a key collision (see GHSA-5gj4-9gm7-2fx2) appends more than one value
+ 	// under the same flattened key, so counting distinct keys would let
+ 	// SecArgumentsLimit undercount and admit more values than configured.
+ 	argCount := 0
+ 	// lenCount counts array-length entries apart from argCount, so they do
+ 	// not use up SecArgumentsLimit.
+ 	lenCount := 0
+-	truncated, err = readItems(json, key, maxRecursion, argumentLimit, byteBudget, &usedBytes, &argCount, &lenCount, res)
++	truncated, err = readItems(json, key, maxRecursion, argumentLimit, byteBudget, &usedBytes, &argCount, &lenCount, &res)
+ 	if errors.Is(err, errFlattenBudget) {
+ 		return res, truncated, fmt.Errorf("flattened form exceeds the %d byte budget for a %d byte body", byteBudget, len(s))
+ 	}
+@@ -232,7 +231,7 @@ func jsonNestingExceedsLimit(s string, limit int) bool {
+ // Java class names used in deserialization attacks) as a substring of the
+ // generated key, and escaping would break that detection for the common,
+ // non-colliding case.
+-func readItems(json gjson.Result, objKey []byte, maxRecursion int, argumentLimit int, byteBudget int, usedBytes *int, argCount *int, lenCount *int, res map[string][]string) (truncated bool, err error) {
++func readItems(json gjson.Result, objKey []byte, maxRecursion int, argumentLimit int, byteBudget int, usedBytes *int, argCount *int, lenCount *int, res *[]jsonArg) (truncated bool, err error) {
+ 	if argumentLimit > 0 && *argCount >= argumentLimit {
+ 		// Already at the configured SecArgumentsLimit: every recursive call
+ 		// rechecks this up front, so once the limit is hit no further level
+@@ -293,8 +292,7 @@ func readItems(json gjson.Result, objKey []byte, maxRecursion int, argumentLimit
+ 			return false
+ 		}
+ 
+-		k := string(objKey)
+-		res[k] = append(res[k], val)
++		*res = append(*res, jsonArg{key: string(objKey), value: val})
+ 		*usedBytes += len(objKey) + len(val)
+ 		*argCount++
+ 		objKey = objKey[:prevParentLength]
+@@ -316,8 +314,7 @@ func readItems(json gjson.Result, objKey []byte, maxRecursion int, argumentLimit
+ 			if byteBudget > 0 && *usedBytes+len(objKey)+len(lenStr) > byteBudget {
+ 				iterationError = errFlattenBudget
+ 			} else {
+-				k := string(objKey)
+-				res[k] = append(res[k], lenStr)
++				*res = append(*res, jsonArg{key: string(objKey), value: lenStr})
+ 				*usedBytes += len(objKey) + len(lenStr)
+ 				*lenCount++
+ 			}
+@@ -326,6 +323,12 @@ func readItems(json gjson.Result, objKey []byte, maxRecursion int, argumentLimit
+ 	return iterationTruncated, iterationError
+ }
+ 
++// jsonArg is one flattened key, value pair of a JSON document.
++type jsonArg struct {
++	key   string
++	value string
++}
++
+ func init() {
+ 	RegisterBodyProcessor("json", func() plugintypes.BodyProcessor {
+ 		return &jsonBodyProcessor{}
+diff --git a/internal/bodyprocessors/multipart.go b/internal/bodyprocessors/multipart.go
+index c500044..098df00 100644
+--- a/internal/bodyprocessors/multipart.go
++++ b/internal/bodyprocessors/multipart.go
+@@ -10,6 +10,7 @@ import (
+ 	"mime"
+ 	"mime/multipart"
+ 	"os"
++	"slices"
+ 	"strings"
+ 
+ 	"github.com/corazawaf/coraza/v3/experimental/plugins/plugintypes"
+@@ -65,7 +66,17 @@ func (mbp *multipartBodyProcessor) ProcessRequest(reader io.Reader, v plugintype
+ 		}
+ 		partName := p.FormName()
+ 		duplicateHeader := false
+-		for key, values := range p.Header {
++		// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++		// p.Header is a map, so sort the names to give every evaluation the
++		// same order (corazawaf/coraza#1815).
++		var namesBuf [8]string
++		names := namesBuf[:0]
++		for key := range p.Header {
++			names = append(names, key)
++		}
++		slices.Sort(names)
++		for _, key := range names {
++			values := p.Header[key]
+ 			if len(values) > 1 {
+ 				duplicateHeader = true
+ 			}
+diff --git a/internal/bodyprocessors/urlencoded.go b/internal/bodyprocessors/urlencoded.go
+index ff96ee6..0903a54 100644
+--- a/internal/bodyprocessors/urlencoded.go
++++ b/internal/bodyprocessors/urlencoded.go
+@@ -23,13 +23,17 @@ func (*urlencodedBodyProcessor) ProcessRequest(reader io.Reader, v plugintypes.T
+ 	}
+ 
+ 	b := buf.String()
+-	// ParseQuery itself stops once options.ArgumentLimit total pairs have
++	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++	// ParseQueryOrdered itself stops once options.ArgumentLimit total pairs have
+ 	// been parsed (see GHSA-3ww9-vw83-9w5x): the copy below never needs to
+-	// re-enforce the cap, since values can never hold more than the limit.
+-	values, truncated := urlutil.ParseQuery(b, '&', options.ArgumentLimit)
++	// re-enforce the cap, since pairs can never hold more than the limit.
++	//
++	// The ordered variant keeps ARGS_POST in body order, so rules see the
++	// arguments in the same order on every evaluation (corazawaf/coraza#1815).
++	pairs, truncated := urlutil.ParseQueryOrdered(b, '&', options.ArgumentLimit)
+ 	argsCol := v.ArgsPost()
+-	for k, vs := range values {
+-		argsCol.Set(k, vs)
++	for _, kv := range pairs {
++		argsCol.Add(kv.Key, kv.Value)
+ 	}
+ 	if truncated {
+ 		v.ArgumentsLimitReached().(*collections.Single).Set("1")
+diff --git a/internal/collections/map.go b/internal/collections/map.go
+index c285cfe..7c8fca9 100644
+--- a/internal/collections/map.go
++++ b/internal/collections/map.go
+@@ -14,16 +14,42 @@ import (
+ )
+ 
+ // Map is a default collection.Map.
++//
++// Every read returns the keys in the order each was first added, and the
++// values of a key in the order they were added. A repeated key is grouped
++// under its first occurrence: ?a=1&b=2&a=3 reads a=1, a=3, b=2, where
++// ModSecurity v2 keeps a=1, b=2, a=3. What matters is that the order is the
++// same on every evaluation of the same request, so the last match a chained
++// rule reads through TX:0-9 or MATCHED_VAR does not change from one
++// transaction to the next. Ranging over a Go map gave a different order on
++// every evaluation (#1815).
++// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
+ type Map struct {
+ 	isCaseSensitive bool
+-	data            map[string][]keyValue
+-	variable        variables.RuleVariable
++	// index maps a key, lowercased unless the map is case sensitive, to its
++	// position in entries.
++	index map[string]int
++	// entries holds one slot per key, in first-insertion order. Remove
++	// leaves a deleted slot behind, reclaimed by compact.
++	entries []mapEntry
++	// deleted counts the deleted slots in entries.
++	deleted  int
++	variable variables.RuleVariable
+ 	// totalValues tracks TotalValues incrementally so it stays O(1) to read;
+ 	// summing len(values) across every key on each call made checkArgumentLimit
+ 	// (called once per Add) quadratic in the number of distinct keys.
+ 	totalValues int
+ }
+ 
++// mapEntry is the slot of one key in a Map.
++type mapEntry struct {
++	// key is the lookup key, lowercased unless the map is case sensitive.
++	key    string
++	values []keyValue
++	// deleted marks a slot whose key was removed.
++	deleted bool
++}
++
+ var _ collection.Map = &Map{}
+ 
+ // NewMap creates a new Map. By default, the Map key is case insensitive.
+@@ -31,7 +57,7 @@ func NewMap(variable variables.RuleVariable) *Map {
+ 	return &Map{
+ 		isCaseSensitive: false,
+ 		variable:        variable,
+-		data:            map[string][]keyValue{},
++		index:           map[string]int{},
+ 	}
+ }
+ 
+@@ -40,18 +66,43 @@ func NewCaseSensitiveKeyMap(variable variables.RuleVariable) *Map {
+ 	return &Map{
+ 		isCaseSensitive: true,
+ 		variable:        variable,
+-		data:            map[string][]keyValue{},
++		index:           map[string]int{},
++	}
++}
++
++// lookup returns the values stored under key, which must already be
++// normalised.
++func (c *Map) lookup(key string) []keyValue {
++	if i, ok := c.index[key]; ok {
++		return c.entries[i].values
++	}
++	return nil
++}
++
++// store sets the values of the slot at i, or appends a slot for key, which
++// must already be normalised, when ok is false.
++func (c *Map) store(i int, ok bool, key string, values []keyValue) {
++	if ok {
++		c.entries[i].values = values
++		return
+ 	}
++	if c.entries == nil {
++		// Start with room for a few keys: most collections hold only a
++		// handful, and growing from zero would allocate at 1, 2 and 4.
++		c.entries = make([]mapEntry, 0, 4)
++	}
++	c.index[key] = len(c.entries)
++	c.entries = append(c.entries, mapEntry{key: key, values: values})
+ }
+ 
+ func (c *Map) Get(key string) []string {
+-	if len(c.data) == 0 {
++	if len(c.entries) == 0 {
+ 		return nil
+ 	}
+ 	if !c.isCaseSensitive {
+ 		key = strings.ToLower(key)
+ 	}
+-	values := c.data[key]
++	values := c.lookup(key)
+ 	if len(values) == 0 {
+ 		return nil
+ 	}
+@@ -67,10 +118,10 @@ func (c *Map) FindRegex(key *regexp.Regexp) []types.MatchData {
+ 	n := 0
+ 	// Collect matching data slices in a single pass to avoid evaluating the regex twice per key.
+ 	var matched [][]keyValue
+-	for k, data := range c.data {
+-		if key.MatchString(k) {
+-			n += len(data)
+-			matched = append(matched, data)
++	for _, e := range c.entries {
++		if !e.deleted && key.MatchString(e.key) {
++			n += len(e.values)
++			matched = append(matched, e.values)
+ 		}
+ 	}
+ 	if n == 0 {
+@@ -98,14 +149,14 @@ func (c *Map) FindString(key string) []types.MatchData {
+ 	if key == "" {
+ 		return c.FindAll()
+ 	}
+-	if len(c.data) == 0 {
++	if len(c.entries) == 0 {
+ 		return nil
+ 	}
+ 	if !c.isCaseSensitive {
+ 		key = strings.ToLower(key)
+ 	}
+-	e, ok := c.data[key]
+-	if !ok || len(e) == 0 {
++	e := c.lookup(key)
++	if len(e) == 0 {
+ 		return nil
+ 	}
+ 	buf := make([]corazarules.MatchData, len(e))
+@@ -124,8 +175,8 @@ func (c *Map) FindString(key string) []types.MatchData {
+ // FindAll returns all map elements.
+ func (c *Map) FindAll() []types.MatchData {
+ 	n := 0
+-	for _, data := range c.data {
+-		n += len(data)
++	for _, e := range c.entries {
++		n += len(e.values)
+ 	}
+ 	if n == 0 {
+ 		return nil
+@@ -133,8 +184,8 @@ func (c *Map) FindAll() []types.MatchData {
+ 	buf := make([]corazarules.MatchData, n)
+ 	result := make([]types.MatchData, n)
+ 	i := 0
+-	for _, data := range c.data {
+-		for _, d := range data {
++	for _, e := range c.entries {
++		for _, d := range e.values {
+ 			buf[i] = corazarules.MatchData{
+ 				Variable_: c.variable,
+ 				Key_:      d.key,
+@@ -153,7 +204,11 @@ func (c *Map) Add(key string, value string) {
+ 	if !c.isCaseSensitive {
+ 		key = strings.ToLower(key)
+ 	}
+-	c.data[key] = append(c.data[key], aVal)
++	if i, ok := c.index[key]; ok {
++		c.entries[i].values = append(c.entries[i].values, aVal)
++	} else {
++		c.store(0, false, key, []keyValue{aVal})
++	}
+ 	c.totalValues++
+ }
+ 
+@@ -163,9 +218,13 @@ func (c *Map) Set(key string, values []string) {
+ 	if !c.isCaseSensitive {
+ 		key = strings.ToLower(key)
+ 	}
+-	dataSlice, exists := c.data[key]
++	slot, ok := c.index[key]
++	var dataSlice []keyValue
++	if ok {
++		dataSlice = c.entries[slot].values
++	}
+ 	oldLen := len(dataSlice)
+-	if !exists || cap(dataSlice) < len(values) {
++	if !ok || cap(dataSlice) < len(values) {
+ 		dataSlice = make([]keyValue, len(values))
+ 	} else {
+ 		dataSlice = dataSlice[:len(values)] // Reuse existing slice with the same length
+@@ -173,7 +232,7 @@ func (c *Map) Set(key string, values []string) {
+ 	for i, v := range values {
+ 		dataSlice[i] = keyValue{key: originalKey, value: v}
+ 	}
+-	c.data[key] = dataSlice
++	c.store(slot, ok, key, dataSlice)
+ 	c.totalValues += len(values) - oldLen
+ }
+ 
+@@ -183,18 +242,22 @@ func (c *Map) SetIndex(key string, index int, value string) {
+ 	if !c.isCaseSensitive {
+ 		key = strings.ToLower(key)
+ 	}
+-	values := c.data[key]
++	slot, ok := c.index[key]
++	var values []keyValue
++	if ok {
++		values = c.entries[slot].values
++	}
+ 	av := keyValue{key: originalKey, value: value}
+ 
+ 	switch {
+ 	case len(values) == 0:
+-		c.data[key] = []keyValue{av}
++		c.store(slot, ok, key, []keyValue{av})
+ 		c.totalValues++
+ 	case len(values) <= index:
+-		c.data[key] = append(c.data[key], av)
++		c.store(slot, ok, key, append(values, av))
+ 		c.totalValues++
+ 	default:
+-		c.data[key][index] = av
++		values[index] = av
+ 	}
+ }
+ 
+@@ -203,11 +266,36 @@ func (c *Map) Remove(key string) {
+ 	if !c.isCaseSensitive {
+ 		key = strings.ToLower(key)
+ 	}
+-	if len(c.data) == 0 {
++	i, ok := c.index[key]
++	if !ok {
+ 		return
+ 	}
+-	c.totalValues -= len(c.data[key])
+-	delete(c.data, key)
++	c.totalValues -= len(c.entries[i].values)
++	delete(c.index, key)
++	// Mark the slot instead of shifting the later ones down, so removing
++	// many keys (setvar:!tx.%{MATCHED_VAR_NAME} over every argument) stays
++	// linear overall.
++	c.entries[i] = mapEntry{deleted: true}
++	c.deleted++
++	if c.deleted > len(c.entries)/2 {
++		c.compact()
++	}
++}
++
++// compact drops the deleted slots, keeping the order of the others.
++func (c *Map) compact() {
++	n := 0
++	for _, e := range c.entries {
++		if e.deleted {
++			continue
++		}
++		c.entries[n] = e
++		c.index[e.key] = n
++		n++
++	}
++	clear(c.entries[n:])
++	c.entries = c.entries[:n]
++	c.deleted = 0
+ }
+ 
+ // Name returns the name of the map/collection.
+@@ -217,9 +305,12 @@ func (c *Map) Name() string {
+ 
+ // Reset removes all key/value pairs from the map.
+ func (c *Map) Reset() {
+-	for k := range c.data {
+-		delete(c.data, k)
+-	}
++	clear(c.index)
++	// Zero the slots so a pooled transaction does not keep the previous
++	// request's values alive through the backing array.
++	clear(c.entries)
++	c.entries = c.entries[:0]
++	c.deleted = 0
+ 	c.totalValues = 0
+ }
+ 
+@@ -227,11 +318,14 @@ func (c *Map) Reset() {
+ func (c *Map) Format(res *strings.Builder) {
+ 	res.WriteString(c.variable.Name())
+ 	res.WriteString(":\n")
+-	for k, v := range c.data {
++	for _, e := range c.entries {
++		if e.deleted {
++			continue
++		}
+ 		res.WriteString("    ")
+-		res.WriteString(k)
++		res.WriteString(e.key)
+ 		res.WriteString(": ")
+-		for i, vv := range v {
++		for i, vv := range e.values {
+ 			if i > 0 {
+ 				res.WriteString(",")
+ 			}
+@@ -252,7 +346,7 @@ func (c *Map) String() string {
+ // values (via repeated Add calls) is counted once -- use TotalValues to count
+ // every individual value instead.
+ func (c *Map) Len() int {
+-	return len(c.data)
++	return len(c.index)
+ }
+ 
+ // TotalValues returns the total number of individual values across every key
+diff --git a/internal/collections/named.go b/internal/collections/named.go
+index 6d6c922..a35ac92 100644
+--- a/internal/collections/named.go
++++ b/internal/collections/named.go
+@@ -56,17 +56,22 @@ func (c *NamedCollection) Remove(key string) {
+ }
+ 
+ func (c *NamedCollection) Len() int {
+-	return len(c.data)
++	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++	return len(c.index)
+ }
+ 
+ // Data is an internal method used for serializing to JSON
+ func (c *NamedCollection) Data() map[string][]string {
+-	result := make(map[string][]string, len(c.data))
+-	for k, v := range c.data {
+-		result[k] = make([]string, len(v))
+-		for i, a := range v {
+-			result[k][i] = a.value
++	result := make(map[string][]string, len(c.index))
++	for _, e := range c.entries {
++		if e.deleted {
++			continue
+ 		}
++		values := make([]string, len(e.values))
++		for i, a := range e.values {
++			values[i] = a.value
++		}
++		result[e.key] = values
+ 	}
+ 	return result
+ }
+@@ -104,10 +109,10 @@ func (c *NamedCollectionNames) FindRegex(key *regexp.Regexp) []types.MatchData {
+ 	n := 0
+ 	// Collect matching data slices in a single pass to avoid evaluating the regex twice per key.
+ 	var matched [][]keyValue
+-	for k, data := range c.collection.data {
+-		if key.MatchString(k) {
+-			n += len(data)
+-			matched = append(matched, data)
++	for _, e := range c.collection.entries {
++		if !e.deleted && key.MatchString(e.key) {
++			n += len(e.values)
++			matched = append(matched, e.values)
+ 		}
+ 	}
+ 	if n == 0 {
+@@ -131,8 +136,8 @@ func (c *NamedCollectionNames) FindRegex(key *regexp.Regexp) []types.MatchData {
+ }
+ 
+ func (c *NamedCollectionNames) FindString(key string) []types.MatchData {
+-	data, ok := c.collection.data[key]
+-	if !ok || len(data) == 0 {
++	data := c.collection.lookup(key)
++	if len(data) == 0 {
+ 		return nil
+ 	}
+ 	buf := make([]corazarules.MatchData, len(data))
+@@ -154,8 +159,8 @@ func (c *NamedCollectionNames) Get(key string) []string {
+ 
+ func (c *NamedCollectionNames) FindAll() []types.MatchData {
+ 	n := 0
+-	for _, data := range c.collection.data {
+-		n += len(data)
++	for _, e := range c.collection.entries {
++		n += len(e.values)
+ 	}
+ 	if n == 0 {
+ 		return nil
+@@ -163,8 +168,8 @@ func (c *NamedCollectionNames) FindAll() []types.MatchData {
+ 	buf := make([]corazarules.MatchData, n)
+ 	res := make([]types.MatchData, n)
+ 	i := 0
+-	for _, data := range c.collection.data {
+-		for _, d := range data {
++	for _, e := range c.collection.entries {
++		for _, d := range e.values {
+ 			buf[i] = corazarules.MatchData{
+ 				Variable_: c.variable,
+ 				Key_:      d.key,
+@@ -186,8 +191,8 @@ func (c *NamedCollectionNames) String() string {
+ 	res.WriteString(c.variable.Name())
+ 	res.WriteString(": ")
+ 	firstOccurrence := true
+-	for _, data := range c.collection.data {
+-		for _, d := range data {
++	for _, e := range c.collection.entries {
++		for _, d := range e.values {
+ 			if !firstOccurrence {
+ 				res.WriteString(",")
+ 			}
+diff --git a/internal/collections/sized.go b/internal/collections/sized.go
+index 146395d..faf93e4 100644
+--- a/internal/collections/sized.go
++++ b/internal/collections/sized.go
+@@ -71,8 +71,9 @@ func (c *SizeCollection) size() int {
+ 	i := 0
+ 	for _, d := range c.data {
+ 		// we iterate over d
+-		for _, data := range d.data {
+-			for _, v := range data {
++		// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++		for _, e := range d.entries {
++			for _, v := range e.values {
+ 				i += len(v.key) + len(v.value)
+ 			}
+ 		}
+diff --git a/internal/cookies/cookies.go b/internal/cookies/cookies.go
+index 4cf1695..d0a2f18 100644
+--- a/internal/cookies/cookies.go
++++ b/internal/cookies/cookies.go
+@@ -7,18 +7,26 @@ import (
+ 	"strings"
+ )
+ 
++// Cookie is one name, value pair of a Cookie header.
++type Cookie struct {
++	Name  string
++	Value string
++}
++
+ // ParseCookies parses cookies and splits in name, value pairs. Won't check for valid names nor values.
+-// If there are multiple cookies with the same name, it will append to the list with the same name key.
++// The pairs are returned in the order they appear in the header, repeated names included, so
++// REQUEST_COOKIES holds them in request order (see corazawaf/coraza#1815).
+ // Loosely based in the stdlib src/net/http/cookie.go
+-func ParseCookies(rawCookies string) map[string][]string {
+-	cookies := make(map[string][]string)
+-
++func ParseCookies(rawCookies string) []Cookie {
+ 	rawCookies = trimCTLAndSpace(rawCookies)
+ 
+ 	if rawCookies == "" {
+-		return cookies
++		return nil
+ 	}
+ 
++	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++	var cookies []Cookie
++
+ 	var part string
+ 	for len(rawCookies) > 0 { // continue since we have rest
+ 		part, rawCookies, _ = strings.Cut(rawCookies, ";")
+@@ -38,7 +46,7 @@ func ParseCookies(rawCookies string) map[string][]string {
+ 		if name == "" && val == "" {
+ 			continue
+ 		}
+-		cookies[name] = append(cookies[name], val)
++		cookies = append(cookies, Cookie{Name: name, Value: val})
+ 	}
+ 	return cookies
+ }
+diff --git a/internal/corazawaf/rulegroup.go b/internal/corazawaf/rulegroup.go
+index 7eace80..43f628b 100644
+--- a/internal/corazawaf/rulegroup.go
++++ b/internal/corazawaf/rulegroup.go
+@@ -312,10 +312,12 @@ type transformationKey struct {
+ 	// collections hold their values throughout the phase.
+ 	//
+ 	// The identity is the value itself (data pointer + length), not the argument's key
+-	// and position: collections backed by a map return FindAll() results in Go map
+-	// iteration order, so an argument's position is not stable from one rule to the
+-	// next within a phase. Variables that get a fresh string on every lookup would only
+-	// leave entries behind, see transformationCacheable.
++	// and position: an argument's position is not stable from one rule to the next
++	// within a phase, since reading the same collection through a key, a regex or an
++	// exception yields a different subset, and setvar can add or remove keys in
++	// between. Variables that get a fresh string on every lookup would only leave
++	// entries behind, see transformationCacheable.
++	// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
+ 	argValue          *byte
+ 	argValueLen       int
+ 	transformationsID int
+diff --git a/internal/corazawaf/transaction.go b/internal/corazawaf/transaction.go
+index e128daf..16b484b 100644
+--- a/internal/corazawaf/transaction.go
++++ b/internal/corazawaf/transaction.go
+@@ -430,11 +430,9 @@ func (tx *Transaction) AddRequestHeader(key string, value string) {
+ 		//   cookie-string = cookie-pair *( ";" SP cookie-pair )
+ 		//
+ 		// There is no URL Decode performed no the cookies
+-		values := cookies.ParseCookies(value)
+-		for k, vr := range values {
+-			for _, v := range vr {
+-				tx.variables.requestCookies.Add(k, v)
+-			}
++		// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
++		for _, c := range cookies.ParseCookies(value) {
++			tx.variables.requestCookies.Add(c.Name, c.Value)
+ 		}
+ 	}
+ }
+diff --git a/internal/url/url.go b/internal/url/url.go
+index 21ff9f6..15cb6bc 100644
+--- a/internal/url/url.go
++++ b/internal/url/url.go
+@@ -13,26 +13,20 @@ type KeyValue struct {
+ 	Value string
+ }
+ 
+-// ParseQuery parses the URL-encoded query string and returns the corresponding
+-// map, plus whether parsing stopped early because limit was reached (limit <= 0
+-// means no limit). Stopping the parse itself, rather than only capping what a
+-// caller later copies out of the result, matters because building the full
+-// map is what actually spends the memory: a query string with millions of
+-// pairs (repeated key or not) would otherwise allocate for every single one
+-// of them before any caller-side limit ever got a chance to run. See
+-// GHSA-3ww9-vw83-9w5x. limit counts total pairs parsed, not distinct keys, so
+-// it isn't fooled by many values crammed under one repeated key either.
+-// It takes separators as parameter, for example: & or ; or &;
+-func ParseQuery(query string, separator byte, limit int) (result map[string][]string, truncated bool) {
+-	return doParseQuery(query, separator, true, limit)
+-}
+-
+ // ParseQueryOrdered parses the URL-encoded query string and returns key-value
+ // pairs in the order they appear in the input, plus whether parsing stopped
+-// early because limit was reached (limit <= 0 means no limit; see ParseQuery
+-// for why the parse itself, not just a later copy, is what needs to stop).
+-// The order is important for deterministic behavior when an argument limit
+-// is enforced.
++// early because limit was reached (limit <= 0 means no limit). Stopping the
++// parse itself, rather than only capping what a caller later copies out of
++// the result, matters because building the full result is what actually
++// spends the memory: a query string with millions of pairs (repeated key or
++// not) would otherwise allocate for every single one of them before any
++// caller-side limit ever got a chance to run. See GHSA-3ww9-vw83-9w5x. limit
++// counts total pairs parsed, not distinct keys, so it isn't fooled by many
++// values crammed under one repeated key either.
++// The order keeps rules deterministic: they see the arguments in the same
++// order on every evaluation, and the same pairs survive the limit.
++// It takes the separator as parameter, for example: & or ;
++// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
+ func ParseQueryOrdered(query string, separator byte, limit int) (result []KeyValue, truncated bool) {
+ 	for query != "" {
+ 		key := query
+@@ -62,39 +56,6 @@ func ParseQueryOrdered(query string, separator byte, limit int) (result []KeyVal
+ 	return result, false
+ }
+ 
+-func doParseQuery(query string, separator byte, urlUnescape bool, limit int) (m map[string][]string, truncated bool) {
+-	m = make(map[string][]string)
+-	total := 0
+-	for query != "" {
+-		key := query
+-		if i := strings.IndexByte(key, separator); i >= 0 {
+-			key, query = key[:i], key[i+1:]
+-		} else {
+-			query = ""
+-		}
+-		if key == "" {
+-			continue
+-		}
+-		// See the matching comment in ParseQueryOrdered: checked after the
+-		// empty-key skip so a trailing separator at the limit doesn't report
+-		// truncation for a pair that was never going to be added.
+-		if limit > 0 && total >= limit {
+-			return m, true
+-		}
+-		value := ""
+-		if i := strings.IndexByte(key, '='); i >= 0 {
+-			key, value = key[:i], key[i+1:]
+-		}
+-		if urlUnescape {
+-			key = queryUnescape(key)
+-			value = queryUnescape(value)
+-		}
+-		m[key] = append(m[key], value)
+-		total++
+-	}
+-	return m, false
+-}
+-
+ // queryUnescape is a non-strict version of net/url.QueryUnescape.
+ func queryUnescape(input string) string {
+ 	ilen := len(input)

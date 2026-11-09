@@ -430,11 +430,9 @@ func (tx *Transaction) AddRequestHeader(key string, value string) {
 		//   cookie-string = cookie-pair *( ";" SP cookie-pair )
 		//
 		// There is no URL Decode performed no the cookies
-		values := cookies.ParseCookies(value)
-		for k, vr := range values {
-			for _, v := range vr {
-				tx.variables.requestCookies.Add(k, v)
-			}
+		// Changed by Ostiole: collections keep a fixed order (upstream PR #1834).
+		for _, c := range cookies.ParseCookies(value) {
+			tx.variables.requestCookies.Add(c.Name, c.Value)
 		}
 	}
 }
