@@ -11,7 +11,7 @@
 #   skipped every SecMarker (the ctl part of upstream PR #1782).
 #   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 08aa511.
 diff --git a/internal/actions/ctl.go b/internal/actions/ctl.go
-index 6a270c1..fb92bbf 100644
+index 6a270c1..6aff9e0 100644
 --- a/internal/actions/ctl.go
 +++ b/internal/actions/ctl.go
 @@ -9,6 +9,7 @@ import (
@@ -22,7 +22,7 @@ index 6a270c1..fb92bbf 100644
  
  	"github.com/corazawaf/coraza/v3/debuglog"
  	"github.com/corazawaf/coraza/v3/experimental/plugins/plugintypes"
-@@ -119,6 +120,56 @@ type ctlFn struct {
+@@ -119,6 +120,61 @@ type ctlFn struct {
  	collection variables.RuleVariable
  	colKey     string
  	colKeyRx   *regexp.Regexp
@@ -61,6 +61,11 @@ index 6a270c1..fb92bbf 100644
 +	rules := tx.WAF.Rules.GetRules()
 +	for i := range rules {
 +		r := &rules[i]
++		if r.ID_ == noID {
++			// Rules without an id all share ID_ 0, so a removal stored under
++			// it would reach every one of them.
++			continue
++		}
 +		var selected bool
 +		switch a.action {
 +		case ctlRuleRemoveTargetByID:
@@ -79,7 +84,7 @@ index 6a270c1..fb92bbf 100644
  }
  
  func (a *ctlFn) Init(m plugintypes.RuleMetadata, data string) error {
-@@ -150,34 +201,12 @@ func parseOnOff(s string) (bool, bool) {
+@@ -150,34 +206,12 @@ func parseOnOff(s string) (bool, bool) {
  func (a *ctlFn) Evaluate(_ plugintypes.RuleMetadata, txS plugintypes.TransactionState) {
  	tx := txS.(*corazawaf.Transaction)
  	switch a.action {
@@ -118,7 +123,7 @@ index 6a270c1..fb92bbf 100644
  	case ctlAuditEngine:
  		ae, err := types.ParseAuditEngineStatus(a.value)
  		if err != nil {
-@@ -293,19 +322,10 @@ func (a *ctlFn) Evaluate(_ plugintypes.RuleMetadata, txS plugintypes.Transaction
+@@ -293,19 +327,10 @@ func (a *ctlFn) Evaluate(_ plugintypes.RuleMetadata, txS plugintypes.Transaction
  			}
  			tx.RemoveRuleByIDRange(start, end)
  		}
@@ -143,7 +148,7 @@ index 6a270c1..fb92bbf 100644
  
  	case ctlResponseBodyAccess:
 diff --git a/internal/corazawaf/rulegroup.go b/internal/corazawaf/rulegroup.go
-index 43f628b..8260d9d 100644
+index 43f628b..7755eab 100644
 --- a/internal/corazawaf/rulegroup.go
 +++ b/internal/corazawaf/rulegroup.go
 @@ -5,6 +5,7 @@ package corazawaf
@@ -154,7 +159,7 @@ index 43f628b..8260d9d 100644
  	"time"
  
  	"github.com/corazawaf/coraza/v3/internal/corazatypes"
-@@ -19,6 +20,25 @@ import (
+@@ -19,6 +20,26 @@ import (
  type RuleGroup struct {
  	rules    []Rule
  	observer func(rule types.RuleMetadata)
@@ -168,7 +173,8 @@ index 43f628b..8260d9d 100644
 +
 +// Version returns a number that changes whenever a rule is added to or
 +// removed from the group, or a directive edits one in place. A value derived
-+// from the rules stays valid while it does not change.
++// from the rules stays valid while it does not change. Like the rules, it is
++// written only while directives are parsed, before transactions run.
 +func (rg *RuleGroup) Version() uint64 {
 +	return rg.version
 +}
@@ -180,7 +186,7 @@ index 43f628b..8260d9d 100644
  }
  
  // Add a rule to the collection
-@@ -61,6 +81,7 @@ func (rg *RuleGroup) Add(rule *Rule) error {
+@@ -61,6 +82,7 @@ func (rg *RuleGroup) Add(rule *Rule) error {
  	}
  
  	rg.rules = append(rg.rules, *rule)
@@ -188,7 +194,7 @@ index 43f628b..8260d9d 100644
  
  	if rg.observer != nil {
  		rg.observer(rule)
-@@ -104,6 +125,7 @@ func (rg *RuleGroup) DiscardPendingChain() {
+@@ -104,6 +126,7 @@ func (rg *RuleGroup) DiscardPendingChain() {
  	}
  	if tail.HasChain {
  		rg.rules = rg.rules[:last]
@@ -196,7 +202,7 @@ index 43f628b..8260d9d 100644
  	}
  }
  
-@@ -112,6 +134,7 @@ func (rg *RuleGroup) DeleteByID(id int) {
+@@ -112,6 +135,7 @@ func (rg *RuleGroup) DeleteByID(id int) {
  	for i, r := range rg.rules {
  		if r.ID_ == id {
  			rg.rules = append(rg.rules[:i], rg.rules[i+1:]...)
@@ -204,7 +210,7 @@ index 43f628b..8260d9d 100644
  			return
  		}
  	}
-@@ -126,6 +149,7 @@ func (rg *RuleGroup) DeleteByRange(start, end int) {
+@@ -126,6 +150,7 @@ func (rg *RuleGroup) DeleteByRange(start, end int) {
  		}
  	}
  	rg.rules = kept
@@ -212,7 +218,7 @@ index 43f628b..8260d9d 100644
  }
  
  // DeleteByMsg deletes rules with the given message.
-@@ -138,6 +162,7 @@ func (rg *RuleGroup) DeleteByMsg(msg string) {
+@@ -138,6 +163,7 @@ func (rg *RuleGroup) DeleteByMsg(msg string) {
  		}
  	}
  	rg.rules = kept
@@ -220,7 +226,7 @@ index 43f628b..8260d9d 100644
  }
  
  // DeleteByTag deletes rules with the given tag.
-@@ -149,6 +174,7 @@ func (rg *RuleGroup) DeleteByTag(tag string) {
+@@ -149,6 +175,7 @@ func (rg *RuleGroup) DeleteByTag(tag string) {
  		}
  	}
  	rg.rules = kept
@@ -228,7 +234,7 @@ index 43f628b..8260d9d 100644
  }
  
  // Count returns the count of rules
-@@ -203,15 +229,16 @@ RulesLoop:
+@@ -203,15 +230,16 @@ RulesLoop:
  			}
  		}
  
@@ -249,10 +255,10 @@ index 43f628b..8260d9d 100644
  					Int("rule_id", r.ID_).
  					Msg("Skipping rule")
 diff --git a/internal/corazawaf/transaction.go b/internal/corazawaf/transaction.go
-index 16b484b..2d697f8 100644
+index 16b484b..ed491a5 100644
 --- a/internal/corazawaf/transaction.go
 +++ b/internal/corazawaf/transaction.go
-@@ -717,29 +717,50 @@ func (tx *Transaction) GetField(rv ruleVariableParams) []types.MatchData {
+@@ -717,29 +717,45 @@ func (tx *Transaction) GetField(rv ruleVariableParams) []types.MatchData {
  // key for pattern-based matching (e.g. removing all ARGS matching
  // /^json\.\d+\.field$/ from a given rule).
  func (tx *Transaction) RemoveRuleTargetByID(id int, variable variables.RuleVariable, key string, keyRx *regexp.Regexp) {
@@ -295,15 +301,10 @@ index 16b484b..2d697f8 100644
 +			cs[0].Variable, cs[1].Variable = variables.ArgsGetNames, variables.ArgsPostNames
 +		}
 +	}
++	if tx.ruleRemoveTargetByID == nil {
++		tx.ruleRemoveTargetByID = make(map[int][]ruleVariableParams, len(ids))
++	}
 +	for _, id := range ids {
-+		if id == noID {
-+			// Rules without an id all share ID_ 0; a removal stored there would
-+			// apply to every one of them.
-+			continue
-+		}
-+		if tx.ruleRemoveTargetByID == nil {
-+			tx.ruleRemoveTargetByID = make(map[int][]ruleVariableParams, len(ids))
-+		}
 +		if prev := tx.ruleRemoveTargetByID[id]; len(prev) > 0 {
 +			tx.ruleRemoveTargetByID[id] = append(prev, cs...)
 +		} else {
