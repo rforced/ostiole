@@ -864,6 +864,29 @@ func TestProxyReadsEscapedQuotesInLinearTime(t *testing.T) {
 	}
 }
 
+// A JSON escape after a lone high surrogate is read as the application
+// reads it. gjson 1.20.0 took the next escape for the surrogate's pair and
+// dropped it, so \ud83d\u003b hid a semicolon, and any other character,
+// from every rule.
+func TestProxyReadsTheEscapeAfterALoneSurrogate(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	for _, body := range []string{`{"q": "x;uname -a"}`, `{"q": "x\ud83d\u003buname -a"}`} {
+		if got := post(t, plain, "http://web.example.com/search", "application/json", body); got != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", body, got)
+		}
+	}
+}
+
 // A profile that passes larger bodies lets an upload past the limit
 // through with its first part inspected, and a body cut at the limit is
 // not refused as one that does not parse. That padding hides what comes
