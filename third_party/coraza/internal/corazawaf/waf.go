@@ -225,7 +225,8 @@ func (w *WAF) newTransaction(opts Options) *Transaction {
 	tx.lastPhase = 0
 	tx.ruleRemoveByID = nil
 	tx.ruleRemoveByIDRanges = nil
-	tx.ruleRemoveTargetByID = map[int][]ruleVariableParams{}
+	// Changed by Ostiole: rule selections cached, removals added in bulk (upstream issue #1848).
+	tx.ruleRemoveTargetByID = nil
 	tx.Skip = 0
 	tx.AllowType = 0
 	tx.Capture = false

@@ -1,0 +1,217 @@
+# - internal/actions/ctl.go, internal/corazawaf/transaction.go and waf.go:
+#   ctl:ruleRemoveTargetById, ByTag and ByMsg, and ctl:ruleRemoveByTag and
+#   ByMsg, walked every rule by value on every request, and a target
+#   removal then added an entry per selected rule, one allocation each.
+#   ctl:ruleRemoveTargetByTag=OWASP_CRS selects every CRS rule, which cost
+#   68 us and 720 allocations a request. A ctl caches the IDs it selects
+#   per rule group, and the removals share one capped slice: 24 us and 118
+#   allocations.
+#   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 08aa511.
+diff --git a/internal/actions/ctl.go b/internal/actions/ctl.go
+index 6a270c1..1fd088b 100644
+--- a/internal/actions/ctl.go
++++ b/internal/actions/ctl.go
+@@ -9,6 +9,7 @@ import (
+ 	"regexp"
+ 	"strconv"
+ 	"strings"
++	"sync/atomic"
+ 
+ 	"github.com/corazawaf/coraza/v3/debuglog"
+ 	"github.com/corazawaf/coraza/v3/experimental/plugins/plugintypes"
+@@ -119,6 +120,56 @@ type ctlFn struct {
+ 	collection variables.RuleVariable
+ 	colKey     string
+ 	colKeyRx   *regexp.Regexp
++	// Changed by Ostiole: rule selections cached, removals added in bulk (upstream issue #1848).
++	// ruleIDs caches the rules a ctl that selects them by ID range, tag or
++	// msg applies to. The selection only changes with the rule group, so the
++	// group is walked once rather than on every transaction.
++	ruleIDs atomic.Pointer[ctlRuleIDs]
++}
++
++// ctlRuleIDs is what a ctl selected in one rule group.
++type ctlRuleIDs struct {
++	rules []corazawaf.Rule
++	ids   []int
++}
++
++// selectedRuleIDs returns the IDs of the rules in the transaction's rule
++// group that the ctl applies to, or false when its ID range does not parse.
++func (a *ctlFn) selectedRuleIDs(tx *corazawaf.Transaction) ([]int, bool) {
++	rules := tx.WAF.Rules.GetRules()
++	if c := a.ruleIDs.Load(); c != nil && len(c.rules) == len(rules) &&
++		(len(rules) == 0 || &c.rules[0] == &rules[0]) {
++		return c.ids, true
++	}
++	start, end := 0, 0
++	if a.action == ctlRuleRemoveTargetByID {
++		var err error
++		if start, end, err = parseIDOrRange(a.value); err != nil {
++			tx.DebugLogger().Error().
++				Str("ctl", "RuleRemoveTargetByID").
++				Err(err).
++				Msg("Invalid range")
++			return nil, false
++		}
++	}
++	var ids []int
++	for i := range rules {
++		r := &rules[i]
++		var selected bool
++		switch a.action {
++		case ctlRuleRemoveTargetByID:
++			selected = r.ID_ >= start && r.ID_ <= end
++		case ctlRuleRemoveTargetByTag, ctlRuleRemoveByTag:
++			selected = utils.InSlice(a.value, r.Tags_)
++		case ctlRuleRemoveTargetByMsg, ctlRuleRemoveByMsg:
++			selected = r.Msg != nil && r.Msg.String() == a.value
++		}
++		if selected {
++			ids = append(ids, r.ID_)
++		}
++	}
++	a.ruleIDs.Store(&ctlRuleIDs{rules: rules, ids: ids})
++	return ids, true
+ }
+ 
+ func (a *ctlFn) Init(m plugintypes.RuleMetadata, data string) error {
+@@ -150,34 +201,12 @@ func parseOnOff(s string) (bool, bool) {
+ func (a *ctlFn) Evaluate(_ plugintypes.RuleMetadata, txS plugintypes.TransactionState) {
+ 	tx := txS.(*corazawaf.Transaction)
+ 	switch a.action {
+-	case ctlRuleRemoveTargetByID:
+-		start, end, err := parseIDOrRange(a.value)
+-		if err != nil {
+-			tx.DebugLogger().Error().
+-				Str("ctl", "RuleRemoveTargetByID").
+-				Err(err).
+-				Msg("Invalid range")
++	case ctlRuleRemoveTargetByID, ctlRuleRemoveTargetByTag, ctlRuleRemoveTargetByMsg:
++		ids, ok := a.selectedRuleIDs(tx)
++		if !ok {
+ 			return
+ 		}
+-		for _, r := range tx.WAF.Rules.GetRules() {
+-			if r.ID_ >= start && r.ID_ <= end {
+-				tx.RemoveRuleTargetByID(r.ID_, a.collection, a.colKey, a.colKeyRx)
+-			}
+-		}
+-	case ctlRuleRemoveTargetByTag:
+-		rules := tx.WAF.Rules.GetRules()
+-		for _, r := range rules {
+-			if utils.InSlice(a.value, r.Tags_) {
+-				tx.RemoveRuleTargetByID(r.ID(), a.collection, a.colKey, a.colKeyRx)
+-			}
+-		}
+-	case ctlRuleRemoveTargetByMsg:
+-		rules := tx.WAF.Rules.GetRules()
+-		for _, r := range rules {
+-			if r.Msg != nil && r.Msg.String() == a.value {
+-				tx.RemoveRuleTargetByID(r.ID(), a.collection, a.colKey, a.colKeyRx)
+-			}
+-		}
++		tx.RemoveRuleTargetByIDs(ids, a.collection, a.colKey, a.colKeyRx)
+ 	case ctlAuditEngine:
+ 		ae, err := types.ParseAuditEngineStatus(a.value)
+ 		if err != nil {
+@@ -293,19 +322,10 @@ func (a *ctlFn) Evaluate(_ plugintypes.RuleMetadata, txS plugintypes.Transaction
+ 			}
+ 			tx.RemoveRuleByIDRange(start, end)
+ 		}
+-	case ctlRuleRemoveByMsg:
+-		rules := tx.WAF.Rules.GetRules()
+-		for _, r := range rules {
+-			if r.Msg != nil && r.Msg.String() == a.value {
+-				tx.RemoveRuleByID(r.ID_)
+-			}
+-		}
+-	case ctlRuleRemoveByTag:
+-		rules := tx.WAF.Rules.GetRules()
+-		for _, r := range rules {
+-			if utils.InSlice(a.value, r.Tags_) {
+-				tx.RemoveRuleByID(r.ID_)
+-			}
++	case ctlRuleRemoveByMsg, ctlRuleRemoveByTag:
++		ids, _ := a.selectedRuleIDs(tx)
++		for _, id := range ids {
++			tx.RemoveRuleByID(id)
+ 		}
+ 
+ 	case ctlResponseBodyAccess:
+diff --git a/internal/corazawaf/transaction.go b/internal/corazawaf/transaction.go
+index 16b484b..ed491a5 100644
+--- a/internal/corazawaf/transaction.go
++++ b/internal/corazawaf/transaction.go
+@@ -717,29 +717,45 @@ func (tx *Transaction) GetField(rv ruleVariableParams) []types.MatchData {
+ // key for pattern-based matching (e.g. removing all ARGS matching
+ // /^json\.\d+\.field$/ from a given rule).
+ func (tx *Transaction) RemoveRuleTargetByID(id int, variable variables.RuleVariable, key string, keyRx *regexp.Regexp) {
++	tx.RemoveRuleTargetByIDs([]int{id}, variable, key, keyRx)
++}
++
++// RemoveRuleTargetByIDs is RemoveRuleTargetByID for every rule in ids.
++func (tx *Transaction) RemoveRuleTargetByIDs(ids []int, variable variables.RuleVariable, key string, keyRx *regexp.Regexp) {
++	if len(ids) == 0 {
++		return
++	}
+ 	c := ruleVariableParams{
+ 		Variable: variable,
+ 		KeyStr:   key,
+ 		KeyRx:    keyRx,
+ 	}
+-
+-	if multiphaseEvaluation && (variable == variables.Args || variable == variables.ArgsNames) {
++	// Changed by Ostiole: rule selections cached, removals added in bulk (upstream issue #1848).
++	// cs is shared by every rule in ids that has no removal yet. Its length
++	// equals its capacity, so a later append for one of them copies instead
++	// of writing into the others.
++	cs := []ruleVariableParams{c}
++	if multiphaseEvaluation {
+ 		// ARGS and ARGS_NAMES have to be splitted into _GET and _POST
+ 		switch variable {
+ 		case variables.Args:
+-			c.Variable = variables.ArgsGet
+-			tx.ruleRemoveTargetByID[id] = append(tx.ruleRemoveTargetByID[id], c)
+-			c.Variable = variables.ArgsPost
+-			tx.ruleRemoveTargetByID[id] = append(tx.ruleRemoveTargetByID[id], c)
++			cs = []ruleVariableParams{c, c}
++			cs[0].Variable, cs[1].Variable = variables.ArgsGet, variables.ArgsPost
+ 		case variables.ArgsNames:
+-			c.Variable = variables.ArgsGetNames
+-			tx.ruleRemoveTargetByID[id] = append(tx.ruleRemoveTargetByID[id], c)
+-			c.Variable = variables.ArgsPostNames
+-			tx.ruleRemoveTargetByID[id] = append(tx.ruleRemoveTargetByID[id], c)
++			cs = []ruleVariableParams{c, c}
++			cs[0].Variable, cs[1].Variable = variables.ArgsGetNames, variables.ArgsPostNames
++		}
++	}
++	if tx.ruleRemoveTargetByID == nil {
++		tx.ruleRemoveTargetByID = make(map[int][]ruleVariableParams, len(ids))
++	}
++	for _, id := range ids {
++		if prev := tx.ruleRemoveTargetByID[id]; len(prev) > 0 {
++			tx.ruleRemoveTargetByID[id] = append(prev, cs...)
++		} else {
++			tx.ruleRemoveTargetByID[id] = cs
+ 		}
+-		return
+ 	}
+-	tx.ruleRemoveTargetByID[id] = append(tx.ruleRemoveTargetByID[id], c)
+ }
+ 
+ // RemoveRuleByID Removes a rule from the transaction
+diff --git a/internal/corazawaf/waf.go b/internal/corazawaf/waf.go
+index a65a9f5..0ff81e6 100644
+--- a/internal/corazawaf/waf.go
++++ b/internal/corazawaf/waf.go
+@@ -225,7 +225,8 @@ func (w *WAF) newTransaction(opts Options) *Transaction {
+ 	tx.lastPhase = 0
+ 	tx.ruleRemoveByID = nil
+ 	tx.ruleRemoveByIDRanges = nil
+-	tx.ruleRemoveTargetByID = map[int][]ruleVariableParams{}
++	// Changed by Ostiole: rule selections cached, removals added in bulk (upstream issue #1848).
++	tx.ruleRemoveTargetByID = nil
+ 	tx.Skip = 0
+ 	tx.AllowType = 0
+ 	tx.Capture = false

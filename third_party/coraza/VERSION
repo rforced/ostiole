@@ -23,4 +23,13 @@
 #   order, and the parsers add in input order. coraza-caddy feeds headers
 #   itself, from a map, so header order under it is still unsorted.
 #   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 08aa511.
+# - internal/actions/ctl.go, internal/corazawaf/transaction.go and waf.go:
+#   ctl:ruleRemoveTargetById, ByTag and ByMsg, and ctl:ruleRemoveByTag and
+#   ByMsg, walked every rule by value on every request, and a target
+#   removal then added an entry per selected rule, one allocation each.
+#   ctl:ruleRemoveTargetByTag=OWASP_CRS selects every CRS rule, which cost
+#   68 us and 720 allocations a request. A ctl caches the IDs it selects
+#   per rule group, and the removals share one capped slice: 24 us and 118
+#   allocations.
+#   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 08aa511.
 v3.8.2-0.20261029104012-08aa51147300
