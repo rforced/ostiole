@@ -10,7 +10,6 @@ import (
 	"github.com/corazawaf/coraza/v3/internal/corazatypes"
 	utils "github.com/corazawaf/coraza/v3/internal/strings"
 	"github.com/corazawaf/coraza/v3/types"
-	"github.com/corazawaf/coraza/v3/types/variables"
 )
 
 // RuleGroup is a collection of rules
@@ -90,12 +89,20 @@ func (rg *RuleGroup) FindByID(id int) *Rule {
 	return nil
 }
 
-// DiscardPendingChain removes the last rule from the group when it is an open
-// chain starter (HasChain=true). Called when a chain-member parse fails so the
-// partial chain is not left in the rule graph.
+// DiscardPendingChain removes the last rule from the group when its chain is
+// still open, that is when the last link has HasChain set but no Chain yet.
+// Called when a chain-member parse fails so the partial chain is not left in
+// the rule graph. A complete chain is left untouched.
 func (rg *RuleGroup) DiscardPendingChain() {
 	last := len(rg.rules) - 1
-	if last >= 0 && rg.rules[last].HasChain {
+	if last < 0 {
+		return
+	}
+	tail := &rg.rules[last]
+	for tail.Chain != nil {
+		tail = tail.Chain
+	}
+	if tail.HasChain {
 		rg.rules = rg.rules[:last]
 	}
 }
@@ -122,10 +129,11 @@ func (rg *RuleGroup) DeleteByRange(start, end int) {
 }
 
 // DeleteByMsg deletes rules with the given message.
+// Rules without a msg action are kept.
 func (rg *RuleGroup) DeleteByMsg(msg string) {
 	var kept []Rule
 	for _, r := range rg.rules {
-		if r.Msg.String() != msg {
+		if r.Msg == nil || r.Msg.String() != msg {
 			kept = append(kept, r)
 		}
 	}
@@ -164,6 +172,14 @@ func (rg *RuleGroup) Eval(phase types.RulePhase, tx *Transaction) bool {
 	for k := range transformationCache {
 		delete(transformationCache, k)
 	}
+	// The logging phase always runs, as in ModSecurity: a plain allow issued in an
+	// earlier phase skips the remaining request and response phases, not this one.
+	// An allow issued by a logging phase rule still stops the rest of the phase.
+	if phase == types.PhaseLogging && tx.AllowType == corazatypes.AllowTypeAll {
+		tx.DebugLogger().Debug().
+			Msg("Evaluating logging phase despite allow action")
+		tx.AllowType = corazatypes.AllowTypeUnset
+	}
 RulesLoop:
 	for i := range rg.rules {
 		r := &rg.rules[i]
@@ -177,7 +193,6 @@ RulesLoop:
 			// Execute the rule in inferred phases too if multiphase evaluation is enabled
 			// For chained rules, inferredPhases is not relevant, we rather have to run from minimal potentially
 			// matchable phase up to the rule's defined phase (chainMinPhase <= phase <= Phase_)
-			// At the first run chainMinPhase is not set, so we look at the parent chain rule's minimal phase.
 			// If it is not reached, we skip the whole chain, there is no chance to match it.
 			if !multiphaseEvaluation ||
 				(!r.HasChain && !r.has(phase)) ||
@@ -290,14 +305,19 @@ func NewRuleGroup() RuleGroup {
 type transformationKey struct {
 	// TODO(anuraaga): This is a big hack to support performance on TinyGo. TinyGo
 	// cannot efficiently compute a hashcode for a struct if it has embedded non-fixed
-	// size fields, for example string as we'd prefer to use here. A pointer is usable,
-	// and it works for us since we know that the arg key string is populated once per
-	// transaction phase and we would never have different string pointers with the same
-	// content, or more problematically same pointer for different content, as the strings
-	// will be alive throughout the phase.
-	argKey            *byte
-	argIndex          int
-	argVariable       variables.RuleVariable
+	// size fields, for example string as we'd prefer to use here. A pointer is usable:
+	// the pointer stored here keeps the value's memory alive, so the same pointer and
+	// length can never come back with different content. The opposite case, different
+	// pointers with the same content, only costs a duplicate entry, and is rare because
+	// collections hold their values throughout the phase.
+	//
+	// The identity is the value itself (data pointer + length), not the argument's key
+	// and position: collections backed by a map return FindAll() results in Go map
+	// iteration order, so an argument's position is not stable from one rule to the
+	// next within a phase. Variables that get a fresh string on every lookup would only
+	// leave entries behind, see transformationCacheable.
+	argValue          *byte
+	argValueLen       int
 	transformationsID int
 }
 

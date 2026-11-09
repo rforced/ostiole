@@ -126,6 +126,8 @@ func directiveSecMarker(options *DirectiveOptions) error {
 	if err := options.WAF.Rules.Add(rule); err != nil {
 		return err
 	}
+	// A marker ends a pending chain, so it also ends a dropped one.
+	options.Parser.skipChainLinks = false
 	options.WAF.Logger.Debug().Msg("Added secmark rule")
 	return nil
 }
@@ -143,6 +145,10 @@ func directiveSecMarker(options *DirectiveOptions) error {
 func directiveSecAction(options *DirectiveOptions) error {
 	if len(options.Opts) == 0 {
 		return errEmptyOptions
+	}
+
+	if skip, err := skipBrokenChainLink(options, false); skip || err != nil {
+		return err
 	}
 
 	rule, err := ParseRule(RuleOptions{
@@ -185,7 +191,10 @@ func directiveSecRule(options *DirectiveOptions) error {
 		return errEmptyOptions
 	}
 
-	ignoreErrors := options.Parser.IgnoreRuleCompilationErrors
+	if skip, err := skipBrokenChainLink(options, true); skip || err != nil {
+		return err
+	}
+
 	rule, err := ParseRule(RuleOptions{
 		WithOperator: true,
 		WAF:          options.WAF,
@@ -195,26 +204,44 @@ func directiveSecRule(options *DirectiveOptions) error {
 		Data:         options.Opts,
 		Datasets:     options.Datasets,
 	})
-	if err != nil && !ignoreErrors {
-		return err
-	} else if err != nil && ignoreErrors {
-		options.WAF.Logger.Debug().
-			Str("rule_id", options.Opts).
-			Err(err).
-			Msg("Ignoring rule compilation error")
-		return nil
+	if err == nil {
+		err = options.WAF.Rules.Add(rule)
 	}
-	err = options.WAF.Rules.Add(rule)
-	if err != nil && !ignoreErrors {
-		return err
-	} else if err != nil && ignoreErrors {
+	if err != nil {
+		if !options.Parser.IgnoreRuleCompilationErrors {
+			return err
+		}
+		// A chain is loaded whole or not at all: drop the links already read
+		// and skip the ones still to come, so they are neither loaded as rules
+		// of their own nor attached to the next rule.
+		options.WAF.Rules.DiscardPendingChain()
+		options.Parser.skipChainLinks = declaresChain(options.Opts, true)
 		options.WAF.Logger.Debug().
 			Str("rule_id", options.Opts).
 			Err(err).
 			Msg("Ignoring rule compilation error")
-		return nil
 	}
 	return nil
+}
+
+// skipBrokenChainLink reports whether the directive being read is a link of a
+// chain that was dropped because one of its links failed to compile while
+// SecIgnoreRuleCompilationErrors is On. Skipping goes on until a link that does
+// not declare chain. If SecIgnoreRuleCompilationErrors was turned Off in the
+// meantime, the link is reported as an error instead of being skipped silently.
+func skipBrokenChainLink(options *DirectiveOptions, withOperator bool) (bool, error) {
+	if !options.Parser.skipChainLinks {
+		return false, nil
+	}
+	if !options.Parser.IgnoreRuleCompilationErrors {
+		options.Parser.skipChainLinks = false
+		return false, errors.New("rule is a link of a chain dropped for an ignored compilation error")
+	}
+	options.Parser.skipChainLinks = declaresChain(options.Opts, withOperator)
+	options.WAF.Logger.Debug().
+		Str("rule", options.Opts).
+		Msg("Ignoring link of a chain dropped for a rule compilation error")
+	return true, nil
 }
 
 // Description: Configures whether response bodies are to be buffered.
@@ -503,8 +530,7 @@ func directiveSecRuleRemoveByID(options *DirectiveOptions) error {
 		return errEmptyOptions
 	}
 
-	idsOrRanges := strings.Fields(options.Opts)
-	for _, idOrRange := range idsOrRanges {
+	for idOrRange := range strings.FieldsSeq(options.Opts) {
 		if idx := strings.Index(idOrRange, "-"); idx == -1 {
 			id, err := strconv.Atoi(idOrRange)
 			if err != nil {
@@ -1131,7 +1157,7 @@ func directiveSecAuditLogFileMode(options *DirectiveOptions) error {
 //
 // Example:
 // ```seclang
-// SecAuditLogRelevantStatus "^(?:5|40[1235])"
+// SecAuditLogRelevantStatus "^(?:5|4(?:0[0-35-9]|[1-9][0-9]))"
 // ```
 // This example would log all 5xx and 4xx level status codes,
 // except for 404s. Although you could achieve the same effect with a rule in phase 5,
@@ -1147,7 +1173,7 @@ func directiveSecAuditLogRelevantStatus(options *DirectiveOptions) error {
 		return errEmptyOptions
 	}
 
-	re, err := options.WAF.Memoizer().Do(options.Opts, func() (any, error) { return regexp.Compile(options.Opts) })
+	re, err := options.WAF.Memoizer().Do("regexp:"+options.Opts, func() (any, error) { return regexp.Compile(options.Opts) })
 	if err != nil {
 		return err
 	}
@@ -1543,7 +1569,7 @@ func hasDisruptiveActions(actions []ruleAction) bool {
 // ```seclang
 // SecRuleUpdateActionById 12345 "deny,status:403"
 // ```
-// The rule ID can be single IDs or ranges of IDs. The targets are separated by a pipe character.
+// The rule ID can be single IDs or ranges of IDs.
 func directiveSecRuleUpdateActionByID(options *DirectiveOptions) error {
 	if len(options.Opts) == 0 {
 		return errEmptyOptions
@@ -1664,9 +1690,7 @@ func updateActionBySingleID(id int, actions string, options *DirectiveOptions) e
 // ---
 // As an alternative to `SecRuleUpdateTargetById`, this directive will append variables to the specified rule
 // with the targets provided in the second parameter. It can be handy for updating an entire group of rules.
-// Matching is by case-sensitive string equality.
-// This directive will append variables to the specified rule with the targets provided in the second parameter.
-// The rule ID can be single IDs or ranges of IDs. The targets are separated by a pipe character.
+// Matching is by case-sensitive string equality. The targets are separated by a pipe character.
 //
 // Note: OWASP CRS provides a list of [supported tags](https://coreruleset.org/docs/3-about-rules/metadata/#tags-about-rule-classification).
 //
@@ -1703,7 +1727,8 @@ func directiveSecRuleUpdateTargetByTag(options *DirectiveOptions) error {
 
 // Description: Continues loading a rule set when a rule fails to compile, instead of aborting.
 // Enabling it logs a warning: a faulty rule that does not load cannot protect anything, so this
-// is a migration aid rather than a setting to run with.
+// is a migration aid rather than a setting to run with. When a SecRule that is a link of a chain
+// fails, the whole chain is dropped.
 // Syntax: SecIgnoreRuleCompilationErrors On|Off
 // ---
 // Example:
@@ -1752,7 +1777,7 @@ func directiveSecDataset(options *DirectiveOptions) error {
 	}
 	var arr []string
 	data := strings.Trim(d, "`")
-	for _, s := range strings.Split(data, "\n") {
+	for s := range strings.SplitSeq(data, "\n") {
 		s = strings.TrimSpace(s)
 		if s == "" || s[0] == '#' {
 			continue

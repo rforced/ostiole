@@ -1142,7 +1142,7 @@ func TestCloudflaresCookiesAreNotRead(t *testing.T) {
 // shares between requests, where the list has room: 942421's has twelve
 // entries and room for four. Two exclusions taking different cookies off
 // it, hit at once, overwrote each other, and a request lost its own.
-// third_party/coraza copies the list first, until upstream's #1723 is fixed.
+// Coraza copies the list first since upstream's PR #1745.
 func TestConcurrentExclusionsKeepTheirOwnTargets(t *testing.T) {
 	t.Parallel()
 	cfg := &model.Config{}

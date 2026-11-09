@@ -196,6 +196,7 @@ require (
 // The Core Rule Set ships in-tree, refreshed by scripts/update-crs.sh.
 replace github.com/corazawaf/coraza-coreruleset/v4 => ./third_party/coreruleset
 
-// Coraza ships in-tree too, updated with the other dependencies, so its
-// bugs are fixed here at once; third_party/coraza/VERSION lists the fixes.
+// Coraza ships in-tree too, from upstream main with fixes upstream has not
+// merged yet on top, by scripts/update-coraza.sh; third_party/coraza/VERSION
+// lists them.
 replace github.com/corazawaf/coraza/v3 => ./third_party/coraza

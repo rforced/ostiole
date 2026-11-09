@@ -884,9 +884,9 @@ func (tx *Transaction) ProcessURI(uri string, method string, httpVersion string)
 		// has the untouched URI regardless of this fallback.
 		tx.variables.uriParseError.Set("1")
 		tx.variables.requestURI.Set(uri)
-		if posRawQuery := strings.Index(uri, "?"); posRawQuery != -1 {
-			path = uri[:posRawQuery]
-			query = uri[posRawQuery+1:]
+		if before, after, ok := strings.Cut(uri, "?"); ok {
+			path = before
+			query = after
 			tx.ExtractGetArguments(query)
 		} else {
 			path = uri
@@ -1555,6 +1555,13 @@ func (tx *Transaction) AuditLog() *auditlog.Log {
 			Msg("Error converting request length to integer")
 	}
 
+	// HIGHEST_SEVERITY keeps its default of 255 when no matched rule declared a
+	// severity. That is not a severity, so the record leaves the field empty.
+	highestSeverity := tx.variables.highestSeverity.Get()
+	if highestSeverity == strconv.Itoa(defaultHighestSeverity) {
+		highestSeverity = ""
+	}
+
 	// YYYY/MM/DD HH:mm:ss
 	ts := time.Unix(0, tx.Timestamp).Format("2006/01/02 15:04:05")
 	al.Transaction_ = auditlog.Transaction{
@@ -1567,13 +1574,15 @@ func (tx *Transaction) AuditLog() *auditlog.Log {
 		HostPort_:      hostPort,
 		ServerID_:      tx.variables.serverName.Get(), // TODO check
 		Request_: &auditlog.TransactionRequest{
-			Method_:   tx.variables.requestMethod.Get(),
-			URI_:      tx.variables.requestURI.Get(),
-			Protocol_: tx.variables.requestProtocol.Get(),
-			Args_:     tx.variables.args,
-			Length_:   int32(requestLength),
+			Method_:      tx.variables.requestMethod.Get(),
+			URI_:         tx.variables.requestURI.Get(),
+			Protocol_:    tx.variables.requestProtocol.Get(),
+			HTTPVersion_: tx.variables.requestProtocol.Get(),
+			Args_:        tx.variables.args,
+			Length_:      int32(requestLength),
 		},
-		IsInterrupted_: tx.IsInterrupted(),
+		HighestSeverity_: highestSeverity,
+		IsInterrupted_:   tx.IsInterrupted(),
 	}
 
 	var auditLogPartAuditLogTrailerSet, auditLogPartRulesMatchedSet bool
@@ -1733,6 +1742,11 @@ func (tx *Transaction) Close() error {
 	}
 
 	tx.variables.reset()
+	// The entries of the last evaluated phase point to values the collections have
+	// just released, and would keep them alive while the transaction sits in the pool.
+	for k := range tx.transformationCache {
+		delete(tx.transformationCache, k)
+	}
 	if err := tx.requestBodyBuffer.Reset(); err != nil {
 		errs = append(errs, fmt.Errorf("reseting request body buffer: %v", err))
 	}
