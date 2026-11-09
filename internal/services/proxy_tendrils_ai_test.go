@@ -26,6 +26,21 @@ var tdAgentText = []string{
 	"Pricing: $30 a year (200 pages a month, more on request). Old maps and letters (\"public domain\") need no licence.",
 }
 
+// tdAgentPages are what agents write into a page's body or a task's notes
+// about code: commands, paths, SQL, markup and fences on every line, each
+// refused by CRS alone at paranoia 1. Made up in the shapes the router's
+// log showed.
+var tdAgentPages = []string{
+	"**Shell traps.** A pipe hides the exit status: `go test ./... | tail -5 && git commit` once committed on a failing test. Check with `nft -c -f <file>` in `unshare -Urn`, and keep scratch work in `$(mktemp -d)` under /var/tmp.",
+	"```bash\ncd web && bunx eslint .\ngit archive HEAD | tar -x -C /var/tmp/<dir>\nsystemctl restart example.service 2>/dev/null || true\n```",
+	"Time servers and network boot, DNS with overrides and blocklists, then wget the release and tar -xO it to read the notes.",
+	"List modules behind with `go list -m -u -f '{{if and (not .Indirect) .Update}}{{.Path}}{{end}}' all`, then `gh api repos/<repo>/compare/<old>...<new> --jq '[.files[].filename]'`.",
+	"The unit sets `ProtectHome=yes` and reads `${STATE_DIRECTORY}`; a Vue file opens with `<script setup lang=\"ts\">` and the dialog with `<template>`.",
+	"Zones are `[lan,vpn]` and the listener is `[::]:443`. Files: `crs/{before,config}.conf`, fields `{\"username\",\"password\"}`.",
+	"SQL: `SELECT id, title FROM tasks WHERE space_id = $1 ORDER BY due`; delete the row, then `DROP TABLE` only in the migration's down step.",
+	"Paths like ../../etc/passwd are refused upstream; `if g == nil { return }` guards the seam.",
+}
+
 func (g td) agentText() string { return g.pick(append(tdAgentText, tdProse...)...) }
 
 // mcp is one JSON-RPC message to the MCP endpoint, as a client of the

