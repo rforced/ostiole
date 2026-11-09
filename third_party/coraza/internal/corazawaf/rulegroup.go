@@ -5,6 +5,7 @@ package corazawaf
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/corazawaf/coraza/v3/internal/corazatypes"
@@ -19,6 +20,23 @@ import (
 type RuleGroup struct {
 	rules    []Rule
 	observer func(rule types.RuleMetadata)
+	// // Changed by Ostiole: rule selections cached, removals added in bulk (upstream issue #1848).
+	version uint64
+}
+
+// ruleGroupVersions hands out every rule group's versions, so two groups
+// never share one once either has changed.
+var ruleGroupVersions atomic.Uint64
+
+// Version returns a number that changes whenever a rule is added to or
+// removed from the group. A value derived from the rules stays valid while
+// it does not change.
+func (rg *RuleGroup) Version() uint64 {
+	return rg.version
+}
+
+func (rg *RuleGroup) changed() {
+	rg.version = ruleGroupVersions.Add(1)
 }
 
 // Add a rule to the collection
@@ -61,6 +79,7 @@ func (rg *RuleGroup) Add(rule *Rule) error {
 	}
 
 	rg.rules = append(rg.rules, *rule)
+	rg.changed()
 
 	if rg.observer != nil {
 		rg.observer(rule)
@@ -104,6 +123,7 @@ func (rg *RuleGroup) DiscardPendingChain() {
 	}
 	if tail.HasChain {
 		rg.rules = rg.rules[:last]
+		rg.changed()
 	}
 }
 
@@ -112,6 +132,7 @@ func (rg *RuleGroup) DeleteByID(id int) {
 	for i, r := range rg.rules {
 		if r.ID_ == id {
 			rg.rules = append(rg.rules[:i], rg.rules[i+1:]...)
+			rg.changed()
 			return
 		}
 	}
@@ -126,6 +147,7 @@ func (rg *RuleGroup) DeleteByRange(start, end int) {
 		}
 	}
 	rg.rules = kept
+	rg.changed()
 }
 
 // DeleteByMsg deletes rules with the given message.
@@ -138,6 +160,7 @@ func (rg *RuleGroup) DeleteByMsg(msg string) {
 		}
 	}
 	rg.rules = kept
+	rg.changed()
 }
 
 // DeleteByTag deletes rules with the given tag.
@@ -149,6 +172,7 @@ func (rg *RuleGroup) DeleteByTag(tag string) {
 		}
 	}
 	rg.rules = kept
+	rg.changed()
 }
 
 // Count returns the count of rules

@@ -1,14 +1,15 @@
-# - internal/actions/ctl.go, internal/corazawaf/transaction.go and waf.go:
-#   ctl:ruleRemoveTargetById, ByTag and ByMsg, and ctl:ruleRemoveByTag and
-#   ByMsg, walked every rule by value on every request, and a target
-#   removal then added an entry per selected rule, one allocation each.
-#   ctl:ruleRemoveTargetByTag=OWASP_CRS selects every CRS rule, which cost
-#   68 us and 720 allocations a request. A ctl caches the IDs it selects
-#   per rule group, and the removals share one capped slice: 24 us and 118
-#   allocations.
+# - internal/actions/ctl.go, internal/corazawaf/rulegroup.go, transaction.go
+#   and waf.go: ctl:ruleRemoveTargetById, ByTag and ByMsg, and
+#   ctl:ruleRemoveByTag and ByMsg, walked every rule by value on every
+#   request, and a target removal then added an entry per selected rule, one
+#   allocation each. ctl:ruleRemoveTargetByTag=OWASP_CRS selects every CRS
+#   rule, which cost 68 us and 720 allocations a request. A ctl caches the
+#   IDs it selects per version of the rule group, which every added or
+#   removed rule changes, and the removals share one capped slice: 24 us and
+#   118 allocations.
 #   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 08aa511.
 diff --git a/internal/actions/ctl.go b/internal/actions/ctl.go
-index 6a270c1..1fd088b 100644
+index 6a270c1..fb92bbf 100644
 --- a/internal/actions/ctl.go
 +++ b/internal/actions/ctl.go
 @@ -9,6 +9,7 @@ import (
@@ -26,22 +27,21 @@ index 6a270c1..1fd088b 100644
 +	// Changed by Ostiole: rule selections cached, removals added in bulk (upstream issue #1848).
 +	// ruleIDs caches the rules a ctl that selects them by ID range, tag or
 +	// msg applies to. The selection only changes with the rule group, so the
-+	// group is walked once rather than on every transaction.
++	// group is walked once per version rather than on every transaction.
 +	ruleIDs atomic.Pointer[ctlRuleIDs]
 +}
 +
-+// ctlRuleIDs is what a ctl selected in one rule group.
++// ctlRuleIDs is what a ctl selected in one version of a rule group.
 +type ctlRuleIDs struct {
-+	rules []corazawaf.Rule
-+	ids   []int
++	version uint64
++	ids     []int
 +}
 +
 +// selectedRuleIDs returns the IDs of the rules in the transaction's rule
 +// group that the ctl applies to, or false when its ID range does not parse.
 +func (a *ctlFn) selectedRuleIDs(tx *corazawaf.Transaction) ([]int, bool) {
-+	rules := tx.WAF.Rules.GetRules()
-+	if c := a.ruleIDs.Load(); c != nil && len(c.rules) == len(rules) &&
-+		(len(rules) == 0 || &c.rules[0] == &rules[0]) {
++	version := tx.WAF.Rules.Version()
++	if c := a.ruleIDs.Load(); c != nil && c.version == version {
 +		return c.ids, true
 +	}
 +	start, end := 0, 0
@@ -56,6 +56,7 @@ index 6a270c1..1fd088b 100644
 +		}
 +	}
 +	var ids []int
++	rules := tx.WAF.Rules.GetRules()
 +	for i := range rules {
 +		r := &rules[i]
 +		var selected bool
@@ -71,7 +72,7 @@ index 6a270c1..1fd088b 100644
 +			ids = append(ids, r.ID_)
 +		}
 +	}
-+	a.ruleIDs.Store(&ctlRuleIDs{rules: rules, ids: ids})
++	a.ruleIDs.Store(&ctlRuleIDs{version: version, ids: ids})
 +	return ids, true
  }
  
@@ -139,6 +140,90 @@ index 6a270c1..1fd088b 100644
  		}
  
  	case ctlResponseBodyAccess:
+diff --git a/internal/corazawaf/rulegroup.go b/internal/corazawaf/rulegroup.go
+index 43f628b..6d03ffe 100644
+--- a/internal/corazawaf/rulegroup.go
++++ b/internal/corazawaf/rulegroup.go
+@@ -5,6 +5,7 @@ package corazawaf
+ 
+ import (
+ 	"fmt"
++	"sync/atomic"
+ 	"time"
+ 
+ 	"github.com/corazawaf/coraza/v3/internal/corazatypes"
+@@ -19,6 +20,23 @@ import (
+ type RuleGroup struct {
+ 	rules    []Rule
+ 	observer func(rule types.RuleMetadata)
++	// // Changed by Ostiole: rule selections cached, removals added in bulk (upstream issue #1848).
++	version uint64
++}
++
++// ruleGroupVersions hands out every rule group's versions, so two groups
++// never share one once either has changed.
++var ruleGroupVersions atomic.Uint64
++
++// Version returns a number that changes whenever a rule is added to or
++// removed from the group. A value derived from the rules stays valid while
++// it does not change.
++func (rg *RuleGroup) Version() uint64 {
++	return rg.version
++}
++
++func (rg *RuleGroup) changed() {
++	rg.version = ruleGroupVersions.Add(1)
+ }
+ 
+ // Add a rule to the collection
+@@ -61,6 +79,7 @@ func (rg *RuleGroup) Add(rule *Rule) error {
+ 	}
+ 
+ 	rg.rules = append(rg.rules, *rule)
++	rg.changed()
+ 
+ 	if rg.observer != nil {
+ 		rg.observer(rule)
+@@ -104,6 +123,7 @@ func (rg *RuleGroup) DiscardPendingChain() {
+ 	}
+ 	if tail.HasChain {
+ 		rg.rules = rg.rules[:last]
++		rg.changed()
+ 	}
+ }
+ 
+@@ -112,6 +132,7 @@ func (rg *RuleGroup) DeleteByID(id int) {
+ 	for i, r := range rg.rules {
+ 		if r.ID_ == id {
+ 			rg.rules = append(rg.rules[:i], rg.rules[i+1:]...)
++			rg.changed()
+ 			return
+ 		}
+ 	}
+@@ -126,6 +147,7 @@ func (rg *RuleGroup) DeleteByRange(start, end int) {
+ 		}
+ 	}
+ 	rg.rules = kept
++	rg.changed()
+ }
+ 
+ // DeleteByMsg deletes rules with the given message.
+@@ -138,6 +160,7 @@ func (rg *RuleGroup) DeleteByMsg(msg string) {
+ 		}
+ 	}
+ 	rg.rules = kept
++	rg.changed()
+ }
+ 
+ // DeleteByTag deletes rules with the given tag.
+@@ -149,6 +172,7 @@ func (rg *RuleGroup) DeleteByTag(tag string) {
+ 		}
+ 	}
+ 	rg.rules = kept
++	rg.changed()
+ }
+ 
+ // Count returns the count of rules
 diff --git a/internal/corazawaf/transaction.go b/internal/corazawaf/transaction.go
 index 16b484b..ed491a5 100644
 --- a/internal/corazawaf/transaction.go
