@@ -587,6 +587,7 @@ export interface ProxySite {
   plainHttp?: boolean
   hostHeader?: string
   allowFrom?: string[]
+  redactPaths?: string[]
   waf?: string
 }
 

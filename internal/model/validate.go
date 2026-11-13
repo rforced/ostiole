@@ -1186,6 +1186,7 @@ func (v *validator) proxy(c *Config, zones map[string]bool) {
 	for i := range p.Sites {
 		v.proxySite(fmt.Sprintf("services.proxy.sites[%d]", i), p.Sites[i], c, ids, hosts)
 	}
+	v.proxyRedactCap(p.Sites)
 	if n := p.Events.Entries; n < 0 || n > MaxProxyEventEntries {
 		v.add("services.proxy.events.entries", "%d must be 0-%d (0 means %d)",
 			n, MaxProxyEventEntries, DefaultProxyEventEntries)
@@ -1383,9 +1384,55 @@ func (v *validator) proxySite(path string, s ProxySite, c *Config, ids map[strin
 		v.add(path+".hostHeader", "%q must be upstream or empty", s.HostHeader)
 	}
 	v.proxyAllowFrom(path, s.AllowFrom, c)
+	v.proxyRedactPaths(path, s.RedactPaths)
 	if s.WAF != "" {
 		if _, ok := p.Profile(s.WAF); !ok {
 			v.add(path+".waf", "unknown WAF profile %q", s.WAF)
+		}
+	}
+}
+
+// redactPathRe is a prefix the proxy hides: unreserved path characters, so
+// escaping it for a pattern changes only the dots.
+var redactPathRe = regexp.MustCompile(`^[A-Za-z0-9._~/-]+$`)
+
+// proxyRedactPaths checks a site's hidden path prefixes. The proxy writes
+// them into one pattern for its log filter, so each is a plain prefix of
+// whole segments.
+func (v *validator) proxyRedactPaths(path string, prefixes []string) {
+	seen := map[string]bool{}
+	for i, r := range prefixes {
+		rpath := fmt.Sprintf("%s.redactPaths[%d]", path, i)
+		switch {
+		case len(r) < 3 || r[0] != '/' || r[len(r)-1] != '/':
+			v.add(rpath, "%q must start and end with / and hold at least 3 characters", r)
+		case len(r) > ProxyRedactPathMaxLen:
+			v.add(rpath, "%q is longer than %d characters", r, ProxyRedactPathMaxLen)
+		case !redactPathRe.MatchString(r):
+			v.add(rpath, "%q may hold only letters, digits and - . _ ~ /", r)
+		case strings.Contains(r, "//"):
+			v.add(rpath, "%q must not hold //", r)
+		case seen[r]:
+			v.add(rpath, "duplicate prefix %q", r)
+		}
+		seen[r] = true
+	}
+}
+
+// proxyRedactCap holds the proxy to ProxyRedactPathsMax prefixes across all
+// its sites, switched on or not, each counted once: they share one filter.
+func (v *validator) proxyRedactCap(sites []ProxySite) {
+	seen := map[string]bool{}
+	for i, s := range sites {
+		for j, r := range s.RedactPaths {
+			if seen[r] {
+				continue
+			}
+			seen[r] = true
+			if len(seen) > ProxyRedactPathsMax {
+				v.add(fmt.Sprintf("services.proxy.sites[%d].redactPaths[%d]", i, j),
+					"the proxy hides at most %d different prefixes across its sites", ProxyRedactPathsMax)
+			}
 		}
 	}
 }

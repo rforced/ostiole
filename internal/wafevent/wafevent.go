@@ -26,6 +26,11 @@ const Prefix = "ostiole-waf "
 // log reports it among the rulesets.
 const SiteSignature = "ostiole-site:"
 
+// RedactSignature marks a path prefix whose tail the proxy hides in its
+// events, on top of the proxy's SecComponentSignature lines: RedactSignature
+// and the prefix, one line each.
+const RedactSignature = "ostiole-redact:"
+
 // Event is one transaction the WAF had something to say about. Headers
 // and bodies are not logged, so nothing here carries what a visitor sent
 // beyond the request line and each rule's own evidence.

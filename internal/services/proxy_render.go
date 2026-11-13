@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"ostiole/internal/journald"
 	"ostiole/internal/model"
 	"ostiole/internal/network"
+	"ostiole/internal/wafevent"
 )
 
 // The proxy's own JSON, in structs of ours rather than Caddy's: the
@@ -192,7 +194,7 @@ func (p *Proxy) logConfig(cfg *model.Config) caddyLog {
 			"format": "filter",
 			"wrap":   jsonMap{"format": "json"},
 			"fields": jsonMap{
-				"request>uri":     jsonMap{"filter": "regexp", "regexp": `\?.*$`, "value": ""},
+				"request>uri":     uriFilter(cfg.Services.Proxy.RedactedPrefixes()),
 				"request>headers": jsonMap{"filter": "delete"},
 				"request>tls":     jsonMap{"filter": "delete"},
 				"resp_headers":    jsonMap{"filter": "delete"},
@@ -200,6 +202,28 @@ func (p *Proxy) logConfig(cfg *model.Config) caddyLog {
 		},
 		Exclude: []string{wafLogger},
 	}
+}
+
+// uriFilter cuts the query off a request's URI and, for each prefix given,
+// replaces what follows it in the path with the marker; a bare prefix is
+// left as it is. With no prefix it is the plain regexp filter. Otherwise
+// it is multi_regexp, which Caddy limits to 50 operations and 1,000
+// characters a pattern: this is two operations and one pattern, which
+// model.ProxyRedactPathsMax keeps in bounds. The prefixes are sorted, so
+// one that starts another matches first and hides more.
+func uriFilter(prefixes []string) jsonMap {
+	const strip = `\?.*$`
+	if len(prefixes) == 0 {
+		return jsonMap{"filter": "regexp", "regexp": strip, "value": ""}
+	}
+	quoted := make([]string, len(prefixes))
+	for i, p := range prefixes {
+		quoted[i] = regexp.QuoteMeta(p)
+	}
+	return jsonMap{"filter": "multi_regexp", "operations": []jsonMap{
+		{"regexp": strip, "value": ""},
+		{"regexp": "(?s)^(" + strings.Join(quoted, "|") + ").+", "value": "${1}" + wafevent.Redacted},
+	}}
 }
 
 // wafLogger is the logger coraza-caddy writes each matched rule to.
@@ -383,7 +407,7 @@ func (p *Proxy) siteSubroute(cfg *model.Config, site model.ProxySite) jsonMap {
 		routes = append(routes, httpRoute{Handle: []jsonMap{{
 			"handler":        "waf",
 			"load_owasp_crs": true,
-			"directives":     wafDirectives(p.Dir, *profile, site.ID),
+			"directives":     wafDirectives(p.Dir, *profile, site.ID, cfg.Services.Proxy.RedactedPrefixes()...),
 		}}})
 	}
 	for _, path := range site.Paths {

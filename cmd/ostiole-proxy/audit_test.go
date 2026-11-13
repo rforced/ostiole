@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +132,56 @@ func TestAPartLeftOutIsLeftOut(t *testing.T) {
 	ev, ok := wafevent.Parse(lines[0])
 	if !ok || ev.Site != "" || ev.Engine != "" || ev.Status != 0 || len(ev.Rules) != 0 || ev.Verdict != wafevent.VerdictMatched {
 		t.Errorf("event = %+v, %v", ev, ok)
+	}
+}
+
+// A path under a prefix the configuration names in a signature is written
+// without its tail, in the URI and in what each rule quotes of it, while
+// the same request without the signature shows the token, and a path
+// outside the prefix is left as it is.
+func TestAPathUnderAHiddenPrefixIsWrittenWithoutItsTail(t *testing.T) {
+	t.Parallel()
+	rule := `SecRule REQUEST_URI|REQUEST_FILENAME|REQUEST_BASENAME|REQUEST_LINE "@rx tok[0-9]+" ` +
+		`"id:1003,phase:1,pass,log,capture,msg:'Token',severity:CRITICAL,` +
+		`logdata:'Matched Data: %{TX.0} found within %{MATCHED_VAR_NAME}: %{MATCHED_VAR}'"`
+	sign := `SecComponentSignature "` + wafevent.RedactSignature + `/s/"`
+
+	waf, path := wafWriting(t, "DetectionOnly", "AHFKZ", sign, `SecComponentSignature "`+wafevent.RedactSignature+`/feed/"`, rule)
+	line := get(t, waf, path, "/s/tok42?a=1", http.StatusOK)[0]
+	if strings.Contains(line, "tok42") {
+		t.Errorf("the line holds the token: %s", line)
+	}
+	ev, ok := wafevent.Parse(line)
+	if !ok || ev.Site != "shop" || ev.URI != "/s/REDACTED?a=1" {
+		t.Fatalf("event = %+v, %v", ev, ok)
+	}
+	var within []string
+	for _, h := range ev.Rules {
+		_, w, _ := strings.Cut(h.Data, " found within ")
+		within = append(within, w)
+	}
+	for _, want := range []string{
+		"REQUEST_URI: /s/REDACTED?a=1",
+		"REQUEST_FILENAME: /s/REDACTED",
+		"REQUEST_BASENAME: REDACTED",
+		"REQUEST_LINE: GET /s/REDACTED?a=1 HTTP/1.1",
+	} {
+		if !slices.Contains(within, want) {
+			t.Errorf("no rule quotes %q, they quote %q", want, within)
+		}
+	}
+
+	waf, path = wafWriting(t, "DetectionOnly", "AHFKZ", rule)
+	if line := get(t, waf, path, "/s/tok42?a=1", http.StatusOK)[0]; !strings.Contains(line, "/s/tok42?a=1") {
+		t.Errorf("without the signature the line is %s", line)
+	}
+
+	waf, path = wafWriting(t, "DetectionOnly", "AHFKZ", sign, rule)
+	if ev, _ := wafevent.Parse(get(t, waf, path, "/static/tok42", http.StatusOK)[0]); ev.URI != "/static/tok42" {
+		t.Errorf("a path outside the prefix reads %q", ev.URI)
+	}
+	lines := get(t, waf, path, "/s/tok42", http.StatusOK)
+	if ev, _ := wafevent.Parse(lines[len(lines)-1]); ev.URI != "/s/REDACTED" {
+		t.Errorf("a second request reads %q", ev.URI)
 	}
 }

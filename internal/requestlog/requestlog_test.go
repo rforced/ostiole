@@ -22,6 +22,21 @@ func TestParseReadsARequestLine(t *testing.T) {
 	}
 }
 
+// A path the proxy hid the tail of keeps the marker in Path, and the line
+// is otherwise read as any other.
+func TestParseKeepsTheMarkerOfAHiddenPath(t *testing.T) {
+	t.Parallel()
+	hidden := `{"level":"info","ts":1790480447.622,"logger":"http.log.access","msg":"handled request",` +
+		`"request":{"remote_ip":"10.0.0.2","client_ip":"203.0.113.9","proto":"HTTP/2.0","method":"GET",` +
+		`"host":"share.example.com","uri":"/s/REDACTED"},"duration":0.002,"size":64,"status":200,"site":"share",` +
+		`"upstream_status":200,"user_agent":"probe/1"}`
+	want := Request{Site: "share", Client: "203.0.113.9", Method: "GET", Host: "share.example.com",
+		Path: "/s/REDACTED", Proto: "HTTP/2.0", Status: 200, Bytes: 64, Duration: 0.002, Agent: "probe/1", By: BySite}
+	if r, ok := Parse(hidden); !ok || r != want {
+		t.Errorf("parsed %+v, %v", r, ok)
+	}
+}
+
 // Only a request's line is one; a query string an older proxy left on is
 // taken off; the address the connection came from stands in for a client
 // address the proxy did not work out.

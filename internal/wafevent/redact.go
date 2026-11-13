@@ -29,6 +29,120 @@ func (ev Event) Redacted() Event {
 	return ev
 }
 
+// HidingPaths is ev with the tail of its path under one of prefixes, a share
+// link's token say, replaced by Redacted, in the URI and wherever a rule
+// quotes it. A bare prefix has no tail. Of the prefixes the path starts
+// with the shortest counts, as in the request log's filter. A match that
+// holds the tail, lies in it or runs into it is hidden whole. Only this
+// request's own tail is known, so a rule's quote of another path stays.
+func (ev Event) HidingPaths(prefixes []string) Event {
+	path, query, hasQuery := strings.Cut(ev.URI, "?")
+	prefix := ""
+	for _, p := range prefixes {
+		if p != "" && len(path) > len(p) && strings.HasPrefix(path, p) && (prefix == "" || len(p) < len(prefix)) {
+			prefix = p
+		}
+	}
+	if prefix == "" {
+		return ev
+	}
+	// The WAF reads some variables decoded, REQUEST_FILENAME among them.
+	tails := []string{path[len(prefix):]}
+	if d, err := url.PathUnescape(tails[0]); err == nil && d != tails[0] {
+		tails = append(tails, d)
+	}
+	ev.URI = prefix + Redacted
+	if hasQuery {
+		ev.URI += "?" + query
+	}
+	if ev.Rules != nil {
+		rules := slices.Clone(ev.Rules)
+		for i := range rules {
+			rules[i].Data = hideData(rules[i].Data, prefix, tails)
+		}
+		ev.Rules = rules
+	}
+	return ev
+}
+
+// hideData hides the tails in what a rule quotes. A quote of the whole
+// path, as REQUEST_URI, REQUEST_FILENAME and REQUEST_LINE give it, keeps
+// the prefix; REQUEST_BASENAME is the end of the tail alone.
+func hideData(data, prefix string, tails []string) string {
+	m := evidence.FindStringSubmatch(data)
+	if m == nil {
+		return hideTails(data, prefix, tails)
+	}
+	head, match, within, variable, name, value := m[1], m[2], m[3], m[4], m[5], m[6]
+	if name != "" {
+		variable += ":" + name
+	}
+	if match != "" && overlaps(match, tails) {
+		match = Redacted
+	} else {
+		match = hideTails(match, prefix, tails)
+	}
+	if m[4] == "REQUEST_BASENAME" && value != "" && overlaps(value, tails) {
+		value = Redacted
+	} else {
+		value = hideTails(value, prefix, tails)
+	}
+	return head + match + within + variable + ": " + value
+}
+
+// hideTails replaces what follows each prefix in s as far as it reads like
+// a tail, since a rule's quote may be cut short.
+func hideTails(s, prefix string, tails []string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(s, prefix)
+		if i < 0 {
+			break
+		}
+		i += len(prefix)
+		b.WriteString(s[:i])
+		s = s[i:]
+		if n := hiddenLen(s, tails); n > 0 {
+			b.WriteString(Redacted)
+			s = s[n:]
+		}
+	}
+	b.WriteString(s)
+	return b.String()
+}
+
+// hiddenLen is how much of the start of s a tail has in common with it.
+func hiddenLen(s string, tails []string) int {
+	n := 0
+	for _, t := range tails {
+		i := 0
+		for i < len(s) && i < len(t) && s[i] == t[i] {
+			i++
+		}
+		n = max(n, i)
+	}
+	return n
+}
+
+// overlaps says whether s holds a tail, lies in one, starts like one or
+// shares an end with one. A match that only shares a character is hidden
+// too: hiding what was not a secret costs little.
+func overlaps(s string, tails []string) bool {
+	return hiddenLen(s, tails) > 0 || slices.ContainsFunc(tails, func(t string) bool {
+		return strings.Contains(t, s) || strings.Contains(s, t) || endsWithStartOf(s, t) || endsWithStartOf(t, s)
+	})
+}
+
+// endsWithStartOf says whether a ends with some start of b.
+func endsWithStartOf(a, b string) bool {
+	for n := min(len(a), len(b)); n > 0; n-- {
+		if strings.HasSuffix(a, b[:n]) {
+			return true
+		}
+	}
+	return false
+}
+
 // jwts is a JSON web token or the start of one: its header is JSON, so
 // base64url of `{"`.
 var jwts = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*){0,2}`)

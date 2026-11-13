@@ -64,8 +64,10 @@ const wafRuleBase = 10000
 
 // wafDirectives is one site's rule configuration, as Coraza reads it.
 // The signature names the site, which is how an audit line is tied back
-// to it without the rules knowing anything about Ostiole.
-func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
+// to it without the rules knowing anything about Ostiole. Each of redact,
+// the path prefixes the proxy hides, is one more signature, which the
+// sidecar reads to keep the tail of a path out of its events.
+func wafDirectives(dir string, w model.WAFProfile, siteID string, redact ...string) string {
 	var b strings.Builder
 	engine := "DetectionOnly"
 	if w.Mode == "block" {
@@ -112,6 +114,9 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	// left out, which would go on writing through it.
 	b.WriteString("SecDebugLogLevel 0\n")
 	fmt.Fprintf(&b, "SecComponentSignature %q\n", wafevent.SiteSignature+siteID)
+	for _, prefix := range redact {
+		fmt.Fprintf(&b, "SecComponentSignature %q\n", wafevent.RedactSignature+prefix)
+	}
 	b.WriteString("Include @crs-setup.conf.example\n")
 	// Coraza gives a rule only its own phase's default actions, and its
 	// built-in log,auditlog only to phase 2. crs-setup covers phases 1, 2

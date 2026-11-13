@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, keptOrder, parseList } from '@/lib/lists'
@@ -11,6 +12,7 @@ import type { ProxyPath, ProxySite } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import AllowFromAliases from '@/views/services/proxy/AllowFromAliases.vue'
 import { splitAllowFrom } from '@/views/services/proxy/allowFrom'
+import { redactPathsProblem } from '@/views/services/proxy/redactPaths'
 
 const props = defineProps({
   /** The site being edited, or null for a new one. */
@@ -35,6 +37,7 @@ function blank() {
     hostHeader: string
     allowFrom: string
     allowAliases: string[]
+    redactPaths: string
     waf: string
   } = {
     id: '',
@@ -49,6 +52,7 @@ function blank() {
     hostHeader: '',
     allowFrom: '',
     allowAliases: [],
+    redactPaths: '',
     waf: '',
   }
   return form
@@ -82,6 +86,7 @@ watch(
       hostHeader: s.hostHeader ?? '',
       allowFrom: joinList(splitAllowFrom(s.allowFrom, config.aliases).prefixes),
       allowAliases: splitAllowFrom(s.allowFrom, config.aliases).aliases,
+      redactPaths: joinList(s.redactPaths),
       waf: s.waf ?? '',
     }
   },
@@ -89,6 +94,17 @@ watch(
 )
 
 const hosts = computed(() => parseList(form.value.hosts))
+const redactPaths = computed(() => parseList(form.value.redactPaths))
+
+/** What the router would refuse. A list left as saved is never one, so an untouched save stays open. */
+const redactProblem = computed(() => {
+  const now = redactPaths.value
+  if (props.site && keptOrder(props.site.redactPaths, now) !== now) return ''
+  const others = (config.proxy.sites ?? [])
+    .filter((s) => !form.value.previousId || s.id !== form.value.previousId)
+    .flatMap((s) => s.redactPaths ?? [])
+  return redactPathsProblem(now, others)
+})
 
 function addPath() {
   form.value.paths.push({ prefix: '', pool: pools.value[0]?.id ?? '' })
@@ -114,6 +130,8 @@ function save() {
   if (f.hostHeader) site.hostHeader = f.hostHeader
   const allow = keptOrder(props.site?.allowFrom, [...parseList(f.allowFrom), ...f.allowAliases])
   if (allow.length) site.allowFrom = allow
+  const redact = keptOrder(props.site?.redactPaths, redactPaths.value)
+  if (redact.length) site.redactPaths = redact
   if (f.waf) site.waf = f.waf
   config.upsertSite(site, f.previousId || site.id)
   open.value = false
@@ -202,6 +220,20 @@ function save() {
         <AllowFromAliases v-model="form.allowAliases" />
       </FormField>
 
+      <FormField
+        id="site-redact"
+        label="Hidden path prefixes"
+        hint="One per line, written like /s/. What follows a listed prefix is hidden in every log: the proxy's log line, the Requests tab and WAF events. The list works proxy-wide, so a prefix is hidden on every site. Nothing is hidden when empty."
+      >
+        <textarea
+          id="site-redact"
+          v-model="form.redactPaths"
+          class="input h-20 font-mono"
+          spellcheck="false"
+        ></textarea>
+        <ErrorLine v-if="redactProblem" class="text-sm">{{ redactProblem }}</ErrorLine>
+      </FormField>
+
       <fieldset class="field-group">
         <legend>Paths to another pool</legend>
         <div v-for="(p, i) in form.paths" :key="i" class="flex items-center gap-2">
@@ -247,7 +279,7 @@ function save() {
         type="submit"
         form="site-form"
         class="btn-primary"
-        :disabled="!hosts.length || !form.pool"
+        :disabled="!hosts.length || !form.pool || Boolean(redactProblem)"
       >
         Save to draft
       </button>

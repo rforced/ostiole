@@ -39,8 +39,9 @@ func (auditFormat) Format(al plugintypes.AuditLog) (line []byte, err error) {
 }
 
 // event is what the Events tab shows of an audit log entry: the producer,
-// which names the site and the engine's mode, comes with part H, the
-// response status with part F, and the rules that matched with part K.
+// which names the site, the engine's mode and the path prefixes to hide,
+// comes with part H, the response status with part F, and the rules that
+// matched with part K. Without part H no prefix is known and none is hidden.
 func event(al plugintypes.AuditLog) wafevent.Event {
 	tx := al.Transaction()
 	ev := wafevent.Event{
@@ -62,12 +63,16 @@ func event(al plugintypes.AuditLog) wafevent.Event {
 		ev.Status = tx.Response().Status()
 	}
 	parts := al.Parts()
+	var hide []string
 	if slices.Contains(parts, types.AuditLogPartAuditLogTrailer) {
 		p := tx.Producer()
 		ev.Engine = p.RuleEngine()
 		for _, name := range p.Rulesets() {
 			if site, ok := strings.CutPrefix(name, wafevent.SiteSignature); ok {
 				ev.Site = site
+			}
+			if prefix, ok := strings.CutPrefix(name, wafevent.RedactSignature); ok {
+				hide = append(hide, prefix)
 			}
 		}
 	}
@@ -82,5 +87,5 @@ func event(al plugintypes.AuditLog) wafevent.Event {
 		}
 	}
 	ev.Verdict = wafevent.Verdict(tx.IsInterrupted(), ev.Rules)
-	return ev
+	return ev.HidingPaths(hide)
 }

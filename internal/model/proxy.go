@@ -151,8 +151,36 @@ type ProxySite struct {
 	HostHeader string `json:"hostHeader,omitempty"`
 	// AllowFrom limits the site to these prefixes; empty is anyone.
 	AllowFrom []string `json:"allowFrom,omitempty"`
+	// RedactPaths are path prefixes whose tail the proxy's request log
+	// replaces with a marker, for a path that carries a credential. The
+	// log filter sees a path and not its site, so a prefix hides on every
+	// site's lines, not only this one's.
+	RedactPaths []string `json:"redactPaths,omitempty"`
 	// WAF is the profile that inspects requests; empty inspects nothing.
 	WAF string `json:"waf,omitempty"`
+}
+
+// The limits on the path prefixes the proxy hides. The log filter that
+// does it is one Caddy pattern of at most 1,000 characters, and a prefix
+// takes up to twice its length once escaped, so ten of 48 characters fit
+// however many sites name them.
+const (
+	ProxyRedactPathMaxLen = 48
+	ProxyRedactPathsMax   = 10
+)
+
+// RedactedPrefixes are the path prefixes the proxy hides in its logs: those
+// of the enabled sites, sorted, each once. A prefix that starts another
+// sorts before it, so the shorter one is the one that matches.
+func (p Proxy) RedactedPrefixes() []string {
+	var out []string
+	for _, s := range p.Sites {
+		if s.Enabled {
+			out = append(out, s.RedactPaths...)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // WAFProfile is how the Core Rule Set is applied to a site.
