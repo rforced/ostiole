@@ -60,13 +60,16 @@ var tdZones = []string{"UTC", "Europe/Berlin", "Asia/Kolkata", "Pacific/Auckland
 
 // tdTitles are what people call a task, a list, a space or a label, in
 // the shapes that trip the rules: quotes curly and straight, a dash, an
-// ampersand, brackets, punctuation and words that are commands.
+// ampersand, brackets, punctuation, words that are commands, a database's
+// name before a bracket and a backslash before a letter.
 var tdTitles = []string{"Eat potato’s", "Call the plumber about the sink", "Renew passport — before May!", "Buy 2×4s & wood screws",
 	"Read “The Lantern Keeper”", "Plan Sam's 40th (surprise!)", "Café run: oat milk, beans", "Garden & yard", "Work — Q4",
 	"Who's bringing what?", "Sleep by 11", "Top 3 this week", "Watch the tide tables", "Kill the weeds (again)", "Echo Lake trip, day 2",
 	"Pay rent / utilities", "50% off — ends Friday", "Ask: \"can we move it?\"", "Mi lista de la compra", "Büro aufräumen", "週末の買い物",
 	"Set a time to find my keys", "Watch the retrieval logs", "Watch this, then nice work", "Share one event with a non-user (.ics download)",
-	"Attach the file (PDF) to the claim", "Install the app on the old router for Sam /personal #", "Ask about the shared shelf toggle #"}
+	"Attach the file (PDF) to the claim", "Install the app on the old router for Sam /personal #", "Ask about the shared shelf toggle #",
+	"Check the deploy against the old schema (item 43)", "Migrate the database (v2) first", `Move the readers into pkg\storage (item 8)`,
+	`Back up C:\Users\sam\Documents`}
 
 // tdProse is what goes in notes, comments and the journal: Markdown with
 // lists, links, emphasis and code, and plain sentences.
@@ -101,7 +104,7 @@ var tdQuestions = []string{"What are the top three tasks to complete in the spac
 	"Which tasks wait on the plumber?", "Was habe ich diese Woche erledigt?", "Who's doing the groceries & the dishes?", "Sleep or work first?"}
 
 // tdSearches are what people type into the search box.
-var tdSearches = []string{"plumber", "Sam's", "café", "trip, day", "Q4 — work", "who"}
+var tdSearches = []string{"plumber", "Sam's", "café", "trip, day", "Q4 — work", "who", "schema (item 43)", "information_schema", `\d+ in the parser`}
 
 func (g td) title() string { return g.pick(tdTitles...) }
 func (g td) prose() string { return g.pick(tdProse...) }
@@ -775,7 +778,8 @@ type tdAttack struct {
 // set reads as paranoia 1 does, keeps what CRS alone refuses there but a
 // command run under another or after a backtick, which plain sentences and
 // Markdown code spell, a link to the machine itself, a word and a bracket,
-// a semicolon and a word, and JavaScript run without brackets. A page's
+// a semicolon and a word, JavaScript run without brackets and a database's
+// name. A page's
 // body and a task's notes are not read at all where they go, and are read
 // as text elsewhere.
 func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
@@ -873,6 +877,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "(a)(b);"})},
 		{2, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "\"in a.b=c"})},
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "json(x)"})},
+		// Or a database's name.
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "information_schema"})},
 		// And JavaScript run without brackets.
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "[x].sort.call`a`"})},
 		// Only recall's labels may come more than once.
