@@ -207,7 +207,7 @@ function save() {
       <FormField id="rule-desc" label="Description">
         <input id="rule-desc" v-model="form.description" class="input" />
       </FormField>
-      <div class="grid gap-4 sm:grid-cols-3">
+      <div class="grid gap-4 sm:grid-cols-2">
         <FormField id="rule-action" label="Action">
           <select id="rule-action" v-model="form.action" class="input">
             <option value="accept">Accept</option>
@@ -222,19 +222,6 @@ function save() {
             <option value="udp">UDP</option>
             <option value="tcp+udp">TCP + UDP</option>
             <option value="icmp">ICMP / ICMPv6</option>
-          </select>
-        </FormField>
-        <FormField
-          v-if="config.schedules.length"
-          id="rule-schedule"
-          label="Schedule"
-          hint="Outside the window the rule does not match."
-        >
-          <select id="rule-schedule" v-model="form.schedule" class="input">
-            <option value="">Always</option>
-            <option v-for="s in config.schedules" :key="s.name" :value="s.name">
-              {{ s.name }} ({{ s.start }}–{{ s.end }})
-            </option>
           </select>
         </FormField>
         <FormField
@@ -275,6 +262,19 @@ function save() {
             <option value="">{{ UNSET_LABEL }}</option>
             <option v-for="t in TIERS" :key="t.value" :value="t.value">
               {{ tierOption(t) }}
+            </option>
+          </select>
+        </FormField>
+        <FormField
+          v-if="config.schedules.length"
+          id="rule-schedule"
+          label="Schedule"
+          hint="Outside the window the rule does not match."
+        >
+          <select id="rule-schedule" v-model="form.schedule" class="input">
+            <option value="">Always</option>
+            <option v-for="s in config.schedules" :key="s.name" :value="s.name">
+              {{ s.name }} ({{ s.start }}–{{ s.end }})
             </option>
           </select>
         </FormField>
