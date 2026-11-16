@@ -607,6 +607,11 @@ export interface WAFProfile {
   bodyLimitMB?: number
   passLargeBodies?: boolean
   inspectResponses?: boolean
+  maxCookies?: number
+  maxParts?: number
+  maxNameDepth?: number
+  maxNameLength?: number
+  refuseMultipart?: boolean
   exclusions?: WAFExclusion[]
 }
 

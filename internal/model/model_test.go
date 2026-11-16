@@ -854,6 +854,15 @@ func TestValidateWAFProfiles(t *testing.T) {
 			w.Applications = []string{"wordpress", "wordpress"}
 		}, "services.proxy.wafProfiles[0].applications[1]"},
 		{"body limit too big", func(w *WAFProfile) { w.BodyLimitMB = 2048 }, "services.proxy.wafProfiles[0].bodyLimitMB"},
+		{"negative cookie cap", func(w *WAFProfile) { w.MaxCookies = -1 }, "services.proxy.wafProfiles[0].maxCookies"},
+		{"part cap too high", func(w *WAFProfile) { w.MaxParts = 10001 }, "services.proxy.wafProfiles[0].maxParts"},
+		{"nesting past PHP's own limit", func(w *WAFProfile) { w.MaxNameDepth = 65 }, "services.proxy.wafProfiles[0].maxNameDepth"},
+		{"name cap too short", func(w *WAFProfile) { w.MaxNameLength = 15 }, "services.proxy.wafProfiles[0].maxNameLength"},
+		{"name cap too long", func(w *WAFProfile) { w.MaxNameLength = 8193 }, "services.proxy.wafProfiles[0].maxNameLength"},
+		// More would number a path exclusion into the fixed request rules.
+		{"too many exclusions", func(w *WAFProfile) {
+			w.Exclusions = slices.Repeat([]WAFExclusion{{Rule: "942100", Path: "/a"}}, MaxWAFExclusions+1)
+		}, "services.proxy.wafProfiles[0].exclusions"},
 		{"rule is not a number", func(w *WAFProfile) { w.Exclusions[0].Rule = "SQLI" }, "services.proxy.wafProfiles[0].exclusions[0].rule"},
 		{"range runs backwards", func(w *WAFProfile) { w.Exclusions[0].Rule = "942200-942100" }, "services.proxy.wafProfiles[0].exclusions[0].rule"},
 		{"path without a slash", func(w *WAFProfile) { w.Exclusions[1].Path = "wp-admin" }, "services.proxy.wafProfiles[0].exclusions[1].path"},
@@ -876,6 +885,25 @@ func TestValidateWAFProfiles(t *testing.T) {
 				t.Errorf("no issue at %s", tc.want)
 			}
 		})
+	}
+}
+
+func TestValidateWAFRequestLimitsAtTheirEdges(t *testing.T) {
+	t.Parallel()
+	for _, w := range []WAFProfile{
+		{MaxCookies: 10000, MaxParts: 10000, MaxNameDepth: 64, MaxNameLength: 8192},
+		{MaxCookies: 1, MaxParts: 1, MaxNameDepth: 1, MaxNameLength: 16},
+	} {
+		cfg := proxyStarter()
+		p := workingProxy()
+		w.ID, w.Exclusions = p.Profiles[0].ID, slices.Repeat([]WAFExclusion{{Rule: "942100", Path: "/a"}}, MaxWAFExclusions)
+		p.Profiles[0] = w
+		cfg.Services.Proxy = p
+		for _, f := range []string{"maxCookies", "maxParts", "maxNameDepth", "maxNameLength", "exclusions"} {
+			if hasIssue(t, cfg, "services.proxy.wafProfiles[0]."+f) {
+				t.Errorf("%+v: refused %s", w, f)
+			}
+		}
 	}
 }
 

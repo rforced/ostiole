@@ -1494,6 +1494,20 @@ func (v *validator) wafProfile(path string, w WAFProfile, ids map[string]string)
 	if w.BodyLimitMB < 0 || w.BodyLimitMB > 1024 {
 		v.add(path+".bodyLimitMB", "%d must be 0-1024", w.BodyLimitMB)
 	}
+	for _, c := range []struct {
+		path     string
+		n, limit int
+	}{{"maxCookies", w.MaxCookies, 10000}, {"maxParts", w.MaxParts, 10000}, {"maxNameDepth", w.MaxNameDepth, 64}} {
+		if c.n < 0 || c.n > c.limit {
+			v.add(path+"."+c.path, "%d must be 0-%d", c.n, c.limit)
+		}
+	}
+	if n := w.MaxNameLength; n != 0 && (n < 16 || n > 8192) {
+		v.add(path+".maxNameLength", "%d must be 0 or 16-8192", n)
+	}
+	if len(w.Exclusions) > MaxWAFExclusions {
+		v.add(path+".exclusions", "%d exclusions; a profile takes at most %d", len(w.Exclusions), MaxWAFExclusions)
+	}
 	for i, e := range w.Exclusions {
 		v.wafExclusion(fmt.Sprintf("%s.exclusions[%d]", path, i), e)
 	}

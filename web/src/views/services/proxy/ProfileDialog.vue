@@ -42,6 +42,11 @@ interface ProfileForm {
   bodyLimitMB: number | ''
   passLargeBodies: boolean
   inspectResponses: boolean
+  maxCookies: number | ''
+  maxParts: number | ''
+  maxNameDepth: number | ''
+  maxNameLength: number | ''
+  refuseMultipart: boolean
 }
 
 function blank(): ProfileForm {
@@ -57,6 +62,11 @@ function blank(): ProfileForm {
     bodyLimitMB: '',
     passLargeBodies: false,
     inspectResponses: false,
+    maxCookies: '',
+    maxParts: '',
+    maxNameDepth: '',
+    maxNameLength: '',
+    refuseMultipart: false,
   }
 }
 
@@ -82,6 +92,11 @@ watch(
       bodyLimitMB: w.bodyLimitMB || '',
       passLargeBodies: Boolean(w.passLargeBodies),
       inspectResponses: Boolean(w.inspectResponses),
+      maxCookies: w.maxCookies || '',
+      maxParts: w.maxParts || '',
+      maxNameDepth: w.maxNameDepth || '',
+      maxNameLength: w.maxNameLength || '',
+      refuseMultipart: Boolean(w.refuseMultipart),
     }
   },
   { immediate: true },
@@ -115,6 +130,11 @@ function save() {
   if (Number(f.bodyLimitMB)) profile.bodyLimitMB = Number(f.bodyLimitMB)
   if (f.passLargeBodies) profile.passLargeBodies = true
   if (f.inspectResponses) profile.inspectResponses = true
+  if (Number(f.maxCookies)) profile.maxCookies = Number(f.maxCookies)
+  if (Number(f.maxParts)) profile.maxParts = Number(f.maxParts)
+  if (Number(f.maxNameDepth)) profile.maxNameDepth = Number(f.maxNameDepth)
+  if (Number(f.maxNameLength)) profile.maxNameLength = Number(f.maxNameLength)
+  if (f.refuseMultipart) profile.refuseMultipart = true
   // The exclusions card edits those; a rename takes them along.
   const exclusions = config.proxy.wafProfiles?.find((w) => w.id === f.previousId)?.exclusions
   if (exclusions?.length) profile.exclusions = exclusions
@@ -210,6 +230,78 @@ function save() {
         label="Let larger bodies through"
         hint="Only the part up to the limit is inspected, and the rest reaches the site unread. For a site that takes larger uploads."
       />
+
+      <fieldset class="field-group">
+        <legend>Request limits</legend>
+        <div class="fields">
+          <FormField
+            id="waf-cookies"
+            label="Cookies per request"
+            hint="200 is the default. A request with more is blocked."
+          >
+            <input
+              id="waf-cookies"
+              v-model.number="form.maxCookies"
+              type="number"
+              min="0"
+              max="10000"
+              placeholder="200"
+              class="input w-32 font-mono max-sm:w-full"
+            />
+          </FormField>
+          <FormField
+            id="waf-parts"
+            label="Multipart parts"
+            hint="200 is the default. A body with more fields and files together is blocked."
+          >
+            <input
+              id="waf-parts"
+              v-model.number="form.maxParts"
+              type="number"
+              min="0"
+              max="10000"
+              placeholder="200"
+              class="input w-32 font-mono max-sm:w-full"
+            />
+          </FormField>
+          <FormField
+            id="waf-depth"
+            label="Brackets per argument name"
+            hint="16 is the default. A name with more [ in it is blocked."
+          >
+            <input
+              id="waf-depth"
+              v-model.number="form.maxNameDepth"
+              type="number"
+              min="0"
+              max="64"
+              placeholder="16"
+              class="input w-32 font-mono max-sm:w-full"
+            />
+          </FormField>
+          <FormField
+            id="waf-name-length"
+            label="Characters per argument name"
+            hint="256 is the default. A longer argument or cookie name is blocked."
+          >
+            <input
+              id="waf-name-length"
+              v-model.number="form.maxNameLength"
+              type="number"
+              min="16"
+              max="8192"
+              placeholder="256"
+              class="input w-32 font-mono max-sm:w-full"
+            />
+          </FormField>
+        </div>
+        <ToggleRow
+          id="waf-refuse-multipart"
+          v-model="form.refuseMultipart"
+          label="Refuse multipart bodies"
+          hint="For a site that takes no uploads. Excluding rule 19008 lets them through on an upload path."
+        />
+      </fieldset>
 
       <fieldset class="field-group">
         <legend>Applications</legend>

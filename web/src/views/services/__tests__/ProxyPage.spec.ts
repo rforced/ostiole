@@ -19,6 +19,7 @@ import type {
   Stats,
   System,
   WaflogEntry,
+  WAFProfile,
   WafEventsPage,
 } from '@/lib/types.gen'
 import { configOf, draftOf, fixture, must, type DeepPartial } from '@/test/fixtures'
@@ -890,6 +891,90 @@ describe('Untouched save', () => {
     await wrapper.get('form').trigger('submit')
     expect(store.dirty).toBe(true)
     expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch', mode: 'block' })
+  })
+
+  const LIMITS = {
+    maxCookies: 300,
+    maxParts: 50,
+    maxNameDepth: 8,
+    maxNameLength: 512,
+    refuseMultipart: true,
+  }
+  const LIMIT_FIELDS = {
+    maxCookies: '#waf-cookies',
+    maxParts: '#waf-parts',
+    maxNameDepth: '#waf-depth',
+    maxNameLength: '#waf-name-length',
+  } as const
+
+  async function openProfile(profile: WAFProfile) {
+    const draft = config({ services: services({ wafProfiles: [profile] }) })
+    const opened = withDraft(ProfileDialog, draft, { open: true, profile })
+    await flushPromises()
+    return opened
+  }
+
+  it('saves a profile without request limits as it was', async () => {
+    const { wrapper, store } = await openProfile({ id: 'watch' })
+    for (const sel of Object.values(LIMIT_FIELDS)) {
+      expect(wrapper.get<HTMLInputElement>(sel).element.value).toBe('')
+    }
+    expect(wrapper.get<HTMLInputElement>('#waf-refuse-multipart').element.checked).toBe(false)
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(false)
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch' })
+  })
+
+  it('keeps the request limits a profile sets', async () => {
+    const { wrapper, store } = await openProfile({ id: 'watch', ...LIMITS })
+    for (const [key, sel] of Object.entries(LIMIT_FIELDS)) {
+      expect(wrapper.get<HTMLInputElement>(sel).element.value).toBe(
+        String(LIMITS[key as keyof typeof LIMIT_FIELDS]),
+      )
+    }
+    expect(wrapper.get<HTMLInputElement>('#waf-refuse-multipart').element.checked).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(false)
+  })
+
+  it('writes the request limits the user types as numbers', async () => {
+    const { wrapper, store } = await openProfile({ id: 'watch' })
+    await wrapper.get('#waf-cookies').setValue('300')
+    await wrapper.get('#waf-parts').setValue('50')
+    await wrapper.get('#waf-depth').setValue('8')
+    await wrapper.get('#waf-name-length').setValue('512')
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(true)
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({
+      id: 'watch',
+      maxCookies: 300,
+      maxParts: 50,
+      maxNameDepth: 8,
+      maxNameLength: 512,
+    })
+  })
+
+  it('drops a request limit the user clears', async () => {
+    const { wrapper, store } = await openProfile({ id: 'watch', ...LIMITS })
+    for (const sel of Object.values(LIMIT_FIELDS)) await wrapper.get(sel).setValue('')
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(true)
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch', refuseMultipart: true })
+  })
+
+  it('refuses multipart bodies only when switched on', async () => {
+    const { wrapper, store } = await openProfile({ id: 'watch' })
+    await wrapper.get('#waf-refuse-multipart').setValue(true)
+    await wrapper.get('form').trigger('submit')
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch', refuseMultipart: true })
+  })
+
+  it('drops refuse multipart when switched off', async () => {
+    const { wrapper, store } = await openProfile({ id: 'watch', refuseMultipart: true })
+    await wrapper.get('#waf-refuse-multipart').setValue(false)
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(true)
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch' })
   })
 
   it('keeps the order of an access rule ports', async () => {

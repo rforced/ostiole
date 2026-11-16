@@ -57,10 +57,25 @@ func crsInclude(b *strings.Builder, dir, app, part string) {
 const cloudflareCookies = `^(?:__cf_bm|__cflb|__cfruid|__cfseq.*|__cfwaitingroom|_cfuvid|cf_clearance|cf_chl_rc_(?:i|ni|m)|cf_ob_info|cf_use_ob)$`
 
 // The first rule ID Ostiole writes. CRS reserves 10000-99999 for local
-// rules, and everything below is a counter from here. Ostiole's own
-// exclusion sets take a thousand each from 20000: vaultwarden 20000-20999,
-// jellyfin 21000-21999, tendrils 22000-22999, cavu 23000-23999.
+// rules, and everything below is a counter from here, which
+// model.MaxWAFExclusions keeps under the fixed request rules at 19001-19010
+// (wafRequestRules). Ostiole's own exclusion sets take a thousand each from
+// 20000: vaultwarden 20000-20999, jellyfin 21000-21999, tendrils
+// 22000-22999, cavu 23000-23999.
 const wafRuleBase = 10000
+
+// A multipart/form-data Content-Type is plain when PHP, which takes the
+// first "boundary" in the header up to the next , or ; or the closing
+// quote, and Go's mime.ParseMediaType, which Coraza reads it with, find the
+// same boundary: lower-case parameter names, boundary once, charset at
+// most once, nothing else. An unquoted boundary is the RFC 2046 characters
+// Go also takes as a token.
+const (
+	plainBoundary = `(?:[0-9A-Za-z'+_.-]{1,70}|\"[^\"\\]{1,70}\")`
+	plainCharset  = `[0-9A-Za-z_.-]{1,40}`
+	plainFormData = `^(?i:multipart/form-data);[ \t]*(?:boundary=` + plainBoundary + `(?:;[ \t]*charset=` + plainCharset +
+		`)?|charset=` + plainCharset + `;[ \t]*boundary=` + plainBoundary + `)$`
+)
 
 // wafDirectives is one site's rule configuration, as Coraza reads it.
 // The signature names the site, which is how an audit line is tied back
@@ -216,6 +231,7 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string, redact ...stri
 		}
 		fmt.Fprintf(&b, "SecRule REQUEST_URI \"@beginsWith %s\" \"id:%d,phase:1,pass,nolog,%s\"\n", e.Path, id, ctl)
 	}
+	wafRequestRules(&b, w)
 	b.WriteString("Include @owasp_crs/*.conf\n")
 	// Cloudflare's cookies are for Cloudflare, and a browser sends them to
 	// every name under a zone once one name in it has been through
@@ -238,4 +254,43 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string, redact ...stri
 		fmt.Fprintf(&b, "SecRuleRemoveById %s\n", e.Rule)
 	}
 	return b.String()
+}
+
+// wafRequestRules refuses requests shaped to break a backend's own request
+// parser (php2shell, Broccoli2Shell) before CRS reads them. Each has a
+// fixed ID, so an exclusion can lift one on a path: the path exclusions
+// come before, and the global ones after.
+func wafRequestRules(b *strings.Builder, w model.WAFProfile) {
+	limit := func(n, def int) int {
+		if n == 0 {
+			return def
+		}
+		return n
+	}
+	// Coraza picks the multipart reader only for multipart/form-data, and
+	// CRS then reads any other multipart body as a form: split at every &
+	// and =, with the framing in the names, where a backend reads the parts.
+	b.WriteString(`SecRule REQUEST_HEADERS:Content-Type "@rx ^[\s\v\p{Z}]*multipart/" "id:19009,phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=MULTIPART"` + "\n")
+	// Coraza reads the first Content-Type, and backends do not all agree.
+	b.WriteString(`SecRule &REQUEST_HEADERS:Content-Type "@gt 1" "id:19010,phase:1,t:none,log,deny,msg:'More than one Content-Type header',severity:2"` + "\n")
+	b.WriteString(`SecRule REQUEST_HEADERS:Content-Type "@rx ^[\s\v\p{Z}]*(?i:multipart/form-data)" "id:19006,phase:1,t:none,log,deny,msg:'Multipart Content-Type is not plain',logdata:'%{MATCHED_VAR}',severity:2,chain"` + "\n")
+	b.WriteString(`SecRule REQUEST_HEADERS:Content-Type "!@rx ` + plainFormData + `" "t:none"` + "\n")
+	// Coraza never decompresses a request body, so no rule reads one sent
+	// compressed, and a backend that inflates it can be the target itself.
+	b.WriteString(`SecRule REQUEST_HEADERS:Content-Encoding "!@rx ^(?i:identity)$" "id:19007,phase:1,t:none,log,deny,msg:'Request body is compressed',logdata:'%{MATCHED_VAR}',severity:2"` + "\n")
+	if w.RefuseMultipart {
+		b.WriteString(`SecRule REQUEST_HEADERS:Content-Type "@rx ^[\s\v\p{Z}]*multipart/" "id:19008,phase:1,t:none,t:lowercase,log,deny,msg:'Multipart body refused by the profile',severity:2"` + "\n")
+	}
+	fmt.Fprintf(b, `SecRule &REQUEST_COOKIES "@gt %d" "id:19002,phase:1,t:none,log,deny,msg:'Too many cookies',logdata:'%%{MATCHED_VAR}',severity:2"`+"\n",
+		limit(w.MaxCookies, model.DefaultMaxCookies))
+	// PHP keeps per-request state for upload progress that the php2shell
+	// bugs reach; no app needs the field sent through a WAF it trusts.
+	b.WriteString(`SecRule MULTIPART_NAME|MULTIPART_PART_HEADERS "@contains php_session_upload_progress" "id:19001,phase:2,t:none,t:lowercase,log,deny,msg:'PHP upload progress field in a multipart body',severity:2"` + "\n")
+	fmt.Fprintf(b, `SecRule &MULTIPART_NAME "@gt %d" "id:19003,phase:2,t:none,log,deny,msg:'Too many multipart parts',logdata:'%%{MATCHED_VAR}',severity:2"`+"\n",
+		limit(w.MaxParts, model.DefaultMaxParts))
+	const names = "ARGS_NAMES|MULTIPART_NAME|REQUEST_COOKIES_NAMES"
+	fmt.Fprintf(b, `SecRule %s "@rx ^(?:[^\[]*\[){%d}" "id:19004,phase:2,t:none,log,deny,msg:'Argument name nested too deep',severity:2"`+"\n",
+		names, limit(w.MaxNameDepth, model.DefaultMaxNameDepth)+1)
+	fmt.Fprintf(b, `SecRule %s "@gt %d" "id:19005,phase:2,t:none,t:length,log,deny,msg:'Argument name too long',severity:2"`+"\n",
+		names, limit(w.MaxNameLength, model.DefaultMaxNameLength))
 }

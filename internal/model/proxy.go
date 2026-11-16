@@ -206,8 +206,18 @@ type WAFProfile struct {
 	// WAF should hold. What comes after is never read.
 	PassLargeBodies bool `json:"passLargeBodies,omitempty"`
 	// InspectResponses runs the outbound rules on text responses.
-	InspectResponses bool           `json:"inspectResponses,omitempty"`
-	Exclusions       []WAFExclusion `json:"exclusions,omitempty"`
+	InspectResponses bool `json:"inspectResponses,omitempty"`
+	// MaxCookies, MaxParts, MaxNameDepth and MaxNameLength cap a request's
+	// cookies, its multipart parts, the brackets in one argument name and
+	// the length of one name; 0 is the default.
+	MaxCookies    int `json:"maxCookies,omitempty"`
+	MaxParts      int `json:"maxParts,omitempty"`
+	MaxNameDepth  int `json:"maxNameDepth,omitempty"`
+	MaxNameLength int `json:"maxNameLength,omitempty"`
+	// RefuseMultipart refuses every multipart body, for a site that takes
+	// no uploads; an exclusion of rule 19008 lets them through on a path.
+	RefuseMultipart bool           `json:"refuseMultipart,omitempty"`
+	Exclusions      []WAFExclusion `json:"exclusions,omitempty"`
 }
 
 // WAFExclusion switches a rule off, for one path or one variable when
@@ -250,6 +260,18 @@ const (
 	DefaultOutboundThreshold = 4
 	DefaultBodyLimitMB       = 12
 	DefaultPoolHealthSeconds = 30
+)
+
+// Request limits a WAF profile applies when it sets none. These are
+// Ostiole's, not the Core Rule Set's.
+const (
+	DefaultMaxCookies    = 200
+	DefaultMaxParts      = 200
+	DefaultMaxNameDepth  = 16
+	DefaultMaxNameLength = 256
+	// MaxWAFExclusions keeps a profile's numbered rules below 19001, where
+	// the fixed request rules start.
+	MaxWAFExclusions = 1000
 )
 
 // HTTPPortOr is the port plain HTTP is served on.
