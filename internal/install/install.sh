@@ -775,11 +775,16 @@ aur_miniupnpd() {
 		echo "warning: $AUR_UPNP did not build; no UPnP" >&2
 		return 0
 	fi
-	pkg=$(find "$build/$AUR_UPNP" -maxdepth 1 -name "$AUR_UPNP-*.pkg.tar.*" \
+	pkg=$(find "$build/$AUR_UPNP" -maxdepth 1 -type f -name "$AUR_UPNP-*.pkg.tar.*" \
 		! -name '*.sig' ! -name "$AUR_UPNP-debug-*" | head -1)
 	if [ -z "$pkg" ]; then
 		aur_done
 		echo "warning: the AUR build left nothing to install; no UPnP" >&2
+		return 0
+	fi
+	if ! pkg=$(aur_take "$pkg"); then
+		aur_done
+		echo "warning: could not take the package from the build; no UPnP" >&2
 		return 0
 	fi
 	# pacman runs a package's install script as root, so a path the review
@@ -811,6 +816,22 @@ aur_account() {
 	useradd --system --no-create-home --home-dir / --shell /usr/bin/nologin --user-group "$AUR_USER" >>"$TMP/aur.log" 2>&1 ||
 		return 1
 	AUR_UID="$(id -u "$AUR_USER")" && AUR_GID="$(id -g "$AUR_USER")"
+}
+
+# aur_take stops everything left running as the build account, then copies
+# the package into $TMP, which only root can reach. The check and pacman -U
+# read the copy, so nothing can swap the file between the two.
+aur_take() {
+	waited=0
+	while pgrep -u "$AUR_USER" >/dev/null 2>&1; do
+		[ "$waited" -lt 10 ] || return 1
+		pkill -KILL -u "$AUR_USER" 2>/dev/null || true
+		waited=$((waited + 1))
+		sleep 1
+	done
+	{ [ -f "$1" ] && [ ! -L "$1" ]; } || return 1
+	cp "$1" "$TMP/${1##*/}" || return 1
+	printf '%s\n' "$TMP/${1##*/}"
 }
 
 # aur_done removes the build and the account it ran as.
