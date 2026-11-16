@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -105,6 +106,30 @@ var jfProviders = []string{"TheMovieDb", "The Open Movie Database", "TheTVDB", "
 
 // jfMusicBrainz is where the MusicBrainz plugin's settings are saved.
 const jfMusicBrainz = "/Plugins/8c95c4d2-e50c-4fb0-a4f3-6c06ff0f9a1a/Configuration"
+
+// jfIntroSkipper is where the Intro Skipper plugin's settings are saved.
+const jfIntroSkipper = "/Plugins/c83d86bb-a1e0-4c35-a113-e2101cf4ee6b/Configuration"
+
+// jfIntroSkipperPatterns are the Intro Skipper plugin's default patterns.
+var jfIntroSkipperPatterns = map[string]any{
+	"ChapterAnalyzerIntroductionPattern": `(^[\s0-9.♪-]*|/\s*)((Intro|Introduction)(\s+Start)?:?$|(OP[0-9]*|Opening|Abertura|オープニング|(Main\s+)?Titles?)(\s+(Theme|Song|Music|Credits|Titles?|Sequences?|Start))?(?![\s:]+End)\s*($|[-–—/:(]))`,
+	"ChapterAnalyzerEndCreditsPattern":   `(^[0-9.\s♪]*|[+,;:]\s*)((The\s+)?Credits?|(Mixed\s+)?(ED[0-9]*(v[0-9]+)?|Ending)|Outro|Closing|Cast\s+List|Abspann|Encerramento|エンディング)(\s+(Theme|Song|Music|Start))?(?![\s:]+End)\s*($|:|[-–—]\s)|(^|[^a-z])(End|Ending|Closing|Early|Final)\s+(Credits?|Titles?)(?![a-z])(?![\s:]+End)`,
+	"ChapterAnalyzerPreviewPattern":      `(^|\s)(Preview|PV|Sneak\s?Peek|Coming\s?(Up|Soon)|Next\s+(time|on|episode)|Extra|Teaser|Trailer)(?![\s:]+End)(\s|:|$)`,
+	"ChapterAnalyzerRecapPattern":        `(^|[-–—|:.()\[\]])\s*(Recap(?![a-z])(?![\s:]+End)|(Last(\s+(time|week|episode|season))?|Catch[ -]?up),?\s+on(?![a-z])|(Summary|Previously|Previous\s+episode|Earlier|Last\s+(time|week|episode|season)|Catch[ -]?up|(The\s+)?(Story|Road)\s+so\s+far)(?![\s:]+End)\s*($|[-–—|:.()\[\]…]))|(^|\s)Previously,?\s+(on|in)(?![a-z])`,
+	"ChapterAnalyzerCommercialPattern":   `(^|\s)(Ad(vert(isement)?)?|Commercial|Intermission)(?![\s:]+End)(\s|:|$)`,
+	"SubtitleRecapPattern":               `\bpreviously\s+on|^\W*(?:zuvor\s+bei|zuletzt\s+bei|was\s+bisher\s+geschah|bisher\s+bei|anteriormente|previamente|précédemment|wat\s+voorafging)|episodio?\s+precedent[ei]|^\W*前回までは|前情提要|지난\s*이야기\W*$`,
+	"SubtitlePreviewPattern":             `\b(?:here(?:'|’)?s|now)\s+the\s+preview\b|^\W*(?:\[[^\]]*\]|\([^)]*\)|[^\s:]+:)?\s*next\s+time\b`,
+}
+
+// introSkipper is the Intro Skipper plugin's settings as its page saves
+// them, with patterns over the defaults.
+func introSkipper(patterns map[string]any) string {
+	s := map[string]any{"AutoDetectIntros": true, "AnalyzeSeasonZero": false, "ScanIntroduction": true, "ScanCredits": true,
+		"MinimumIntroDuration": 15, "MaximumIntroDuration": 120, "PreferredAudioLanguage": "", "EnableSubtitleRecapDetection": false}
+	maps.Copy(s, jfIntroSkipperPatterns)
+	maps.Copy(s, patterns)
+	return vwJSON(s)
+}
 
 // libraryOptions are a library's settings as the dashboard saves them, the
 // fields filled as on a server in use, its folders made up.
@@ -630,6 +655,15 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 			for _, server := range []string{"https://musicbrainz.org", "http://192.0.2.10:5000", "https://musicbrainz.home.example/"} {
 				rs = append(rs, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": server, "RateLimit": "1", "ReplaceArtistName": false}), false, web})
 			}
+			// It saves the Intro Skipper plugin's settings, with its default
+			// patterns, older defaults or patterns of one's own.
+			for _, patterns := range []map[string]any{nil,
+				{"ChapterAnalyzerIntroductionPattern": `(^|\s)(Intro|Introduction|OP|Opening)(?!\sEnd)(\s|$)`,
+					"ChapterAnalyzerRecapPattern": `(^|\s)(Re?cap|Sum{1,2}ary|Prev(ious(ly)?)?|(Last|Earlier)(\s\w+)?|Catch[ -]up)(?!\sEnd)(\s|:|$)`},
+				{"ChapterAnalyzerIntroductionPattern": `(?i)^(vorspann|intro)$`, "SubtitlePreviewPattern": `^(?:next time on|in the next episode)\b`,
+					"ChapterAnalyzerCommercialPattern": ""}} {
+				rs = append(rs, jfRequest{"POST", jfIntroSkipper, js, introSkipper(patterns), false, web})
+			}
 			for _, r := range rs {
 				if status := jfSend(t, plain, r); status != http.StatusOK {
 					t.Errorf("%s %s %.80q (%s): %d", r.method, r.path, r.body, r.client.userAgent, status)
@@ -773,6 +807,11 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{2, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": "https://musicbrainz.example.org/x.txt", "RateLimit": "1"}), false, c}},
 		{2, jfRequest{"POST", jfMusicBrainz, js, vwJSON(map[string]any{"Server": "https://musicbrainz.org", "server": "https://attacker.example", "RateLimit": "1"}), false, c}},
 		{2, jfRequest{"POST", "/Plugins/" + g.uuid() + "/Configuration", js, vwJSON(map[string]any{"Server": "https://musicbrainz.org"}), false, c}},
+		// Only the Intro Skipper plugin's patterns go unread, on its path.
+		{1, jfRequest{"POST", jfIntroSkipper, js, introSkipper(map[string]any{"PreferredAudioLanguage": "x' UNION SELECT Password FROM Users--"}), false, c}},
+		{1, jfRequest{"POST", jfIntroSkipper, js, introSkipper(map[string]any{"subtitlepreviewpatterns": "<script>alert(1)</script>"}), false, c}},
+		{1, jfRequest{"POST", "/Plugins/" + g.uuid() + "/Configuration", js, vwJSON(map[string]any{"SubtitleRecapPattern": "x' UNION SELECT Password FROM Users--"}), false, c}},
+		{1, jfRequest{"POST", jfIntroSkipper + "?x=" + url.QueryEscape("<script>alert(1)</script>"), js, introSkipper(nil), false, c}},
 		{2, jfRequest{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c}},
 		// Outside the arguments the set knows, text is read as CRS reads it.
 		{2, jfRequest{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c}},
