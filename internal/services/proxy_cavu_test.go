@@ -93,6 +93,21 @@ func (g cv) asset() string {
 	return "/assets/" + g.pick("AdminLayout", "index", "MusicHome", "PlayerBar", "connect") + "-" + g.b64url(6) + g.pick(".js", ".css")
 }
 
+// timing is a subtitle's stored sync as the client keys its address by
+// it: a shift and a speed, and in parts the start and shift of each.
+func (g cv) timing() string {
+	shift := func() int { return g.r.IntN(120001) - 60000 }
+	key := fmt.Sprintf("%dx%s", shift(), g.pick("1", "1.042709", "0.9590409590409591", "1.001"))
+	if g.r.IntN(2) == 0 {
+		from := 0
+		for range 2 + g.r.IntN(4) {
+			key += fmt.Sprintf(";%d:%d", from, shift())
+			from += 1 + g.r.IntN(900000)
+		}
+	}
+	return key
+}
+
 func (g cv) report(device, client string) map[string]any {
 	return map[string]any{"deviceId": device, "clientId": client, "epoch": "k3j9." + fmt.Sprint(1+g.r.IntN(9)), "seq": g.r.IntN(400),
 		"trackId": g.id(), "index": g.r.IntN(30), "positionMs": g.r.IntN(900000), "durationMs": 25225253, "playing": true,
@@ -136,6 +151,8 @@ func (g cv) requests() []cvRequest {
 		cvGet(g.asset()),
 		cvRange(api + "/stream/" + g.token() + "/t-" + g.id() + "-orig." + g.pick("flac", "mp3")),
 		cvRange(api + "/files/" + file + "/subtitles/e" + fmt.Sprint(2+g.r.IntN(3)) + "/pgs"),
+		cvGet(api + "/stream/" + g.token() + "/sub-" + g.id() + ".vtt?" + url.Values{"sync": {g.timing()}}.Encode()),
+		cvGet(api + "/files/" + file + "/subtitles/e2/ass?" + url.Values{"v": {g.b64url(6)}, "sync": {g.timing()}}.Encode()),
 		{method: "DELETE", path: api + "/music/connect/devices/" + device},
 		{method: "DELETE", path: api + "/items/" + item + "/played"},
 		{method: "DELETE", path: api + "/items/" + item + "/resume"},
@@ -327,10 +344,11 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 					send(r, "")
 				}
 			}
-			// A picture's width and version, a script's name and a passkey
-			// are random, so many of each.
+			// A picture's width and version, a script's name, a subtitle's
+			// timing and a passkey are random, so many of each.
 			for range 40 {
 				send(cvGet("/api/v1/images/"+g.id()+"?w=320&v="+g.b64url(6)), " (a picture)")
+				send(cvGet("/api/v1/stream/"+g.token()+"/sub-"+g.id()+".vtt?"+url.Values{"sync": {g.timing()}}.Encode()), " (a timing)")
 				send(cvGet(g.asset()), " (a script)")
 				send(cvGet("/assets/AdminLayout-DNf-AqVU.js"), " (a script)")
 				send(cvBody("POST", "/api/v1/auth/passkey/finish", map[string]any{"credential": g.credential(false)}), " (a passkey)")
@@ -443,6 +461,10 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		// Only a new file's identify takes the name wholeUnit.
 		{3, cvBody("POST", api+"/admin/items/"+item+"/identify", map[string]any{"provider": "tmdb", "id": "12345", "wholeUnit": true})},
 		{3, cvBody("POST", api+"/admin/ingest/files/"+item+"/identify", map[string]any{"kind": "movie", "wholeUnits": true})},
+		// A subtitle's timing is numbers.
+		{4, cvGet(api + "/stream/" + g.token() + "/sub-" + g.id() + ".vtt?sync=a);(b")},
+		{4, cvGet(api + "/stream/" + g.token() + "/sub-" + g.id() + ".vtt?" + url.Values{"sync": {"21590x1;0:-11900;a);(b"}}.Encode())},
+		{1, cvGet(api + "/files/" + item + "/subtitles/e2/ass?" + url.Values{"sync": {"1' OR '1'='1"}}.Encode())},
 		// A home row's key is one of three.
 		{4, cvBody("POST", api+"/me/home", map[string]any{"rows": []any{map[string]any{"key": "a);(b", "hidden": false}}})},
 		{1, cvBody("POST", api+"/me/home", map[string]any{"rows": []any{map[string]any{"key": "x' UNION SELECT password FROM users--"}}})},
