@@ -110,9 +110,11 @@ test('keep a record at the provider that holds its domain', async ({ page }) => 
   await expect(dialog).toContainText('Anyone can look this name up.')
   await dialog.getByLabel('Name').fill('home.example.com')
   await expect(dialog).toContainText('Written through cf (Cloudflare).')
-  // The first link, the LAN: in the netns it carries 192.0.2.10, on CI's
-  // runner a private address.
-  await dialog.getByLabel('Interface').selectOption('eth0')
+  // The LAN, whose name the runner picks: in the netns it carries
+  // 192.0.2.10, on CI's runner a private address.
+  const lan = (await savedConfig(page.request)).interfaces?.find((i) => i.zone === 'lan')?.name
+  expect(lan).toBeTruthy()
+  await dialog.getByLabel('Interface').selectOption(lan ?? '')
 
   // Check reads the provider with the draft's token and writes nothing.
   await dialog.getByRole('button', { name: 'Check' }).click()
