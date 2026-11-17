@@ -206,7 +206,7 @@ assert_openvpn() {
 		fail "ostiole-openvpn@.service was not written"
 	case "$(distro_id)" in
 	rocky | rhel | almalinux | centos)
-		pkg_present kmod-ovpn || fail "kmod-ovpn was not installed"
+		pkg_present kmod-ovpn || elrepo_behind || fail "kmod-ovpn was not installed"
 		;;
 	esac
 	# Connecting is an apply, not an install: nothing here starts one.
@@ -253,10 +253,42 @@ assert_proxy() {
 
 # no_warnings holds the installer to its own output: a line that starts
 # with "warning:" is something it could not do, and on a stock image
-# there is nothing it should not be able to do.
+# there is nothing it should not be able to do but install a kmod-ovpn
+# ELRepo has not built yet.
 no_warnings() {
-	! grep -q '^warning:' "$1" ||
-		{ grep '^warning:' "$1"; fail "the install warned about something"; }
+	left=$(grep '^warning:' "$1") || return 0
+	if elrepo_behind; then
+		left=$(printf '%s\n' "$left" | grep -vxF "$KMOD_OVPN_MISSING") || return 0
+	fi
+	printf '%s\n' "$left"
+	fail "the install warned about something"
+}
+
+KMOD_OVPN_MISSING="warning: kmod-ovpn did not install; OpenVPN runs its data channel in userspace"
+
+# elrepo_behind says ELRepo's newest kmod-ovpn was built for an older point
+# release than the kernel the repositories offer. A point release changes
+# the kernel symbols the module needs, so it cannot install until ELRepo
+# builds it again, which lags the release by weeks. The kernel decides, not
+# os-release: an image can trail its repositories.
+elrepo_behind() {
+	case "$(distro_id)" in
+	rocky | rhel | almalinux | centos) ;;
+	*) return 1 ;;
+	esac
+	kernel=$(el_minor kernel-core)
+	built=$(el_minor kmod-ovpn --repo elrepo)
+	[ -n "$kernel" ] && [ -n "$built" ] && [ "$built" -lt "$kernel" ] || return 1
+	echo "  note: ELRepo's kmod-ovpn is for point release $built, the kernel for $kernel; OpenVPN's data channel runs in userspace" >&2
+}
+
+# el_minor is the point release of a package's newest build: 3 for
+# 6.12.0-264.16.1.el10_3.
+el_minor() {
+	pkg=$1
+	shift
+	dnf_ci -q repoquery "$@" --latest-limit 1 --qf '%{release}\n' "$pkg" 2>/dev/null |
+		sed -n 's/.*\.el[0-9]*_\([0-9][0-9]*\).*/\1/p' | head -1
 }
 
 step "the documented install, agreed to in advance"
