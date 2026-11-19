@@ -82,6 +82,7 @@ type (
 		Listen            []string     `json:"listen"`
 		AutomaticHTTPS    autoHTTPS    `json:"automatic_https"`
 		Protocols         []string     `json:"protocols,omitempty"`
+		Allow0RTT         *bool        `json:"allow_0rtt,omitempty"`
 		ReadHeaderTimeout string       `json:"read_header_timeout"`
 		IdleTimeout       string       `json:"idle_timeout"`
 		MaxHeaderBytes    int          `json:"max_header_bytes"`
@@ -312,6 +313,9 @@ func (p *Proxy) httpApp(cfg *model.Config) *httpApp {
 	}
 	if pr.HTTP3 {
 		secure.Protocols = append(secure.Protocols, "h3")
+		// Caddy takes QUIC early data unless told not to. A request sent
+		// that way can be replayed, and a site's Allow from answers it 425.
+		secure.Allow0RTT = new(bool)
 	}
 	// A request line per request is only worth the journal at the levels
 	// that keep what the daemons say about their clients.

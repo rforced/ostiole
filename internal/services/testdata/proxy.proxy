@@ -274,6 +274,7 @@
             "h2",
             "h3"
           ],
+          "allow_0rtt": false,
           "read_header_timeout": "10s",
           "idle_timeout": "2m",
           "max_header_bytes": 65536,
