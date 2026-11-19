@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -883,6 +884,30 @@ func TestProxyReadsTheEscapeAfterALoneSurrogate(t *testing.T) {
 	for _, body := range []string{`{"q": "x;uname -a"}`, `{"q": "x\ud83d\u003buname -a"}`} {
 		if got := post(t, plain, "http://web.example.com/search", "application/json", body); got != http.StatusForbidden {
 			t.Errorf("%s: status %d, want 403", body, got)
+		}
+	}
+}
+
+// LIKE after an operand is read as the operator it is, and _utf8mb4 and
+// _ucs2 as the charset introducers they are. libinjection-go 0.3.5 took
+// that LIKE for a function and did not know the two names, so an injection
+// written with either got past every rule at paranoia level 1.
+func TestProxyReadsLikeAndCharsetIntroducersAsSQL(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	for _, q := range []string{"' OR (8459 LIKE (SELECT 8459)) * 4906 --", "' OR NOT _utf8mb4''#", "' OR NOT _ucs2''#"} {
+		body := "q=" + url.QueryEscape(q)
+		if got := post(t, plain, "http://web.example.com/search", "application/x-www-form-urlencoded", body); got != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", q, got)
 		}
 	}
 }
