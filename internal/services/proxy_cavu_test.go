@@ -2,16 +2,19 @@ package services
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"ostiole/internal/model"
+	"ostiole/internal/wafevent"
 )
 
 // cv makes what Cavu's web client sends, from a seed, with the shapes a
@@ -33,6 +36,12 @@ func cvBeacon(p string, b any) cvRequest {
 }
 func cvRange(path string) cvRequest {
 	return cvRequest{method: "GET", path: path, header: map[string]string{"Range": "bytes=0-"}}
+}
+
+// with is r sent with these cookies in place of the session's.
+func (r cvRequest) with(cookies string) cvRequest {
+	r.header = map[string]string{"Cookie": cookies}
+	return r
 }
 
 // cvTitles are what a film, a show, an album or an artist is called, and
@@ -93,6 +102,12 @@ func (g cv) asset() string {
 	return "/assets/" + g.pick("AdminLayout", "index", "MusicHome", "PlayerBar", "connect") + "-" + g.b64url(6) + g.pick(".js", ".css")
 }
 
+// cursor is where a page of history ends: when its last row began and that
+// row's number, in base64url.
+func (g cv) cursor() string {
+	return base64.RawURLEncoding.EncodeToString(fmt.Appendf(nil, "%d,%d", 1790000000+g.r.IntN(9000000), 1+g.r.IntN(90000)))
+}
+
 // timing is a subtitle's stored sync as the client keys its address by
 // it: a shift and a speed, and in parts the start and shift of each.
 func (g cv) timing() string {
@@ -143,6 +158,9 @@ func (g cv) requests() []cvRequest {
 			"title": g.title(), "libraryId": lib, "season": 1, "episode": 3}),
 		cvGet(api + "/admin/activity/history?" + url.Values{"user": {g.id()}, "library": {lib}}.Encode()),
 		cvGet(api + "/admin/activity/history"),
+		cvGet(api + "/admin/activity/history?cursor=" + g.cursor()),
+		cvGet(api + "/me/history"),
+		cvGet(api + "/me/history?cursor=" + g.cursor()),
 		{method: "DELETE", path: api + "/admin/activity/history"},
 		cvBody("PUT", api+"/admin/settings/smtp", map[string]any{"enabled": true, "host": "smtp.example.com", "port": 587,
 			"security": "starttls", "username": "no-reply@example.com", "password": "", "clearPassword": false,
@@ -361,6 +379,14 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 				c["response"].(map[string]any)["signature"] = sig
 				send(cvBody("POST", "/api/v1/auth/step-up/passkey/finish", map[string]any{"credential": c}), " (a passkey)")
 			}
+			// Sessions and sign-ins under way whose token spells SQL, a
+			// comment or a hex number, as one in five thousand does.
+			for _, token := range []string{"4--cMnZjgKkDWYohOPzX_MSZ6bRiLm73fOqOBCuutxc", "7--hpHwzg3dELkfXDlpwH6W-MZX3zd9sZmgsRpW-TRk",
+				"nB10yjgIF2-0x9eciysImNJe75pvImDf0hhYXbBZHzg", "Xm99haEdCG1-7TAf2YbFmzNFwWHlrPixf5oR77-Sj48", "N1jxdo3Y8m9ESi3yfUbFzrvSsyha3oR7-itM1RaspE0"} {
+				send(cvGet("/api/v1/me/history").with("__Host-cavu_session="+token), " (the session "+token+")")
+				send(cvBody("POST", "/api/v1/auth/login", map[string]any{"username": "sam", "password": "x"}).with("__Host-cavu_login="+token),
+					" (the sign-in "+token+")")
+			}
 			h := cv{td{vw{rand.New(rand.NewPCG(uint64(pl), 1100))}}}
 			for _, tpl := range cvTemplates {
 				lib := h.id()
@@ -449,6 +475,7 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		// a script's name is Vite's.
 		{3, cvGet(api + "/music/top")},
 		{3, cvGet(api + "/admin/activity/history/top")},
+		{3, cvGet(api + "/me/history/top")},
 		{3, cvGet("/assets/x-dnf.js")},
 		{3, cvGet("/assets/AdminLayout-DNf-AqVU.map")},
 		// A password and a key are unread only where one goes.
@@ -471,6 +498,9 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		// A passkey's answer is base64url.
 		{1, cvBody("POST", api+"/auth/passkey/finish", map[string]any{"credential": map[string]any{"id": "x", "response": map[string]any{
 			"signature": "x' OR 1=1--"}}})},
+		// A cookie is a token only in a token's form.
+		{1, cvGet(api + "/me/history").with("cavu_session=x' UNION SELECT password FROM users--")},
+		{1, cvGet(api + "/auth/state").with("cavu_login=x' UNION SELECT password FROM users--")},
 		// Range is taken where players seek.
 		{3, cvRange(api + "/items/" + item)},
 		// PUT, PATCH and DELETE are the API's alone.
@@ -499,6 +529,36 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 			}
 			check("attacks", bare, pl, attacks)
 			check("inText", bareText, 1, inText)
+			// The count of special characters in cookies scores 3, too
+			// little to refuse alone, so its events say whether it read the
+			// cookie: never a session's or a sign-in's token, whatever its
+			// dashes, and anything else as CRS reads it.
+			if pl == 4 {
+				dashes, other := "a-b-c-"+base64URL32[6:], "a'b(c)d"+base64URL32[7:]
+				at := func() cvRequest { return cvGet(api + "/items/" + g.id()) }
+				token, otherToken, both := at().with("__Host-cavu_session="+dashes), at().with("__Host-cavu_session="+other),
+					at().with("__Host-cavu_session="+dashes+"; cavu_session="+other)
+				signIn, otherSignIn, bothSignIns := at().with("__Host-cavu_login="+dashes), at().with("__Host-cavu_login="+other),
+					at().with("__Host-cavu_login="+dashes+"; cavu_login="+other)
+				for _, r := range []cvRequest{token, otherToken, both, signIn, otherSignIn, bothSignIns} {
+					cvSend(t, plain, r)
+				}
+				counted := func(r cvRequest) bool {
+					_, ok := findEvent(out, func(e wafevent.Event) bool {
+						return e.URI == r.path && slices.ContainsFunc(e.Rules, func(h wafevent.Hit) bool { return h.ID == 942421 })
+					})
+					return ok
+				}
+				waitFor(t, "the cookies' events", func() bool {
+					return counted(otherToken) && counted(both) && counted(otherSignIn) && counted(bothSignIns)
+				})
+				if counted(token) {
+					t.Error("a session's token with three dashes was counted")
+				}
+				if counted(signIn) {
+					t.Error("a sign-in's token with three dashes was counted")
+				}
+			}
 			if t.Failed() {
 				t.Logf("events:\n%s", events(out))
 			}
