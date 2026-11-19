@@ -758,6 +758,113 @@ func TestValidateProxyPortsBelongToTheProxy(t *testing.T) {
 	}
 }
 
+func TestValidateHTTP3NeedsItsUDPPort(t *testing.T) {
+	t.Parallel()
+	tunnel := func(port uint16, enabled bool) func(*Config) {
+		return func(c *Config) {
+			c.Interfaces = append(c.Interfaces, Interface{
+				Name: "wg0", Zone: "wan", Enabled: enabled, WireGuard: &WireGuard{ListenPort: port},
+			})
+		}
+	}
+	forward := func(zone string, protocol Protocol, ports string, enabled bool) func(*Config) {
+		return func(c *Config) {
+			c.NAT.PortForwards = []PortForward{{
+				ID: "game", Enabled: enabled, Zone: zone, Protocol: protocol,
+				Ports: []string{ports}, Target: "192.168.1.10",
+			}}
+		}
+	}
+	const path = "services.proxy.http3"
+	for _, tc := range []struct {
+		name string
+		edit func(*Config)
+		want bool
+	}{
+		{"a tunnel listens there", tunnel(443, true), true},
+		{"a tunnel listens elsewhere", tunnel(51820, true), false},
+		{"the tunnel is off", tunnel(443, false), false},
+		{"Tailscale listens there", func(c *Config) {
+			c.Services.Proxy.HTTPSPort = 8444
+			c.Interfaces = append(c.Interfaces, Interface{
+				Name: TailscaleDevice, Zone: "wan", Enabled: true, Tailscale: &Tailscale{Port: 8444},
+			})
+		}, true},
+		{"a forward takes it", forward("wan", ProtocolUDP, "443", true), true},
+		{"a forward's range takes it", forward("wan", ProtocolTCPUDP, "400-500", true), true},
+		{"a forward takes TCP only", forward("wan", ProtocolTCP, "443", true), false},
+		{"a forward where the proxy is closed", forward("lan", ProtocolUDP, "443", true), false},
+		{"the forward is off", forward("wan", ProtocolUDP, "443", false), false},
+		{"HTTP/3 is off", func(c *Config) {
+			c.Services.Proxy.HTTP3 = false
+			tunnel(443, true)(c)
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := proxyStarter()
+			cfg.Services.Proxy = workingProxy()
+			tc.edit(cfg)
+			if got := hasIssue(t, cfg, path); got != tc.want {
+				t.Errorf("issue at %s: %v, want %v", path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateAForwardCannotTakeTheProxysPort(t *testing.T) {
+	t.Parallel()
+	forward := func(zone string, protocol Protocol, ports string, enabled bool) func(*Config) {
+		return func(c *Config) {
+			c.NAT.PortForwards = []PortForward{{
+				ID: "web", Enabled: enabled, Zone: zone, Protocol: protocol,
+				Ports: []string{ports}, Target: "192.168.1.10",
+			}}
+		}
+	}
+	const (
+		plain  = "services.proxy.httpPort"
+		secure = "services.proxy.httpsPort"
+	)
+	for _, tc := range []struct {
+		name string
+		edit func(*Config)
+		path string
+		want bool
+	}{
+		{"HTTPS is forwarded", forward("wan", ProtocolTCP, "443", true), secure, true},
+		{"HTTP is forwarded", forward("wan", ProtocolTCP, "80", true), plain, true},
+		{"HTTP is forwarded, not HTTPS", forward("wan", ProtocolTCP, "80", true), secure, false},
+		{"a range covers HTTPS", forward("wan", ProtocolTCPUDP, "400-500", true), secure, true},
+		{"UDP alone leaves TCP", forward("wan", ProtocolUDP, "443", true), secure, false},
+		{"another port", forward("wan", ProtocolTCP, "8443", true), secure, false},
+		{"a zone the proxy is closed in", forward("lan", ProtocolTCP, "443", true), secure, false},
+		{"the forward is off", forward("wan", ProtocolTCP, "443", false), secure, false},
+		{"the access line opens HTTP only", func(c *Config) {
+			c.Services.Proxy.Access[0].Ports = []string{ProxyPortHTTP}
+			forward("wan", ProtocolTCP, "443", true)(c)
+		}, secure, false},
+		{"the access line is off", func(c *Config) {
+			c.Services.Proxy.Access[0].Enabled = false
+			forward("wan", ProtocolTCP, "443", true)(c)
+		}, secure, false},
+		{"the proxy is off", func(c *Config) {
+			c.Services.Proxy.Enabled = false
+			forward("wan", ProtocolTCP, "443", true)(c)
+		}, secure, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := proxyStarter()
+			cfg.Services.Proxy = workingProxy()
+			tc.edit(cfg)
+			if got := hasIssue(t, cfg, tc.path); got != tc.want {
+				t.Errorf("issue at %s: %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateProxyPoolsAndSites(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

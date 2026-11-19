@@ -1261,6 +1261,70 @@ func (v *validator) proxyPorts(c *Config) {
 	if p.HTTPPortOr() == p.HTTPSPortOr() {
 		v.add("services.proxy.httpsPort", "port %d is already the plain HTTP port", p.HTTPSPortOr())
 	}
+	if p.HTTP3 {
+		v.proxyUDPPort(c)
+	}
+	v.proxyForwards(c)
+}
+
+// proxyUDPPort refuses HTTP/3 on a UDP port a tunnel listens on: the proxy
+// could not bind it, so no site would be served.
+func (v *validator) proxyUDPPort(c *Config) {
+	const path = "services.proxy.http3"
+	port := c.Services.Proxy.HTTPSPortOr()
+	for _, in := range c.Interfaces {
+		if !in.Enabled {
+			continue
+		}
+		switch {
+		case in.WireGuard != nil && in.WireGuard.ListenPort == port:
+			v.add(path, "UDP port %d is where the WireGuard tunnel %s listens", port, in.Name)
+		case in.Tailscale != nil && in.Tailscale.Port == port:
+			v.add(path, "UDP port %d is Tailscale's", port)
+		}
+	}
+}
+
+// proxyForwards refuses a forward that takes one of the proxy's ports in a
+// zone the access list opens it in: the forward is translated first, so
+// the proxy is never reached there. A zone the proxy is closed in is the
+// forward's to use.
+func (v *validator) proxyForwards(c *Config) {
+	p := c.Services.Proxy
+	type listener struct {
+		field, name string
+		protocol    Protocol
+		port        uint16
+	}
+	listeners := []listener{
+		{"httpPort", ProxyPortHTTP, ProtocolTCP, p.HTTPPortOr()},
+		{"httpsPort", ProxyPortHTTPS, ProtocolTCP, p.HTTPSPortOr()},
+	}
+	if p.HTTP3 {
+		listeners = append(listeners, listener{"http3", ProxyPortHTTPS, ProtocolUDP, p.HTTPSPortOr()})
+	}
+	for _, f := range c.NAT.PortForwards {
+		if !f.Enabled {
+			continue
+		}
+		for _, l := range listeners {
+			if f.Protocol != l.protocol && f.Protocol != ProtocolTCPUDP {
+				continue
+			}
+			if !slices.ContainsFunc(f.Ports, func(ports string) bool {
+				r, err := ParsePortRange(ports)
+				return err == nil && r.Lo <= l.port && l.port <= r.Hi
+			}) {
+				continue
+			}
+			if slices.ContainsFunc(p.Access, func(a ProxyAccess) bool {
+				return a.Opens() && a.Zone == f.Zone && slices.Contains(a.Ports, l.name)
+			}) {
+				v.add("services.proxy."+l.field, "%s port %d from %s is forwarded by %s, so the proxy is never reached there",
+					strings.ToUpper(string(l.protocol)), l.port, f.Zone, f.ID)
+			}
+		}
+	}
 }
 
 // proxyPort refuses a listener on a port the router answers on itself.
