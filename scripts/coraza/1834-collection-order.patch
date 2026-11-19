@@ -6,7 +6,7 @@
 #   next (CRS 942130, 942131, 942521). A Map keeps its keys in insertion
 #   order, and the parsers add in input order. coraza-caddy feeds headers
 #   itself, from a map, so header order under it is still unsorted.
-#   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 08aa511.
+#   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 1cfa4f9.
 diff --git a/http/interceptor.go b/http/interceptor.go
 index c14615e..f0d75b7 100644
 --- a/http/interceptor.go

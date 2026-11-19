@@ -1,4 +1,4 @@
-# Coraza v3.8.2-0.20261029104012-08aa51147300 from the Go module proxy, h1:rfIlj0BGn8038D0VvYM9oNKZBd6zQ1AmzT5VzezLGRM=,
+# Coraza v3.8.2-0.20261114225743-1cfa4f955a19 from the Go module proxy, h1:0h/zrV9EdS8JpX4oFS8RTa0fNfaKpLG4gQa9fsh7KvU=,
 # without its tests, testdata, testing/ and http/e2e/ packages, docs, agent
 # guides, or dev and CI files. scripts/update-coraza.sh copies a release or
 # a commit on main the same way each time and applies scripts/coraza/*.patch
@@ -13,7 +13,7 @@
 #   quoted-printable and hides that header. Backends are handed the raw
 #   bytes, so a payload written with =XX escapes or soft line breaks got
 #   past rules that match the raw form. Parts are read with NextRawPart.
-#   Upstream: PR #1759 (2026-10-14), open at 08aa511.
+#   Upstream: PR #1759 (2026-10-14), open at 1cfa4f9.
 # - internal/collections, internal/bodyprocessors, internal/cookies,
 #   internal/url, internal/corazawaf and http: collections were Go maps, so
 #   ARGS, cookies, headers and their _NAMES came out in a new order on every
@@ -22,7 +22,7 @@
 #   next (CRS 942130, 942131, 942521). A Map keeps its keys in insertion
 #   order, and the parsers add in input order. coraza-caddy feeds headers
 #   itself, from a map, so header order under it is still unsorted.
-#   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 08aa511.
+#   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 1cfa4f9.
 # - internal/actions/ctl.go, internal/corazawaf/rulegroup.go, transaction.go
 #   and waf.go, internal/seclang/directives.go: ctl:ruleRemoveTargetById,
 #   ByTag and ByMsg, and ctl:ruleRemoveByTag and ByMsg, walked every rule by
@@ -34,5 +34,5 @@
 #   capped slice: 24 us and 118 allocations. Rules without an id are no longer
 #   touched by ctl removals: all share ID 0, so one removal hit them all and
 #   skipped every SecMarker (the ctl part of upstream PR #1782).
-#   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 08aa511.
-v3.8.2-0.20261029104012-08aa51147300
+#   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 1cfa4f9.
+v3.8.2-0.20261114225743-1cfa4f955a19

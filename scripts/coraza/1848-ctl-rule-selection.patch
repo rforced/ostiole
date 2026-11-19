@@ -9,7 +9,7 @@
 #   capped slice: 24 us and 118 allocations. Rules without an id are no longer
 #   touched by ctl removals: all share ID 0, so one removal hit them all and
 #   skipped every SecMarker (the ctl part of upstream PR #1782).
-#   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 08aa511.
+#   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 1cfa4f9.
 diff --git a/internal/actions/ctl.go b/internal/actions/ctl.go
 index 6a270c1..6aff9e0 100644
 --- a/internal/actions/ctl.go
