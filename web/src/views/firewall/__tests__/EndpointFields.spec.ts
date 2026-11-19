@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { reactive } from 'vue'
 
 import type { Config, Interface, Rule, WireGuardPeer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
@@ -31,7 +32,7 @@ const sites = tunnel('wg1', 'sites', [{ name: 'friend', allowedIps: ['192.168.50
 
 function mountFields(side: string, zone: string, interfaces: Interface[]) {
   useConfigStore().replaceDraft(draft(interfaces))
-  const model = { mode: 'peer', peer: '', notAddresses: false, portMode: 'any' }
+  const model = reactive({ mode: 'peer', peer: '', notAddresses: false, portMode: 'any' })
   return mount(EndpointFields, { props: { side, zone, modelValue: model } })
 }
 
