@@ -18,15 +18,14 @@ const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
 const form = ref(blank())
 
-/** Interfaces with IPv6 switched on and no server yet (unless editing). */
+/** Internal interfaces with IPv6 switched on and no server yet (unless editing). */
 const candidates = computed(() =>
-  config.interfaces.filter(
-    (i) =>
-      i.ipv6?.mode &&
-      i.ipv6.mode !== 'none' &&
-      (props.server?.interface === i.name ||
-        !(config.draft?.services?.dhcp?.v6 ?? []).some((s) => s.interface === i.name)),
-  ),
+  config.interfaces.filter((i) => {
+    if (props.server?.interface === i.name) return true
+    if (!i.ipv6?.mode || i.ipv6.mode === 'none') return false
+    if (config.zones.find((z) => z.name === i.zone)?.external) return false
+    return !(config.draft?.services?.dhcp?.v6 ?? []).some((s) => s.interface === i.name)
+  }),
 )
 
 const managed = computed(() => form.value.mode === 'managed')

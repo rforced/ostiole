@@ -573,19 +573,53 @@ func TestValidateDHCPv6(t *testing.T) {
 	for _, p := range []string{
 		"services.dhcp.v6[0].rangeEnd", "services.dhcp.v6[0].leaseTime", "services.dhcp.v6[0].dns[0]",
 		"services.dhcp.v6[0].domain", "services.dhcp.v6[1].interface", "services.dhcp.v6[1].mode",
-		"services.dhcp.v6[3].interface", "services.dhcp.v6[4].mode",
+		"services.dhcp.v6[2].interface", "services.dhcp.v6[3].interface", "services.dhcp.v6[4].mode",
 	} {
 		if !got[p] {
 			t.Errorf("missing issue at %s (have %v)", p, ve.Issues)
 		}
 	}
 
-	// eth0 (the WAN, SLAAC) raised nothing: advertising there is legal, if
-	// unusual. A single sane server must validate too.
+	// eth0 (in external zone wan) was refused at v6[2]; a single internal
+	// server must validate cleanly.
 	cfg.Services.DHCP.V6 = []DHCPv6Server{{Interface: "eth1", Enabled: true, Mode: RAManaged, RangeStart: "::100", RangeEnd: "::1ff"}}
 	cfg.Services.DNS = DNSServer{Enabled: true, Upstreams: []string{"1.1.1.1"}}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("valid IPv6 server rejected: %v", err)
+	}
+}
+
+func TestValidateRefusesDHCPAndRAOnExternalZones(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	wan, ok := cfg.Interface("eth0")
+	if !ok {
+		t.Fatal("missing eth0")
+	}
+	wan.IPv4 = IPv4{Mode: AddrStatic, Address: "198.51.100.2/24"}
+	wan.IPv6 = IPv6{Mode: AddrStatic, Address: "2001:db8::2/64"}
+	cfg.Services.DHCP = DHCPService{
+		Enabled: true,
+		Servers: []DHCPServer{
+			{Interface: "eth0", Enabled: true, RangeStart: "198.51.100.10", RangeEnd: "198.51.100.20"},
+		},
+		V6: []DHCPv6Server{
+			{Interface: "eth0", Enabled: false, Mode: RAStateless},
+		},
+	}
+	var ve *ValidationError
+	if !errors.As(cfg.Validate(), &ve) {
+		t.Fatal("want validation issues")
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	if !strings.Contains(got["services.dhcp.servers[0].interface"], "external zone") {
+		t.Errorf("DHCPv4 on wan = %q (all %v)", got["services.dhcp.servers[0].interface"], ve.Issues)
+	}
+	if !strings.Contains(got["services.dhcp.v6[0].interface"], "external zone") {
+		t.Errorf("DHCPv6 on wan = %q (all %v)", got["services.dhcp.v6[0].interface"], ve.Issues)
 	}
 }
 

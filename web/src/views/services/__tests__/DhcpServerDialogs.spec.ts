@@ -88,3 +88,40 @@ describe('DNS registration on a DHCP server', () => {
     expect(must(draftOf(config).services?.dhcp?.v6?.[0]).dnsRegistration).toBeUndefined()
   })
 })
+
+describe('DHCP server dialogs exclude external interfaces', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    useConfigStore().replaceDraft(
+      configOf({
+        version: 16,
+        zones: [{ name: 'wan', external: true }, { name: 'lan' }],
+        interfaces: [
+          {
+            name: 'eth0',
+            zone: 'wan',
+            enabled: true,
+            ipv4: { mode: 'static', address: '198.51.100.2/24' },
+            ipv6: { mode: 'static', address: '2001:db8::2/64' },
+          },
+          {
+            name: 'eth1',
+            zone: 'lan',
+            enabled: true,
+            ipv4: { mode: 'static', address: '10.0.0.1/24' },
+            ipv6: { mode: 'static', address: '2001:db8:1::1/64' },
+          },
+        ],
+        rules: [],
+        services: { dhcp: { enabled: true, servers: [], v6: [] } },
+      }),
+    )
+  })
+
+  it('offers only internal interfaces for DHCPv4 and DHCPv6', async () => {
+    const v4 = await mountDialog(ServerDialog, undefined)
+    expect(v4.findAll('#sc-if option').map((o) => o.attributes('value'))).toEqual(['', 'eth1'])
+    const v6 = await mountDialog(V6ServerDialog, undefined)
+    expect(v6.findAll('#v6-if option').map((o) => o.attributes('value'))).toEqual(['', 'eth1'])
+  })
+})

@@ -18,14 +18,14 @@ const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
 const form = ref(blank())
 
-/** Interfaces that can serve DHCP: static IPv4 and without a server yet (unless editing). */
+/** Interfaces that can serve DHCP: internal static IPv4 without a server yet (unless editing). */
 const candidates = computed(() =>
-  config.interfaces.filter(
-    (i) =>
-      i.ipv4?.mode === 'static' &&
-      (props.server?.interface === i.name ||
-        !(config.draft?.services?.dhcp?.servers ?? []).some((s) => s.interface === i.name)),
-  ),
+  config.interfaces.filter((i) => {
+    if (props.server?.interface === i.name) return true
+    if (i.ipv4?.mode !== 'static') return false
+    if (config.zones.find((z) => z.name === i.zone)?.external) return false
+    return !(config.draft?.services?.dhcp?.servers ?? []).some((s) => s.interface === i.name)
+  }),
 )
 
 function blank() {

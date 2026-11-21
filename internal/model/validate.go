@@ -786,6 +786,10 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 			v.add(path+".interface", "interface %q already has a server", sc.Interface)
 		}
 		seen[sc.Interface] = true
+		if z, ok := c.Zone(in.Zone); in.Zone != "" && ok && z.External {
+			v.add(path+".interface", "interface %q is in external zone %q; DHCP belongs on an internal network", sc.Interface, in.Zone)
+			continue
+		}
 		if in.IPv4.Mode != AddrStatic {
 			v.add(path+".interface", "interface %q needs a static IPv4 address to serve DHCP", sc.Interface)
 			continue
@@ -1636,6 +1640,10 @@ func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {
 			v.add(path+".interface", "interface %q already advertises IPv6", sc.Interface)
 		}
 		seen[sc.Interface] = true
+		if z, ok := c.Zone(in.Zone); in.Zone != "" && ok && z.External {
+			v.add(path+".interface", "interface %q is in external zone %q; router advertisements belong on an internal network", sc.Interface, in.Zone)
+			continue
+		}
 		if in.IPv6.Mode == AddrNone {
 			v.add(path+".interface", "interface %q has IPv6 switched off", sc.Interface)
 		}
