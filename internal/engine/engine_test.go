@@ -408,6 +408,71 @@ func TestApplyExpiresAndReverts(t *testing.T) {
 	}
 }
 
+// `ostiole apply` exits as soon as Lapse returns, so Lapse returns only once
+// the apply is undone and its record gone, whether it does the undo itself or
+// the timer's is already running, and it says when the undo failed.
+func TestLapseReturnsOnceTheApplyIsUndone(t *testing.T) {
+	t.Parallel()
+	e, fr, st := newEngine(t)
+	ctx := context.Background()
+	if _, err := e.Apply(ctx, cfg("saved"), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	saved := fr.last()
+	undone := func(when string) {
+		t.Helper()
+		if fr.last() != saved {
+			t.Errorf("%s: Lapse returned before the saved ruleset was back", when)
+		}
+		if _, err := st.ReadState(store.PendingFile); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("%s: the record of the apply is still there (%v)", when, err)
+		}
+	}
+
+	if _, err := e.Apply(ctx, cfg("unconfirmed"), ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Lapse(); err != nil {
+		t.Fatalf("lapse: %v", err)
+	}
+	undone("before the deadline")
+
+	if _, err := e.Apply(ctx, cfg("unconfirmed"), ApplyOptions{ConfirmTimeout: 50 * time.Millisecond}); err != nil {
+		t.Fatal(err)
+	}
+	started, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	fr.mu.Lock()
+	fr.onApply = func() { once.Do(func() { close(started); <-release }) }
+	fr.mu.Unlock()
+	<-started
+	lapsed := make(chan error, 1)
+	go func() { lapsed <- e.Lapse() }()
+	select {
+	case err := <-lapsed:
+		t.Fatalf("Lapse returned while the timer's undo was still loading the ruleset: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	if err := <-lapsed; err != nil {
+		t.Fatalf("lapse during the timer's undo: %v", err)
+	}
+	undone("during the timer's undo")
+
+	if _, err := e.Apply(ctx, cfg("unconfirmed"), ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	fr.mu.Lock()
+	fr.onApply, fr.applyErr = nil, errors.New("nft: kernel says no")
+	fr.mu.Unlock()
+	if err := e.Lapse(); err == nil || !strings.Contains(err.Error(), "kernel says no") {
+		t.Errorf("lapse with a failing undo: err = %v", err)
+	}
+	if err := e.Lapse(); err == nil {
+		t.Error("a second Lapse forgot that the undo failed")
+	}
+}
+
 func TestApplyFailuresLeaveNoPending(t *testing.T) {
 	t.Parallel()
 	e, fr, st := newEngine(t)

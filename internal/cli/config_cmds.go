@@ -226,8 +226,8 @@ previous ruleset is restored automatically. Use --yes to commit immediately.`,
 }
 
 // waitForConfirmation blocks until Enter is pressed (confirm), the
-// deadline passes (the engine has already reverted), or ctx is cancelled
-// (revert now).
+// deadline passes (the engine goes back, and this waits until it has), or
+// ctx is cancelled (revert now).
 func waitForConfirmation(ctx context.Context, eng *engine.Engine, by audit.Actor, deadline time.Time, in io.Reader, out io.Writer) error {
 	enter := make(chan error, 1)
 	go func() {
@@ -248,7 +248,10 @@ func waitForConfirmation(ctx context.Context, eng *engine.Engine, by audit.Actor
 		}
 		fmt.Fprintln(out, "confirmed and committed")
 		return nil
-	case <-time.After(time.Until(deadline) + 500*time.Millisecond):
+	case <-time.After(time.Until(deadline)):
+		if err := eng.Lapse(); err != nil {
+			return fmt.Errorf("not confirmed in time, and going back failed: %w", err)
+		}
 		return errors.New("not confirmed in time; reverted to the previous ruleset")
 	case <-ctx.Done():
 		if err := eng.Revert(context.Background(), by); err != nil && !errors.Is(err, engine.ErrNothingPending) {

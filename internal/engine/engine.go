@@ -87,6 +87,8 @@ type Engine struct {
 
 	mu      sync.Mutex
 	pending *pendingApply
+	// expiry is how the last window to run out ended: nil once undone.
+	expiry error
 	// recovered is set when Recover undid an apply, until the next commit.
 	recovered *Recovered
 	// sshErr is why sshd does not do what the last apply or revert asked of
@@ -584,7 +586,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	}
 	id := p.id
 	p.timer = time.AfterFunc(opts.ConfirmTimeout, func() { e.expire(id) })
-	e.pending = p
+	e.pending, e.expiry = p, nil
 	e.audit.Add(audit.Event{Action: audit.Apply, By: opts.By, Detail: audit.Seconds(opts.ConfirmTimeout)})
 	return &ApplyResult{Plan: *plan, Pending: true, Deadline: p.deadline}, nil
 }
@@ -757,6 +759,24 @@ func (e *Engine) expire(id string) {
 	}
 }
 
+// Lapse ends the confirmation window now, as its deadline does, and returns
+// once the apply is undone, with the error if undoing it failed. The timer
+// undoes on a goroutine of its own, so a process that waits out its window
+// calls this before it exits: exiting under the timer's undo leaves the
+// apply half undone. An expiry already under way is waited for.
+func (e *Engine) Lapse() error {
+	e.mu.Lock()
+	p := e.pending
+	e.mu.Unlock()
+	if p != nil {
+		p.timer.Stop()
+		e.expire(p.id)
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.expiry
+}
+
 // undoExpired puts back the apply whose window ran out, and says what to
 // tell of it.
 func (e *Engine) undoExpired(id string) (notify.Event, bool) {
@@ -768,7 +788,9 @@ func (e *Engine) undoExpired(id string) (notify.Event, bool) {
 	}
 	e.pending = nil
 	window := p.deadline.Sub(p.since)
-	if err := e.undo(context.Background(), p); err != nil {
+	err := e.undo(context.Background(), p)
+	e.expiry = err
+	if err != nil {
 		e.log.Error("automatic revert failed; system may still have the unconfirmed configuration", "err", err)
 		return notify.Event{
 			Kind: notify.KindApplyReverted, Title: "An unconfirmed apply could not be undone",
