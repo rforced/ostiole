@@ -3,10 +3,12 @@ import { computed, ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { interfaceLabel, isTunnel } from '@/lib/interfaces'
+import { nameProblem } from '@/lib/names'
 import type { Gateway, TailscalePeer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
@@ -53,9 +55,11 @@ function blank(): GatewayForm {
   }
 }
 
+const error = ref('')
 watch(
   () => [open.value, props.gateway],
   () => {
+    error.value = ''
     if (!open.value) return
     form.value = props.gateway
       ? {
@@ -149,7 +153,17 @@ const upstream = computed(() => {
 
 function save() {
   const f = form.value
-  const out: Gateway = { name: f.name.trim(), enabled: f.enabled, interface: f.interface }
+  const name = f.name.trim()
+  const previous = props.gateway?.name ?? name
+  error.value = nameProblem('name', name)
+  if (!error.value && name !== props.gateway?.name) {
+    if (config.gateways.some((g) => g.name === name))
+      error.value = `Gateway ${name} already exists.`
+    else if (config.gatewayGroups.some((g) => g.name === name))
+      error.value = `Gateway group ${name} already exists.`
+  }
+  if (error.value) return
+  const out: Gateway = { name, enabled: f.enabled, interface: f.interface }
   // A tunnel or exit-node gateway never carries the default route.
   if (!tunnelGateway.value && Number(f.priority) > 0) out.priority = Number(f.priority)
   if (f.description) out.description = f.description
@@ -165,7 +179,7 @@ function save() {
   if (f.every !== '' && f.every != null) out.probeEverySeconds = Number(f.every)
   if (f.down !== '' && f.down != null) out.downAfterProbes = Number(f.down)
   if (f.up !== '' && f.up != null) out.upAfterProbes = Number(f.up)
-  config.upsertGateway(out, props.gateway?.name ?? out.name)
+  config.upsertGateway(out, previous)
   open.value = false
 }
 </script>
@@ -367,6 +381,7 @@ function save() {
         </FormField>
       </div>
       <ToggleRow v-model="form.enabled" label="Enabled" />
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

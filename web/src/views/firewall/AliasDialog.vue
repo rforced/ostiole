@@ -12,6 +12,7 @@ import { parseAsnList } from '@/lib/asn'
 import { errorMessage } from '@/lib/async'
 import { formatCount } from '@/lib/format'
 import { joinList, parseList } from '@/lib/lists'
+import { nameProblem } from '@/lib/names'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import type { Alias, AliasType, FeedsStatus } from '@/lib/types.gen'
@@ -182,12 +183,10 @@ watch(
 function save() {
   error.value = ''
   const name = form.value.name.trim()
-  if (!/^[a-z][a-z0-9_]{0,30}$/.test(name)) {
-    error.value = 'Name must be lowercase letters, digits, or underscores and start with a letter.'
-    return
-  }
+  error.value = nameProblem('name', name)
+  if (error.value) return
   const previous = props.alias?.name ?? name
-  if (name !== previous && config.aliases.some((a) => a.name === name)) {
+  if (name !== props.alias?.name && config.aliases.some((a) => a.name === name)) {
     error.value = `Alias ${name} already exists.`
     return
   }

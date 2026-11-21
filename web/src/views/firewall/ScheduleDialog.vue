@@ -3,7 +3,9 @@ import { ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import { nameProblem } from '@/lib/names'
 import type { Schedule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
@@ -24,6 +26,7 @@ interface ScheduleForm {
 
 const config = useConfigStore()
 const form = ref<ScheduleForm>(blank())
+const error = ref('')
 
 function blank(): ScheduleForm {
   return { name: '', description: '', days: [], start: '08:00', end: '17:00' }
@@ -32,6 +35,7 @@ function blank(): ScheduleForm {
 watch(
   () => [open.value, props.schedule],
   () => {
+    error.value = ''
     if (open.value)
       form.value = props.schedule
         ? { ...blank(), ...props.schedule, days: [...(props.schedule.days ?? [])] }
@@ -49,11 +53,21 @@ function toggleDay(day: string, on: boolean) {
 
 function save() {
   const f = form.value
-  const out: Schedule = { name: f.name.trim(), start: f.start, end: f.end }
+  const name = f.name.trim()
+  const previous = props.schedule?.name ?? name
+  error.value = nameProblem('name', name)
+  if (
+    !error.value &&
+    name !== props.schedule?.name &&
+    config.schedules.some((s) => s.name === name)
+  )
+    error.value = `Schedule ${name} already exists.`
+  if (error.value) return
+  const out: Schedule = { name, start: f.start, end: f.end }
   if (f.description) out.description = f.description
   const every = f.days.length === DAYS.length && props.schedule?.days?.length !== DAYS.length
   if (f.days.length && !every) out.days = f.days
-  config.upsertSchedule(out, props.schedule?.name ?? out.name)
+  config.upsertSchedule(out, previous)
   open.value = false
 }
 </script>
@@ -103,6 +117,7 @@ function save() {
           </label>
         </div>
       </fieldset>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

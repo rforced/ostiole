@@ -8,6 +8,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { nameProblem } from '@/lib/names'
 import type { ACMEAccount } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -53,9 +54,11 @@ const key = useAsync(async () => {
   form.value.privateKey = privateKey
 })
 
+const error = ref('')
 watch(
   () => [open.value, props.account],
   () => {
+    error.value = ''
     if (!open.value) return
     const a = props.account
     if (a) {
@@ -88,8 +91,15 @@ const valid = computed(
 
 function save() {
   const f = form.value
+  const id = f.id.trim()
+  if (!props.account) {
+    error.value = nameProblem('id', id)
+    if (!error.value && config.acmeAccounts.some((a) => a.id === id))
+      error.value = `Account ${id} already exists.`
+    if (error.value) return
+  }
   const out: ACMEAccount = {
-    id: f.id.trim(),
+    id,
     directory: f.directory.trim(),
     privateKey: f.privateKey,
   }
@@ -184,6 +194,7 @@ function save() {
       <ErrorLine v-if="key.error.value" class="text-sm">
         {{ key.error.value }}
       </ErrorLine>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

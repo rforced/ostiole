@@ -3,8 +3,10 @@ import { computed, ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { proxyNameProblem } from '@/lib/names'
 import type { WAFProfile } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
@@ -70,9 +72,11 @@ function blank(): ProfileForm {
   }
 }
 
+const error = ref('')
 watch(
   () => [open.value, props.profile],
   () => {
+    error.value = ''
     if (!open.value) return
     const w = props.profile
     if (!w) {
@@ -117,6 +121,8 @@ function toggleApp(name: string, on: boolean) {
 
 function save() {
   const f = form.value
+  error.value = proxyNameProblem(config.proxy, f.id.trim(), f.previousId)
+  if (error.value) return
   const profile: WAFProfile = { id: f.id.trim() }
   if (f.description.trim()) profile.description = f.description.trim()
   if (f.mode === 'block') profile.mode = 'block'
@@ -319,6 +325,7 @@ function save() {
       </fieldset>
 
       <ToggleRow v-model="form.inspectResponses" label="Inspect responses" />
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

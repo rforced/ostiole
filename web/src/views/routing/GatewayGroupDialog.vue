@@ -4,8 +4,10 @@ import { computed, ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { nameProblem } from '@/lib/names'
 import type { GatewayGroup, GatewayMember, OnDownMode } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
@@ -43,9 +45,11 @@ const tiers = computed(() => {
   return [...groups.entries()].sort((a, b) => a[0] - b[0])
 })
 
+const error = ref('')
 watch(
   () => [open.value, props.group],
   () => {
+    error.value = ''
     if (!open.value) return
     form.value = props.group
       ? {
@@ -71,8 +75,18 @@ function removeMember(index: number) {
 
 function save() {
   const f = form.value
+  const name = f.name.trim()
+  const previous = props.group?.name ?? name
+  error.value = nameProblem('name', name)
+  if (!error.value && name !== props.group?.name) {
+    if (config.gatewayGroups.some((g) => g.name === name))
+      error.value = `Gateway group ${name} already exists.`
+    else if (config.gateways.some((g) => g.name === name))
+      error.value = `Gateway ${name} already exists.`
+  }
+  if (error.value) return
   const out: GatewayGroup = {
-    name: f.name.trim(),
+    name,
     enabled: f.enabled,
     members: f.members.map((m) => ({
       gateway: m.gateway,
@@ -84,7 +98,7 @@ function save() {
   const was = props.group?.onDown
   const onDown = props.group && f.onDown === (was || 'fallback') ? was : f.onDown
   if (onDown !== undefined) out.onDown = onDown
-  config.upsertGatewayGroup(out, props.group?.name ?? out.name)
+  config.upsertGatewayGroup(out, previous)
   open.value = false
 }
 </script>
@@ -176,6 +190,7 @@ function save() {
       </section>
 
       <ToggleRow v-model="form.enabled" label="Enabled" />
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

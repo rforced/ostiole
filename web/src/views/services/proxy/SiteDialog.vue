@@ -8,6 +8,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, keptOrder, parseList } from '@/lib/lists'
+import { proxyNameProblem } from '@/lib/names'
 import type { ProxyPath, ProxySite } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import AllowFromAliases from '@/views/services/proxy/AllowFromAliases.vue'
@@ -62,9 +63,11 @@ const pools = computed(() => config.proxy.pools ?? [])
 const profiles = computed(() => config.proxy.wafProfiles ?? [])
 const certificates = computed(() => config.certificates.filter((c) => c.enabled))
 
+const error = ref('')
 watch(
   () => [open.value, props.site],
   () => {
+    error.value = ''
     if (!open.value) return
     const s = props.site
     if (!s) {
@@ -116,6 +119,8 @@ function removePath(index: number) {
 
 function save() {
   const f = form.value
+  error.value = proxyNameProblem(config.proxy, f.id.trim(), f.previousId)
+  if (error.value) return
   const site: ProxySite = {
     id: f.id.trim(),
     enabled: f.enabled,
@@ -272,6 +277,7 @@ function save() {
         />
         <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

@@ -3,9 +3,11 @@ import { computed, ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, parseList } from '@/lib/lists'
+import { proxyNameProblem } from '@/lib/names'
 import type { ProxyPool } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
@@ -56,9 +58,11 @@ function blank(): PoolForm {
   }
 }
 
+const error = ref('')
 watch(
   () => [open.value, props.pool],
   () => {
+    error.value = ''
     if (!open.value) return
     const p = props.pool
     if (!p) {
@@ -89,6 +93,8 @@ const upstreams = computed(() => parseList(form.value.upstreams))
 
 function save() {
   const f = form.value
+  error.value = proxyNameProblem(config.proxy, f.id.trim(), f.previousId)
+  if (error.value) return
   const pool: ProxyPool = {
     id: f.id.trim(),
     upstreams: upstreams.value.map((address) => ({ address })),
@@ -218,6 +224,7 @@ function save() {
           />
         </template>
       </fieldset>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

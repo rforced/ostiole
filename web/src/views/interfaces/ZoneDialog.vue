@@ -7,6 +7,7 @@ import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { nameProblem } from '@/lib/names'
 import type { Zone } from '@/lib/types.gen'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -45,12 +46,10 @@ watch(
 function save() {
   error.value = ''
   const name = form.value.name.trim()
-  if (!/^[a-z][a-z0-9_]{0,30}$/.test(name)) {
-    error.value = 'Name must be lowercase letters, digits, or underscores and start with a letter.'
-    return
-  }
+  error.value = nameProblem('name', name)
+  if (error.value) return
   const previous = props.zone?.name ?? name
-  if (name !== previous && config.zones.some((z) => z.name === name)) {
+  if (name !== props.zone?.name && config.zones.some((z) => z.name === name)) {
     error.value = `Zone ${name} already exists.`
     return
   }

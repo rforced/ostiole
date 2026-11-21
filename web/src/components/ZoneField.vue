@@ -5,6 +5,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { NEW_ZONE } from '@/components/zones'
+import { nameProblem } from '@/lib/names'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -72,10 +73,8 @@ const mates = computed(() =>
 function commit(): boolean {
   if (!creating.value) return true
   const name = newName.value.trim()
-  if (!/^[a-z][a-z0-9_]{0,30}$/.test(name)) {
-    error.value = 'Name must be lowercase letters, digits, or underscores and start with a letter.'
-    return false
-  }
+  error.value = nameProblem('name', name)
+  if (error.value) return false
   if (config.zones.some((z) => z.name === name)) {
     error.value = `Zone ${name} already exists. Pick it from the list.`
     return false

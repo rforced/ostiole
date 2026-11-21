@@ -9,6 +9,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { formatCount } from '@/lib/format'
+import { nameProblem } from '@/lib/names'
 import type { BlockList, CatalogEntry, ListFormat } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
@@ -91,12 +92,10 @@ function pick(name: string) {
 function save() {
   error.value = ''
   const name = form.value.name.trim()
-  if (!/^[a-z][a-z0-9_]{0,30}$/.test(name)) {
-    error.value = 'Name must be lowercase letters, digits, or underscores and start with a letter.'
-    return
-  }
+  error.value = nameProblem('name', name)
+  if (error.value) return
   const previous = props.list?.name ?? name
-  if (name !== previous && config.blockLists.some((l) => l.name === name)) {
+  if (name !== props.list?.name && config.blockLists.some((l) => l.name === name)) {
     error.value = `A list called ${name} already exists.`
     return
   }

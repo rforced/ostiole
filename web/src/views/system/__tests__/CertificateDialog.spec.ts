@@ -153,6 +153,34 @@ describe('CertificateDialog', () => {
     expect(must(config.certificates[0]).account).toBeUndefined()
   })
 
+  async function upload(wrapper: VueWrapper, id: string) {
+    await wrapper.get('#cert-id').setValue(id)
+    await wrapper.get('#cert-source').setValue('uploaded')
+    await flushPromises()
+    await wrapper.get('#cert-pem').setValue('-----BEGIN CERTIFICATE-----')
+    await wrapper.get('#cert-key').setValue('-----BEGIN PRIVATE KEY-----')
+    await wrapper.get('form').trigger('submit')
+  }
+
+  // The name is a directory and a URL segment, so the dialog refuses
+  // what apply would.
+  it.each(['example.test', 'Mail', '-mail', 'a'.repeat(33)])('refuses %s as a name', async (id) => {
+    const { wrapper, config } = open()
+    await upload(wrapper, id)
+    expect(config.certificates).toHaveLength(0)
+    expect(wrapper.text()).toContain('Name must be at most 32 lowercase letters')
+  })
+
+  it('refuses a name another certificate has', async () => {
+    const { wrapper, config } = open()
+    config.upsertCertificate({ id: 'mail', enabled: true, source: 'acme', account: 'le' })
+    await upload(wrapper, 'mail')
+    expect(wrapper.text()).toContain('Certificate mail already exists.')
+    expect(config.certificates).toEqual([
+      { id: 'mail', enabled: true, source: 'acme', account: 'le' },
+    ])
+  })
+
   it.each([
     ['omits the profile', {}],
     ['names shortlived', { profile: 'shortlived' }],

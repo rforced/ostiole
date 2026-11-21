@@ -11,6 +11,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { parseList } from '@/lib/lists'
+import { nameProblem } from '@/lib/names'
 import type { Interface, NetMap, WireGuardPeer } from '@/lib/types.gen'
 import { encode, svgPath } from '@/lib/qr'
 import { deviceAddresses, deviceFile, endpoint, isPublic, networkOf, nextFree } from '@/lib/wgconf'
@@ -236,11 +237,20 @@ async function makeKeys() {
 }
 
 async function save() {
-  error.value = ''
   const tunnel = current.value
   if (!tunnel) return
+  const name = form.value.name.trim()
+  const previous = props.peer?.name ?? name
+  error.value = nameProblem('name', name)
+  if (
+    !error.value &&
+    name !== props.peer?.name &&
+    tunnel.wireguard?.peers?.some((p) => p.name === name)
+  )
+    error.value = `Peer ${name} already exists.`
+  if (error.value) return
   if (!making.value) {
-    config.upsertPeer(tunnel.name, peerOut(), props.peer?.name ?? form.value.name.trim())
+    config.upsertPeer(tunnel.name, peerOut(), previous)
     open.value = false
     return
   }

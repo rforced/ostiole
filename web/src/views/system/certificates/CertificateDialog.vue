@@ -3,9 +3,11 @@ import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { parseList } from '@/lib/lists'
+import { nameProblem } from '@/lib/names'
 import type { Certificate } from '@/lib/types.gen'
 import { certificateProvider } from '@/lib/providers'
 import { useConfigStore } from '@/stores/config'
@@ -46,6 +48,7 @@ const blank = (): Form => ({
 })
 
 const form = ref(blank())
+const error = ref('')
 watch(
   () => [open.value, props.certificate],
   () => {
@@ -61,6 +64,7 @@ watch(
           profile: c.profile ?? '',
         }
       : blank()
+    error.value = ''
   },
   { immediate: true },
 )
@@ -105,8 +109,16 @@ const valid = computed(() => {
 })
 
 function save() {
+  error.value = ''
   const f = form.value
-  const out: Certificate = { id: f.id.trim(), enabled: f.enabled, source: f.source }
+  const id = f.id.trim()
+  if (!props.certificate) {
+    error.value = nameProblem('certificate', id)
+    if (!error.value && config.certificates.some((c) => c.id === id))
+      error.value = `Certificate ${id} already exists.`
+    if (error.value) return
+  }
+  const out: Certificate = { id, enabled: f.enabled, source: f.source }
   if (f.description) out.description = f.description
   if (f.source === 'uploaded') {
     out.certPem = f.certPem
@@ -138,7 +150,7 @@ function save() {
         <FormField
           id="cert-id"
           label="Name"
-          hint="Used in the file path and the API. Cannot change later."
+          hint="Lowercase letters, digits, or hyphens. Cannot change later."
         >
           <input
             id="cert-id"
@@ -288,6 +300,7 @@ function save() {
           />
         </FormField>
       </template>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

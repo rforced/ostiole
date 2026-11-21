@@ -9,6 +9,7 @@ import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { joinList, parseList } from '@/lib/lists'
+import { nameProblem } from '@/lib/names'
 import type { DnsproviderTestResult, DNSProvider, ProviderKind } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -48,9 +49,11 @@ const tested = ref<DnsproviderTestResult | null>(null)
 const testing = ref(false)
 const testError = ref('')
 
+const error = ref('')
 watch(
   () => [open.value, props.provider, props.kinds],
   () => {
+    error.value = ''
     if (!open.value) return
     const p = props.provider
     form.value = p
@@ -101,7 +104,14 @@ function built() {
 }
 
 function save() {
-  config.upsertDnsProvider(built(), props.provider?.id)
+  const out = built()
+  if (!props.provider) {
+    error.value = nameProblem('id', out.id)
+    if (!error.value && config.dnsProviders.some((p) => p.id === out.id))
+      error.value = `DNS provider ${out.id} already exists.`
+    if (error.value) return
+  }
+  config.upsertDnsProvider(out, props.provider?.id)
   open.value = false
 }
 
@@ -208,6 +218,7 @@ const sees = computed(() => {
         </ul>
       </div>
       <ErrorLine v-if="testError" class="text-sm">{{ testError }}</ErrorLine>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>
     <template #footer>
       <ActionButton
