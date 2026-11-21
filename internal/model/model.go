@@ -2227,6 +2227,23 @@ func (c *Config) IdleDHCP() []string {
 	return out
 }
 
+// AntiLockoutPrivateBlocked names the enabled interfaces that block private
+// sources while their zone has anti-lockout on, in configuration order. The
+// private-source drop runs ahead of anti-lockout, so management from a private
+// upstream address is dropped there.
+func (c *Config) AntiLockoutPrivateBlocked() []string {
+	var out []string
+	for _, in := range c.Interfaces {
+		if !in.Enabled || !in.BlockPrivate || in.Zone == "" {
+			continue
+		}
+		if z, ok := c.Zone(in.Zone); ok && z.AntiLockout {
+			out = append(out, in.Name)
+		}
+	}
+	return out
+}
+
 // StaticLease pins addresses to a MAC. IPv6 may be a host part of the
 // interface's prefix, written like ::20, and only reaches clients whose
 // DHCPv6 identifier the server can tie to the MAC.

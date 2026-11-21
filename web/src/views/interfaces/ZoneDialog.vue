@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
@@ -20,6 +21,12 @@ const config = useConfigStore()
 const form = ref<Zone>(blank())
 // Anti-lockout is kept by zone name, so renaming such a zone changes it.
 const nameLocked = computed(() => !auth.isAdmin && props.zone?.antiLockout === true)
+/** Interfaces in this zone whose private-source block would run ahead of anti-lockout. */
+const privateBlocked = computed(() => {
+  const zone = props.zone?.name || form.value.name.trim()
+  if (!zone) return []
+  return config.interfaces.filter((i) => i.zone === zone && i.blockPrivate).map((i) => i.name)
+})
 const error = ref('')
 
 function blank(): Zone {
@@ -96,6 +103,10 @@ function save() {
           "
           :disabled="!auth.isAdmin"
         />
+        <AppNotice v-if="form.antiLockout && privateBlocked.length">
+          Blocking private sources is on for {{ privateBlocked.join(', ') }} and runs ahead of
+          anti-lockout, so management from a private upstream will be dropped.
+        </AppNotice>
         <ToggleRow
           v-model="form.logDrops"
           label="Log drops"

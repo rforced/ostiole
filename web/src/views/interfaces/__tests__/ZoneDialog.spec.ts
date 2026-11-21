@@ -59,4 +59,30 @@ describe('ZoneDialog anti-lockout', () => {
     expect(antiLockout(w).attributes('disabled')).toBeUndefined()
     expect(w.get('#zone-name').attributes('disabled')).toBeUndefined()
   })
+
+  it('warns when anti-lockout is enabled on a zone whose interface blocks private sources', () => {
+    useAuthStore().user = sessionOf({ username: 'admin', role: 'admin' })
+    useConfigStore().replaceDraft(
+      configOf({
+        version: 16,
+        zones: [{ name: 'wan', external: true, antiLockout: true }],
+        interfaces: [
+          {
+            name: 'eth0',
+            zone: 'wan',
+            enabled: true,
+            blockPrivate: true,
+            ipv4: { mode: 'dhcp' },
+            ipv6: { mode: 'none' },
+          },
+        ],
+        rules: [],
+      }),
+    )
+    const w = mount(ZoneDialog, {
+      props: { open: true, zone: { name: 'wan', external: true, antiLockout: true } },
+      global: { stubs },
+    })
+    expect(w.text()).toContain('Blocking private sources is on for eth0 and runs ahead of')
+  })
 })

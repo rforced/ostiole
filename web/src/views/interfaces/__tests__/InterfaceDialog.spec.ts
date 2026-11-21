@@ -279,3 +279,25 @@ describe('InterfaceDialog IPv6 source check', () => {
     expect(wrapper.find('#if-ipv6-source').exists()).toBe(false)
   })
 })
+
+describe('InterfaceDialog blockPrivate on anti-lockout zone', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('warns when blocking private sources on an external anti-lockout zone', () => {
+    useAuthStore().user = sessionOf({ username: 'admin', role: 'admin' })
+    const wan = iface({ name: 'eth0', zone: 'wan', blockPrivate: true })
+    useConfigStore().replaceDraft({
+      ...emptyConfig(),
+      version: 16,
+      zones: [{ name: 'wan', external: true, antiLockout: true }],
+      interfaces: [wan],
+    })
+    const wrapper = mount(InterfaceDialog, {
+      props: { open: true, iface: wan },
+      global: { stubs },
+    })
+    expect(wrapper.text()).toContain(
+      'Zone wan has anti-lockout on, and blocking private sources runs ahead of it',
+    )
+  })
+})

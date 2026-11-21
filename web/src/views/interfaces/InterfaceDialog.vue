@@ -166,6 +166,11 @@ const external = computed(
   () => config.zones.find((z) => z.name === form.value.zone)?.external ?? false,
 )
 
+/** Blocking private sources runs ahead of anti-lockout on this interface's zone. */
+const antiLockout = computed(
+  () => config.zones.find((z) => z.name === form.value.zone)?.antiLockout ?? false,
+)
+
 /**
  * The router holds IPv6 sources to the routes on an inside interface it
  * numbers itself. Tunnels, PPPoE and a gateway's link are left out, as
@@ -444,6 +449,10 @@ function save() {
         <AppNotice v-if="form.blockPrivate && privateItself">
           This interface is itself on a private network, so blocking private sources here would cut
           it off.
+        </AppNotice>
+        <AppNotice v-if="form.blockPrivate && external && antiLockout">
+          Zone {{ form.zone }} has anti-lockout on, and blocking private sources runs ahead of it,
+          so management from a private upstream will be dropped.
         </AppNotice>
 
         <ToggleRow

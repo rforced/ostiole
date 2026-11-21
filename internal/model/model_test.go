@@ -623,6 +623,27 @@ func TestValidateRefusesDHCPAndRAOnExternalZones(t *testing.T) {
 	}
 }
 
+func TestAntiLockoutPrivateBlocked(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0", ManagementFromWAN: true})
+	// Starter turns BlockPrivate off when ManagementFromWAN is set.
+	if got := cfg.AntiLockoutPrivateBlocked(); len(got) != 0 {
+		t.Fatalf("starter ManagementFromWAN = %v, want empty", got)
+	}
+	wan, ok := cfg.Interface("eth0")
+	if !ok {
+		t.Fatal("missing eth0")
+	}
+	wan.BlockPrivate = true
+	if got := cfg.AntiLockoutPrivateBlocked(); !slices.Equal(got, []string{"eth0"}) {
+		t.Errorf("with blockPrivate = %v, want [eth0]", got)
+	}
+	wan.Enabled = false
+	if got := cfg.AntiLockoutPrivateBlocked(); len(got) != 0 {
+		t.Errorf("disabled interface = %v, want empty", got)
+	}
+}
+
 func TestValidateStaticLeaseAddresses(t *testing.T) {
 	t.Parallel()
 	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24"})

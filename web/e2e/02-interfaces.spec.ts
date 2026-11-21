@@ -114,7 +114,9 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
   await privateRow.getByRole('button', { name: 'Edit' }).click()
   let dialog = page.getByRole('dialog')
   await dialog.getByLabel('Block private and loopback sources').check()
-  await expect(dialog.getByRole('note')).toContainText('itself on a private network')
+  await expect(
+    dialog.getByRole('note').filter({ hasText: 'itself on a private network' }),
+  ).toBeVisible()
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   await page.getByRole('button', { name: /Apply with \d+s confirmation/ }).click()
   await expect(page.getByRole('alert')).toContainText('blockPrivate')

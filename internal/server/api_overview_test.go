@@ -989,6 +989,35 @@ func TestWarnsWhenEnforcementExemptsNoClient(t *testing.T) {
 	}
 }
 
+// Blocking private sources runs before anti-lockout, so turning both on
+// warns that management from a private upstream will be dropped.
+func TestWarnsWhenAntiLockoutBlocksPrivateSources(t *testing.T) {
+	t.Parallel()
+	cfg := starter()
+	wanZone, ok := cfg.Zone("wan")
+	if !ok {
+		t.Fatal("missing wan zone")
+	}
+	wan, ok := cfg.Interface("eth0")
+	if !ok {
+		t.Fatal("missing eth0")
+	}
+	wanZone.AntiLockout = true
+	wan.BlockPrivate = true
+	find := func() *Warning {
+		ws := (&api{}).warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{})
+		return warning(Overview{Warnings: ws}, "anti-lockout-block-private")
+	}
+	w := find()
+	if w == nil || w.Level != "warn" || !strings.Contains(w.Detail, "eth0") {
+		t.Fatalf("warning = %+v, want anti-lockout-block-private naming eth0", w)
+	}
+	wan.BlockPrivate = false
+	if w := find(); w != nil {
+		t.Errorf("without blockPrivate warned: %+v", w)
+	}
+}
+
 // An http-01 certificate checked through a proxy whose port 80 is open to
 // some sources only is worth a line: the CA checks from several places.
 func TestWarnsWhenCertificateChecksAreLimited(t *testing.T) {

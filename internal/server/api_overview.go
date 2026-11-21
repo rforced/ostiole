@@ -899,6 +899,14 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 					"address; to let a destination through, use Except these destinations.",
 			})
 		}
+		if blocked := cfg.AntiLockoutPrivateBlocked(); len(blocked) > 0 {
+			out = append(out, Warning{
+				Kind: "anti-lockout-block-private", Level: "warn",
+				Title: "Private sources are blocked before anti-lockout",
+				Detail: "Blocking private sources runs ahead of anti-lockout on " + strings.Join(blocked, ", ") +
+					", so management from a private upstream will be dropped. Details under Interfaces.",
+			})
+		}
 	}
 	// A fetched alias with nothing in it turns the rules that use it inside
 	// out: "drop unless home country" drops everything until the first
