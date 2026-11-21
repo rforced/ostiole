@@ -555,7 +555,12 @@ esac
 			// its own back before it restarts.
 			calls := []string{"new install --units-only --log-level warn", "systemctl restart ostiole.service", "new update --probe x"}
 			if !tc.daemonUp {
-				calls = append(calls, "old install --units-only --log-level warn", "systemctl restart ostiole.service")
+				calls = append(calls,
+					"systemctl stop ostiole.service",
+					"new policy --clear",
+					"old install --units-only --log-level warn",
+					"systemctl restart ostiole.service",
+				)
 			}
 			raw, _ := os.ReadFile(filepath.Join(dir, "calls"))
 			if got := strings.Split(strings.TrimSpace(string(raw)), "\n"); !slices.Equal(got, calls) {
@@ -916,5 +921,31 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 	}
 	if m.Status().State != Idle {
 		t.Error("security mode installed a release that carried no marker")
+	}
+}
+
+// Rolling back an update stops the new daemon and clears policy routing
+// before putting the previous binary back, so rules the previous release
+// does not know about are never stranded. The success branch does not.
+func TestRestartScriptClearsPolicyOnRollback(t *testing.T) {
+	t.Parallel()
+	inst := &Installer{
+		Binary:    "/usr/local/bin/ostiole",
+		Unit:      "ostiole.service",
+		HealthURL: "https://127.0.0.1:443/api/v1/health",
+	}
+	script := inst.restartScript("/usr/local/bin/ostiole.previous", "", "0.5.0")
+	before, after, ok := strings.Cut(script, "\nelse ")
+	if !ok {
+		t.Fatalf("restart script has no else branch:\n%s", script)
+	}
+	if strings.Contains(before, "policy --clear") {
+		t.Errorf("success branch must not clear policy routing:\n%s", before)
+	}
+	stop := strings.Index(after, "systemctl stop 'ostiole.service'")
+	wipe := strings.Index(after, "'/usr/local/bin/ostiole' policy --clear")
+	restore := strings.Index(after, "mv -f '/usr/local/bin/ostiole.previous' '/usr/local/bin/ostiole'")
+	if stop < 0 || wipe < 0 || restore < 0 || stop >= wipe || wipe >= restore {
+		t.Errorf("rollback branch must stop, clear policy, then restore binary:\n%s", after)
 	}
 }

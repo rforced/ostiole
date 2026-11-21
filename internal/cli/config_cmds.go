@@ -512,7 +512,8 @@ func printDetected(cmd *cobra.Command, cfg *model.Config) {
 }
 
 func newPolicyCmd(g *globals) *cobra.Command {
-	return &cobra.Command{
+	var clearRules bool
+	cmd := &cobra.Command{
 		Use:   "policy",
 		Short: "Show where rules that pick a gateway send their traffic",
 		Long: `Lists every gateway and gateway group that firewall rules can route
@@ -522,6 +523,9 @@ external interfaces or more it lists the replies too: the table each one
 answers what came in on it through, and where that table sends them now.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if clearRules {
+				return policy.NewInstaller(slog.Default()).Clear()
+			}
 			cfg, err := g.store().Load()
 			if err != nil {
 				return err
@@ -568,6 +572,8 @@ answers what came in on it through, and where that table sends them now.`,
 			return w.Flush()
 		},
 	}
+	cmd.Flags().BoolVar(&clearRules, "clear", false, "remove every policy routing table and ip rule Ostiole owns")
+	return cmd
 }
 
 // policyHops resolves each gateway's next hop without probing: the CLI

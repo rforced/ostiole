@@ -754,6 +754,6 @@ elif %[3]s version >/dev/null 2>&1; then rm -f %[2]s; else mv -f %[2]s %[3]s; fi
 	}
 	return fmt.Sprintf(`sleep 1; %[2]s install --units-only --log-level warn; systemctl restart %[1]s; sleep 4;
 if %[2]s update --probe %[3]s; then rm -f %[4]s;%[5]s
-else %[6]smv -f %[4]s %[2]s && { %[2]s install --units-only --log-level warn; systemctl restart %[1]s; }; fi`,
+else %[6]ssystemctl stop %[1]s; %[2]s policy --clear; mv -f %[4]s %[2]s && { %[2]s install --units-only --log-level warn; systemctl restart %[1]s; }; fi`,
 		shq(i.Unit), shq(i.Binary), shq(i.HealthURL), shq(previous), proxy, restore)
 }
