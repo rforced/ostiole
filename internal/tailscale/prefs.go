@@ -29,13 +29,20 @@ type pref struct {
 // writing the lot makes an apply deterministic and a revert a replay.
 //
 // Ostiole renders every rule, so the daemon touches no netfilter and no
-// resolv.conf of its own. --exit-node is cleared rather than omitted for
-// the same reason: using one is shelved (ADR-0014), and a node pointed at
-// one by hand would otherwise keep it. Source NAT stays on: with netfilter
-// off the flag writes nothing, and off makes tailscaled warn on every node
-// that offers an exit node.
-func prefs(t model.Tailscale) []pref {
-	return []pref{
+// resolv.conf of its own. Source NAT stays on: with netfilter off the flag
+// writes nothing, and off makes tailscaled warn on every node that offers
+// an exit node.
+//
+// When exitNode is empty, --exit-node and --exit-node-allow-lan-access are
+// cleared explicitly so removing a gateway, reverting an apply, or a node
+// pointed at an exit node by hand never leaves a stale exit node behind.
+// When exitNode is set, both flags are omitted here: the gateway monitor
+// sets --exit-node=<name> and --exit-node-allow-lan-access=true together
+// once tailscaled is Running (tailscale refuses allow-lan-access=true when
+// no exit node is set yet), and `tailscale set` leaves unspecified flags
+// alone on later applies.
+func prefs(t model.Tailscale, exitNode string) []pref {
+	out := []pref{
 		{"--netfilter-mode=off", true},
 		{"--accept-dns=false", true},
 		{"--snat-subnet-routes=true", true},
@@ -47,18 +54,26 @@ func prefs(t model.Tailscale) []pref {
 		{"--shields-up=false", true},
 		{"--advertise-connector=false", true},
 		{"--report-posture=false", true},
-		{"--exit-node=", true},
-		{"--hostname=" + t.Hostname, true},
-		{"--advertise-routes=" + strings.Join(t.AdvertiseRoutes, ","), true},
-		{fmt.Sprintf("--advertise-exit-node=%t", t.AdvertiseExitNode), true},
-		{fmt.Sprintf("--accept-routes=%t", t.AcceptRoutes), true},
 	}
+	if exitNode == "" {
+		out = append(out,
+			pref{"--exit-node=", true},
+			pref{"--exit-node-allow-lan-access=false", true},
+		)
+	}
+	return append(out,
+		pref{"--hostname=" + t.Hostname, true},
+		pref{"--advertise-routes=" + strings.Join(t.AdvertiseRoutes, ","), true},
+		pref{fmt.Sprintf("--advertise-exit-node=%t", t.AdvertiseExitNode), true},
+		pref{fmt.Sprintf("--accept-routes=%t", t.AcceptRoutes), true},
+	)
 }
 
 // PrefArgs is what `tailscale set` is given: everything.
-func PrefArgs(t model.Tailscale) []string {
-	args := make([]string, 0, len(prefs(t)))
-	for _, p := range prefs(t) {
+func PrefArgs(t model.Tailscale, exitNode string) []string {
+	ps := prefs(t, exitNode)
+	args := make([]string, 0, len(ps))
+	for _, p := range ps {
 		args = append(args, p.arg)
 	}
 	return args
@@ -66,9 +81,9 @@ func PrefArgs(t model.Tailscale) []string {
 
 // UpArgs is what `tailscale up` is given: the flags it defines. The rest
 // follow in a `set` once the node is up.
-func UpArgs(t model.Tailscale) []string {
+func UpArgs(t model.Tailscale, exitNode string) []string {
 	var args []string
-	for _, p := range prefs(t) {
+	for _, p := range prefs(t, exitNode) {
 		if p.up {
 			args = append(args, p.arg)
 		}

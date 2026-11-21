@@ -28,6 +28,7 @@ type tailscaleStatus struct {
 	MagicDNSSuffix string          `json:"magicDnsSuffix,omitempty"`
 	KeyExpiry      *time.Time      `json:"keyExpiry,omitempty"`
 	Version        string          `json:"version,omitempty"`
+	ExitNode       string          `json:"exitNode,omitempty"`
 	Health         []string        `json:"health"`
 	Peers          []tailscalePeer `json:"peers"`
 }
@@ -85,6 +86,9 @@ func (a *api) readTailscale(ctx context.Context) tailscaleStatus {
 	out.State = st.BackendState
 	out.AuthURL = st.AuthURL
 	out.Version = st.Version
+	if name, ok := st.ActiveExitNode(); ok {
+		out.ExitNode = name
+	}
 	if st.TailscaleIPs != nil {
 		out.IPs = st.TailscaleIPs
 	}
@@ -173,16 +177,20 @@ func (a *api) tailscaleLogin(w http.ResponseWriter, r *http.Request) error {
 		return &badRequest{errors.New("apply the Tailscale interface first")}
 	}
 
+	exitNode := ""
+	if gw, ok := cfg.ExitNode(); ok {
+		exitNode = gw.ExitNode
+	}
 	// The login is the operator's, not the request's: a browser that gives
 	// up must not take the attempt with it.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 3*time.Minute)
-	url, done, err := a.tsClient.Login(ctx, tailscale.UpArgs(*in.Tailscale), in.Tailscale.LoginServer, body.AuthKey)
+	url, done, err := a.tsClient.Login(ctx, tailscale.UpArgs(*in.Tailscale, exitNode), in.Tailscale.LoginServer, body.AuthKey)
 	if err != nil {
 		cancel()
 		return err
 	}
 	a.record(r, audit.TailscaleLogin, "", "")
-	prefs := tailscale.PrefArgs(*in.Tailscale)
+	prefs := tailscale.PrefArgs(*in.Tailscale, exitNode)
 	go func() {
 		defer cancel()
 		if err := <-done; err != nil {

@@ -1,8 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Config, Gateway } from '@/lib/types.gen'
+import { api } from '@/lib/api'
+import type { Config, Gateway, TailscaleStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import type { DeepPartial } from '@/test/fixtures'
 import { configOf, must } from '@/test/fixtures'
@@ -26,6 +27,7 @@ function open(gateway: Gateway | null = null, more: DeepPartial<Config> = {}) {
       zones: [
         { name: 'wan', external: true },
         { name: 'vpn', external: true },
+        { name: 'tailnet' },
       ],
       interfaces: [
         {
@@ -51,6 +53,14 @@ function open(gateway: Gateway | null = null, more: DeepPartial<Config> = {}) {
           ipv6: { mode: 'none' },
           openvpn: { remotes: [{ host: '198.51.100.7', port: 1194, proto: 'udp' }], caPem: 'x' },
         },
+        {
+          name: 'tailscale0',
+          zone: 'tailnet',
+          enabled: true,
+          ipv4: { mode: 'none' },
+          ipv6: { mode: 'none' },
+          tailscale: { port: 41641 },
+        },
       ],
       gateways: gateway ? [gateway] : [{ name: 'wan', enabled: true, interface: 'eth0' }],
       rules: [],
@@ -65,6 +75,7 @@ function open(gateway: Gateway | null = null, more: DeepPartial<Config> = {}) {
 
 describe('GatewayDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.restoreAllMocks())
 
   it('asks a line for its priority', async () => {
     const { wrapper } = open()
@@ -223,13 +234,125 @@ describe('GatewayDialog', () => {
       monitor: '10.8.0.1',
     })
   })
+
+  it('swaps address for an exit node select when Tailscale is running with exit-node peers', async () => {
+    const status: TailscaleStatus = {
+      setUp: true,
+      running: true,
+      ips: ['100.64.0.2'],
+      health: [],
+      peers: [
+        {
+          hostName: 'ams-vps',
+          dnsName: 'ams-1.tail1234.ts.net.',
+          ips: ['100.64.0.9'],
+          routes: [],
+          online: true,
+          active: false,
+          exitNode: true,
+        },
+        {
+          hostName: 'laptop',
+          dnsName: 'laptop.tail1234.ts.net.',
+          ips: ['100.64.0.10'],
+          routes: [],
+          online: true,
+          active: false,
+          exitNode: false,
+        },
+      ],
+    }
+    vi.spyOn(api.tailscale, 'status').mockResolvedValue(status)
+
+    const { wrapper, config } = open()
+    await wrapper.find('#gw-if').setValue('tailscale0')
+    await flushPromises()
+
+    expect(wrapper.find('#gw-addr').exists()).toBe(false)
+    expect(wrapper.find('#gw-prio').exists()).toBe(false)
+    expect(wrapper.find('#gw-monitor').attributes('required')).toBeUndefined()
+    expect(wrapper.find('#gw-monitor').attributes('placeholder')).toBe('the exit node')
+    expect(wrapper.text()).toContain('One per router.')
+    expect(wrapper.text()).toContain('Empty pings the exit node.')
+
+    const exitSelect = wrapper.find('select#gw-exit-node')
+    expect(exitSelect.exists()).toBe(true)
+    const values = exitSelect.findAll('option').map((o) => o.attributes('value'))
+    expect(values).toEqual(['', 'ams-1'])
+
+    await wrapper.find('#gw-name').setValue('amsterdam')
+    await exitSelect.setValue('ams-1')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways.find((g) => g.name === 'amsterdam')).toEqual({
+      name: 'amsterdam',
+      enabled: true,
+      interface: 'tailscale0',
+      exitNode: 'ams-1',
+    })
+  })
+
+  it('falls back to a text input for exit node when Tailscale is not running', async () => {
+    vi.spyOn(api.tailscale, 'status').mockResolvedValue({
+      setUp: false,
+      running: false,
+      ips: [],
+      health: [],
+      peers: [],
+    })
+    const { wrapper, config } = open()
+    await wrapper.find('#gw-if').setValue('tailscale0')
+    await flushPromises()
+
+    const exitInput = wrapper.find('input#gw-exit-node')
+    expect(exitInput.exists()).toBe(true)
+    await wrapper.find('#gw-name').setValue('amsterdam')
+    await exitInput.setValue('100.64.0.9')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways.find((g) => g.name === 'amsterdam')).toEqual({
+      name: 'amsterdam',
+      enabled: true,
+      interface: 'tailscale0',
+      exitNode: '100.64.0.9',
+    })
+  })
 })
 
 describe('GatewayDialog round trip', () => {
   beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.restoreAllMocks())
 
   it('reopens the first line as saved and leaves an untouched save alone', async () => {
     const { wrapper, config } = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('reopens an exit-node gateway and leaves an untouched save alone', async () => {
+    vi.spyOn(api.tailscale, 'status').mockResolvedValue({
+      setUp: true,
+      running: true,
+      ips: ['100.64.0.2'],
+      health: [],
+      peers: [
+        {
+          hostName: 'tok-vps',
+          dnsName: 'tok-1.tail1234.ts.net.',
+          ips: ['100.64.0.12'],
+          routes: [],
+          online: true,
+          active: false,
+          exitNode: true,
+        },
+      ],
+    })
+    const { wrapper, config } = open({
+      name: 'amsterdam',
+      enabled: true,
+      interface: 'tailscale0',
+      exitNode: 'ams-1',
+    })
     config.saved = JSON.parse(JSON.stringify(config.draft)) as typeof config.draft
     await flushPromises()
     await wrapper.get('form').trigger('submit')

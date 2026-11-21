@@ -1,0 +1,143 @@
+{
+  "version": 16,
+  "system": {
+    "hostname": "tailscale-fw",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    },
+    {
+      "name": "tailnet"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "tailscale0",
+      "zone": "tailnet",
+      "enabled": true,
+      "ipv4": {
+        "mode": "none"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "tailscale": {
+        "port": 41641,
+        "advertiseRoutes": ["192.168.1.0/24"]
+      }
+    }
+  ],
+  "gateways": [
+    {
+      "name": "wan",
+      "enabled": true,
+      "interface": "eth0"
+    },
+    {
+      "name": "amsterdam",
+      "enabled": true,
+      "interface": "tailscale0",
+      "exitNode": "ams-1"
+    }
+  ],
+  "gatewayGroups": [
+    {
+      "name": "private",
+      "enabled": true,
+      "onDown": "block",
+      "members": [
+        {
+          "gateway": "amsterdam",
+          "tier": 1
+        },
+        {
+          "gateway": "wan",
+          "tier": 2
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-strict",
+      "description": "Keep one host strictly on the exit node",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "gateway": "amsterdam",
+      "source": {
+        "addresses": ["192.168.1.50"]
+      },
+      "destination": {}
+    },
+    {
+      "id": "lan-out",
+      "description": "Allow LAN to any via private group",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "gateway": "private",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "tailnet-lan",
+      "description": "Tailnet devices reach the LAN",
+      "enabled": true,
+      "zone": "tailnet",
+      "destZone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  }
+}

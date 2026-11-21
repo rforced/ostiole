@@ -85,7 +85,9 @@ type Status struct {
 	Name      string `json:"name"`
 	Interface string `json:"interface"`
 	// Address is the next hop in use, resolved for dynamic gateways.
-	Address  string `json:"address,omitempty"`
+	Address string `json:"address,omitempty"`
+	// ExitNode names the Tailscale exit node when this is an exit-node gateway.
+	ExitNode string `json:"exitNode,omitempty"`
 	Monitor  string `json:"monitor,omitempty"`
 	Priority int    `json:"priority"`
 	Metric   int    `json:"metric"`
@@ -307,6 +309,9 @@ type Monitor struct {
 	// Policy, when set, keeps the policy routing tables and ip rules in
 	// step with what the probes just learned.
 	Policy Policy
+	// ExitNodes, when set, resolves Tailscale exit-node peers and keeps
+	// tailscaled pointed at the configured exit node.
+	ExitNodes ExitNodes
 	// Shaping, when set, puts back any queue that has gone missing since
 	// the last apply: a dialled session that has only now come up, a link
 	// that was unplugged, a helper device somebody removed by hand.
@@ -336,6 +341,9 @@ type Monitor struct {
 	// the last tick.
 	carriers []string
 	synced   time.Time
+	// exitErrNode and exitErrMsg deduplicate repeated Set errors across ticks.
+	exitErrNode string
+	exitErrMsg  string
 }
 
 func (m *Monitor) now() time.Time {
@@ -393,8 +401,8 @@ func (m *Monitor) Configure(cfg *model.Config) {
 		if ok && st.gw.Monitor != g.Monitor {
 			changed = append(changed, Event{Gateway: g.Name, Kind: EventMonitor, Monitor: g.Monitor, Was: st.gw.Monitor})
 		}
-		if !ok || st.gw.Interface != g.Interface || st.gw.Address != g.Address || st.gw.Monitor != g.Monitor ||
-			st.tunnel != tunnel {
+		if !ok || st.gw.Interface != g.Interface || st.gw.Address != g.Address || st.gw.ExitNode != g.ExitNode ||
+			st.gw.Monitor != g.Monitor || st.tunnel != tunnel {
 			st = &state{gw: g, tunnel: tunnel, unknown: true, since: m.now()}
 		} else {
 			if st.gw.ProbeEverySeconds != g.ProbeEverySeconds {
@@ -512,8 +520,21 @@ func (m *Monitor) tick(ctx context.Context, all bool) {
 		timeout = DefaultTimeout
 	}
 
+	var exitGW *model.Gateway
+	for _, st := range states {
+		if st.gw.ExitNode != "" {
+			gw := st.gw
+			exitGW = &gw
+			break
+		}
+	}
+	var exitIP string
+	if resync {
+		exitIP = m.syncExitNode(ctx, exitGW)
+	}
+
 	for _, st := range due {
-		m.probe(ctx, st, timeout)
+		m.probe(ctx, st, timeout, exitIP)
 	}
 	m.mark(states)
 	if !resync {
@@ -537,6 +558,51 @@ func nextProbe(next, now time.Time, interval time.Duration) time.Time {
 		return next.Add(interval)
 	}
 	return now.Add(interval)
+}
+
+// syncExitNode resolves the configured Tailscale exit node's tailnet IPv4
+// address and points tailscaled at it when tailscaled is Running and using
+// no exit node or a different one. Failures are logged once per change.
+func (m *Monitor) syncExitNode(ctx context.Context, gw *model.Gateway) string {
+	if m.ExitNodes == nil {
+		return ""
+	}
+	if gw == nil || gw.ExitNode == "" {
+		m.mu.Lock()
+		m.exitErrNode, m.exitErrMsg = "", ""
+		m.mu.Unlock()
+		return ""
+	}
+	ipv4, running, active := m.ExitNodes.Resolve(ctx, gw.ExitNode)
+	if !running {
+		return ""
+	}
+	if active {
+		m.mu.Lock()
+		m.exitErrNode, m.exitErrMsg = "", ""
+		m.mu.Unlock()
+		return ipv4
+	}
+	if err := m.ExitNodes.Set(ctx, gw.ExitNode); err != nil {
+		msg := err.Error()
+		m.mu.Lock()
+		changed := m.exitErrNode != gw.ExitNode || m.exitErrMsg != msg
+		if changed {
+			m.exitErrNode, m.exitErrMsg = gw.ExitNode, msg
+		}
+		m.mu.Unlock()
+		if changed && m.Log != nil {
+			m.Log.Warn("could not select tailscale exit node", "gateway", gw.Name, "exitNode", gw.ExitNode, "err", err)
+		}
+		return ipv4
+	}
+	m.mu.Lock()
+	m.exitErrNode, m.exitErrMsg = "", ""
+	m.mu.Unlock()
+	if m.Log != nil {
+		m.Log.Info("tailscale exit node selected", "gateway", gw.Name, "exitNode", gw.ExitNode)
+	}
+	return ipv4
 }
 
 // syncShaping puts back anything the queues have lost. It warns rather
@@ -641,7 +707,7 @@ func familyOf(address string) string {
 // gateway with an address or a monitor is probed there alone; one that
 // learns its next hops is probed at each, and keeps probing a family
 // whose next hop went unless its interface switched the family off.
-func (m *Monitor) targets(st *state) (model.Gateway, []target, string) {
+func (m *Monitor) targets(st *state, exitIP string) (model.Gateway, []target, string) {
 	m.mu.Lock()
 	gw, tunnel, off := st.gw, st.tunnel, st.off
 	var have []string
@@ -650,6 +716,9 @@ func (m *Monitor) targets(st *state) (model.Gateway, []target, string) {
 	}
 	m.mu.Unlock()
 	if tunnel {
+		if gw.ExitNode != "" {
+			return gw, []target{{family: FamilyIPv4, hop: exitIP, addr: cmp.Or(gw.Monitor, exitIP)}}, exitIP
+		}
 		return gw, []target{{family: familyOf(gw.Monitor), addr: gw.Monitor}}, ""
 	}
 	v4, v6 := m.Router.Resolve(Status{
@@ -702,8 +771,8 @@ func (m *Monitor) missing(st *state, family string) error {
 	return errNoAddress
 }
 
-func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
-	gw, targets, hop := m.targets(st)
+func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration, exitIP string) {
+	gw, targets, hop := m.targets(st, exitIP)
 	results := make([]result, 0, len(targets))
 	for _, t := range targets {
 		var rtt time.Duration
@@ -1029,6 +1098,7 @@ func (m *Monitor) status(st *state, _ bool) Status {
 		Name:          st.gw.Name,
 		Interface:     st.gw.Interface,
 		Address:       st.address,
+		ExitNode:      st.gw.ExitNode,
 		Monitor:       st.gw.Monitor,
 		Priority:      st.gw.Priority,
 		Metric:        st.gw.GatewayMetric(),

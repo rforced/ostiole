@@ -1160,3 +1160,37 @@ func TestPlainTimeServerLookups(t *testing.T) {
 		t.Errorf("forward mode should not add NTP server= lines:\n%s", files[confName])
 	}
 }
+
+// Tailscale rendering clears --exit-node and --exit-node-allow-lan-access
+// when no exit-node gateway is enabled, and omits both flags when one is
+// enabled so apply does not clear what the gateway monitor sets.
+func TestTailscaleRenderExitNodePrefs(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/tailscale.json")
+	files, err := (&Tailscale{Dir: "/etc/ostiole/tailscale"}).Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefs := files[tailscalePrefsName]
+	for _, want := range []string{"--exit-node=\n", "--exit-node-allow-lan-access=false\n"} {
+		if !strings.Contains(prefs, want) {
+			t.Errorf("without exit node, prefs missing %q:\n%s", want, prefs)
+		}
+	}
+
+	in, _ := cfg.TailscaleInterface()
+	in.Tailscale.AdvertiseExitNode = false
+	cfg.Gateways = append(cfg.Gateways, model.Gateway{
+		Name: "amsterdam", Enabled: true, Interface: model.TailscaleDevice, ExitNode: "ams-1",
+	})
+	files, err = (&Tailscale{Dir: "/etc/ostiole/tailscale"}).Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefs = files[tailscalePrefsName]
+	for _, unwanted := range []string{"--exit-node=", "--exit-node-allow-lan-access="} {
+		if strings.Contains(prefs, unwanted) {
+			t.Errorf("with exit node, prefs should omit %q:\n%s", unwanted, prefs)
+		}
+	}
+}

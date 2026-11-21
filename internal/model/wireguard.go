@@ -126,14 +126,17 @@ func (p WireGuardPeer) defaultRoutes() (v4, v6 bool) {
 }
 
 // TunnelGateway reports whether g sends what rules route through it into
-// a WireGuard tunnel rather than to a next hop: its interface is a tunnel
-// and it names no address. Such a gateway never carries the default route.
+// a tunnel (WireGuard, OpenVPN, or a Tailscale exit node) rather than to a
+// next hop. Such a gateway never carries the default route.
 func (c *Config) TunnelGateway(g Gateway) bool {
 	if g.Address != "" {
 		return false
 	}
 	in, ok := c.Interface(g.Interface)
-	return ok && in.Tunnel()
+	if !ok {
+		return false
+	}
+	return in.Tunnel() || (in.Tailscale != nil && g.ExitNode != "")
 }
 
 // TunnelFamilies reports the families a tunnel gateway carries: those its
@@ -141,7 +144,13 @@ func (c *Config) TunnelGateway(g Gateway) bool {
 // of. Traffic of the other family is refused, never sent out elsewhere.
 func (c *Config) TunnelFamilies(g Gateway) (v4, v6 bool) {
 	in, ok := c.Interface(g.Interface)
-	if !ok || !in.Tunnel() {
+	if !ok {
+		return false, false
+	}
+	if in.Tailscale != nil && g.ExitNode != "" {
+		return true, true
+	}
+	if !in.Tunnel() {
 		return false, false
 	}
 	if in.OpenVPN != nil {

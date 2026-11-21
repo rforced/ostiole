@@ -129,7 +129,7 @@ func (c *Config) Validate() error {
 			if tailscales++; tailscales > 1 {
 				v.add(path+".tailscale", "this router can join one tailnet")
 			}
-			v.tailscale(path, in)
+			v.tailscale(c, path, in)
 		}
 		if in.OpenVPN != nil {
 			v.openvpn(path, in)
@@ -432,6 +432,7 @@ func (c *Config) Validate() error {
 	}
 
 	gateways := map[string]bool{}
+	firstExitNode := ""
 	for i, g := range c.Gateways {
 		path := fmt.Sprintf("gateways[%d]", i)
 		if !nameRe.MatchString(g.Name) {
@@ -440,20 +441,37 @@ func (c *Config) Validate() error {
 			v.add(path+".name", "duplicate gateway %q", g.Name)
 		}
 		gateways[g.Name] = true
-		if !ifaces[g.Interface] {
+		in, ifaceOK := c.Interface(g.Interface)
+		if !ifaceOK {
 			v.add(path+".interface", "unknown interface %q", g.Interface)
 		}
 		var addr netip.Addr
-		if g.Address != "" {
-			a, err := ParseIP(g.Address)
-			if err != nil {
-				v.add(path+".address", "%v", err)
+		isExitNode := ifaceOK && in.Tailscale != nil
+		if isExitNode {
+			v.exitNodeGateway(path, g)
+			if g.Enabled && g.ExitNode != "" {
+				if firstExitNode != "" {
+					v.add(path+".exitNode", "Tailscale supports one exit node at a time; %q is already enabled", firstExitNode)
+				} else {
+					firstExitNode = g.Name
+				}
 			}
-			addr = a
-		} else if c.TunnelGateway(g) {
-			v.tunnelGateway(c, path, g)
-		} else if in, ok := c.Interface(g.Interface); ok && !learnsGateway(*in) {
-			v.add(path+".address", "this interface gets no gateway from the network; give one here")
+		} else {
+			if g.ExitNode != "" && ifaceOK {
+				v.add(path+".exitNode", "only a Tailscale interface can use an exit node")
+			}
+			switch {
+			case g.Address != "":
+				a, err := ParseIP(g.Address)
+				if err != nil {
+					v.add(path+".address", "%v", err)
+				}
+				addr = a
+			case c.TunnelGateway(g):
+				v.tunnelGateway(c, path, g)
+			case ifaceOK && !learnsGateway(*in):
+				v.add(path+".address", "this interface gets no gateway from the network; give one here")
+			}
 		}
 		if g.Monitor != "" {
 			m, err := ParseIP(g.Monitor)
@@ -2355,6 +2373,9 @@ func (v *validator) dnsVia(c *Config, via string) {
 			continue
 		}
 		in, _ := c.Interface(gw.Interface)
+		if in.Tailscale != nil {
+			continue
+		}
 		if in.OpenVPN != nil {
 			for _, r := range in.OpenVPN.Remotes {
 				if _, err := netip.ParseAddr(r.Host); err != nil {
@@ -2409,6 +2430,32 @@ func (v *validator) tunnelGateway(c *Config, path string, g Gateway) {
 	}
 }
 
+// exitNodeGateway checks a gateway on the Tailscale interface: it names an
+// exit node on the tailnet instead of a next hop, never carries the default
+// route, and optionally takes an IPv4 monitor address.
+func (v *validator) exitNodeGateway(path string, g Gateway) {
+	if g.Address != "" {
+		v.add(path+".address", "a Tailscale exit node has no gateway address; leave it empty")
+	}
+	if g.ExitNode == "" {
+		v.add(path+".exitNode", "name the exit node on the tailnet")
+	} else if ip, err := netip.ParseAddr(g.ExitNode); err == nil {
+		if !tailscaleCGNAT.Contains(ip) && !tailscaleULA.Contains(ip) {
+			v.add(path+".exitNode", "%q is not a tailnet address (100.64.0.0/10 or fd7a:115c:a1e0::/48)", g.ExitNode)
+		}
+	} else if s := strings.TrimSuffix(g.ExitNode, "."); s == "" || len(s) > 253 || !domainRe.MatchString(s) {
+		v.add(path+".exitNode", "%q must be a tailnet node name or tailnet IP", g.ExitNode)
+	}
+	if g.Monitor != "" {
+		if m, err := ParseIP(g.Monitor); err == nil && !m.Is4() {
+			v.add(path+".monitor", "an exit node gateway is probed over IPv4")
+		}
+	}
+	if g.Priority != 0 {
+		v.add(path+".priority", "an exit node gateway never carries the default route; leave it at 0")
+	}
+}
+
 // translate checks a peer set to Translate: there has to be something to
 // translate, and an address of the tunnel's own in each family it would
 // translate to, or the masquerade would take another interface's.
@@ -2441,7 +2488,7 @@ var (
 
 // tailscale checks a Tailscale interface. The daemon creates the device and
 // addresses it, so everything this router would normally decide is refused.
-func (v *validator) tailscale(path string, in Interface) {
+func (v *validator) tailscale(c *Config, path string, in Interface) {
 	t := in.Tailscale
 	if in.Name != TailscaleDevice {
 		v.add(path+".name", "a Tailscale interface must be called %s", TailscaleDevice)
@@ -2464,6 +2511,12 @@ func (v *validator) tailscale(path string, in Interface) {
 	if t.LoginServer != "" {
 		if u, err := url.Parse(t.LoginServer); err != nil || u.Scheme != "https" || u.Host == "" {
 			v.add(path+".tailscale.loginServer", "%q must be an https URL", t.LoginServer)
+		}
+	}
+	if t.AdvertiseExitNode {
+		if gw, ok := c.ExitNode(); ok {
+			v.add(path+".tailscale.advertiseExitNode",
+				"cannot advertise an exit node while gateway %q uses one", gw.Name)
 		}
 	}
 	for i, r := range t.AdvertiseRoutes {

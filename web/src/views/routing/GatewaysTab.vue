@@ -44,13 +44,16 @@ const historyOf = ref<Gateway | null>(null)
 
 /** Configured gateways merged with what the monitor sees. */
 const gatewayRows = computed(() =>
-  config.gateways.map((g) => ({
-    ...g,
-    live: props.live.find((l) => l.name === g.name) ?? null,
-    // No address on a tunnel: rules send traffic into it, and it never
-    // carries the default route.
-    tunnel: !g.address && isTunnel(config.interfaces.find((i) => i.name === g.interface)),
-  })),
+  config.gateways.map((g) => {
+    const iface = config.interfaces.find((i) => i.name === g.interface)
+    return {
+      ...g,
+      live: props.live.find((l) => l.name === g.name) ?? null,
+      // No address on a tunnel or Tailscale exit node: rules send traffic
+      // into it, and it never carries the default route.
+      tunnel: !g.address && (isTunnel(iface) || Boolean(iface?.tailscale && g.exitNode)),
+    }
+  }),
 )
 
 /** Groups merged with where the kernel currently sends their traffic. */
@@ -206,7 +209,8 @@ function tierSummary(group: GatewayGroup) {
             </td>
             <td class="font-mono text-code" data-label="Interface">{{ g.interface }}</td>
             <td class="font-mono text-code" data-label="Address">
-              <span v-if="g.tunnel" class="font-sans">through the tunnel</span>
+              <template v-if="g.exitNode">{{ g.exitNode }}</template>
+              <span v-else-if="g.tunnel" class="font-sans">through the tunnel</span>
               <template v-else>{{ g.live?.address || g.address || 'from DHCP' }}</template>
               <div v-if="detectedFor(g)" class="text-xs text-ink-muted">
                 kernel: {{ detectedFor(g)?.address }} · metric {{ detectedFor(g)?.metric }} ·
@@ -215,7 +219,7 @@ function tierSummary(group: GatewayGroup) {
               </div>
             </td>
             <td class="font-mono text-code" data-label="Monitor">
-              {{ g.monitor || 'the next hop' }}
+              {{ g.monitor || (g.exitNode ? 'the exit node' : 'the next hop') }}
             </td>
             <td class="num font-mono text-code" data-label="Priority">
               {{ g.tunnel ? '—' : (g.priority ?? 0) }}

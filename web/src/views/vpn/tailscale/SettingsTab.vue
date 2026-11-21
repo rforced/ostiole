@@ -17,6 +17,9 @@ const auth = useAuthStore()
 const config = useConfigStore()
 const node = computed(() => config.tailscale)
 const ts = computed(() => node.value?.tailscale ?? null)
+const exitNodeGateway = computed(() =>
+  config.gateways.find((g) => g.enabled && g.interface === DEVICE && g.exitNode),
+)
 
 const internalZones = computed(() => config.zones.filter((z) => !z.external))
 /** The zones with networks to offer; one without an address has nothing to add. */
@@ -194,8 +197,11 @@ function addZone(zone: string) {
           <ToggleRow
             v-model="advertiseExitNode"
             label="Advertise as exit node"
-            hint="Tailnet devices reach the internet through this router. Needs a rule from its
-              zone to an external zone."
+            :hint="
+              exitNodeGateway
+                ? `Cannot advertise an exit node while gateway ${exitNodeGateway.name} uses one.`
+                : 'Tailnet devices reach the internet through this router. Needs a rule from its zone to an external zone.'
+            "
           />
           <ToggleRow
             v-model="acceptRoutes"

@@ -64,7 +64,10 @@ const stripOf = (g: GatewayStatus) => props.strips?.find((s) => s.name === g.nam
                 <span v-if="g.active" class="badge badge-ok">active</span>
               </div>
               <div class="font-mono text-code text-ink-muted">
-                {{ g.interface }}<span v-if="g.tunnel" class="font-sans"> · through the tunnel</span
+                {{ g.interface
+                }}<template v-if="g.exitNode"
+                  ><span class="font-sans"> · exit node </span>{{ g.exitNode }}</template
+                ><span v-else-if="g.tunnel" class="font-sans"> · through the tunnel</span
                 ><span v-else-if="g.address"> · {{ g.address }}</span>
               </div>
             </td>

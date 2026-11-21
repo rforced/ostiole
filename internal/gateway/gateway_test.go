@@ -873,3 +873,122 @@ func TestAnUnreachableNextHopWithoutAnAddressIsNoWarning(t *testing.T) {
 		})
 	}
 }
+
+// fakeExitNodes stands in for tailscaled in monitor tests.
+type fakeExitNodes struct {
+	mu      sync.Mutex
+	ipv4    string
+	running bool
+	active  bool
+	setErr  error
+	sets    []string
+}
+
+func (f *fakeExitNodes) Resolve(_ context.Context, _ string) (string, bool, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.ipv4, f.running, f.active
+}
+
+func (f *fakeExitNodes) Set(_ context.Context, node string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sets = append(f.sets, node)
+	if f.setErr != nil {
+		return f.setErr
+	}
+	f.active = true
+	return nil
+}
+
+// An exit-node gateway stays offline while tailscaled is down or cannot
+// resolve the peer, selects the exit node once tailscaled is Running
+// without repeating Set once active, probes its tailnet IPv4 (or explicit
+// monitor), logs Set errors once per change, and never touches the main
+// table's default route.
+func TestExitNodeGatewayResolvesSetsAndProbes(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		Interfaces: []model.Interface{{
+			Name: model.TailscaleDevice, Enabled: true, Tailscale: &model.Tailscale{Port: 41641},
+		}},
+		Gateways: []model.Gateway{
+			{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"},
+			{Name: "amsterdam", Enabled: true, Interface: model.TailscaleDevice, ExitNode: "ams-1"},
+		},
+	}
+	var logBuf bytes.Buffer
+	prober := &fakeProber{fail: map[string]bool{}}
+	router := &fakeRouter{}
+	pol := &fakePolicy{}
+	exits := &fakeExitNodes{}
+	m := &Monitor{
+		Prober: prober, Router: router, Policy: pol, ExitNodes: exits,
+		Log:    slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		Source: func() *model.Config { return cfg },
+	}
+
+	// While tailscaled is not Running: Set is not called, probe has no
+	// address, gateway stays down, and WAN stays active.
+	tick(m, FailAfter)
+	ams := statusOf(t, m, "amsterdam")
+	if ams.Online || !ams.Tunnel || ams.ExitNode != "ams-1" || ams.Address != "" {
+		t.Errorf("before tailscaled starts = %+v, want offline tunnel with exitNode ams-1", ams)
+	}
+	if len(exits.sets) != 0 {
+		t.Errorf("Set called before tailscaled ran: %v", exits.sets)
+	}
+
+	// Tailscaled is Running, but Set fails: error is logged once across
+	// repeated ticks until it changes.
+	exits.mu.Lock()
+	exits.running = true
+	exits.setErr = errors.New("unknown exit node")
+	exits.mu.Unlock()
+	logBuf.Reset()
+	tick(m, 3)
+	if got := strings.Count(logBuf.String(), "could not select tailscale exit node"); got != 1 {
+		t.Errorf("Set failure logged %d times, want 1:\n%s", got, logBuf.String())
+	}
+
+	// Set succeeds and peer resolves to 100.64.0.9: Set runs once, is not
+	// repeated once active, and after RiseAfter probes the gateway is up.
+	exits.mu.Lock()
+	exits.setErr = nil
+	exits.ipv4 = "100.64.0.9"
+	exits.sets = nil
+	exits.mu.Unlock()
+	tick(m, RiseAfter+1)
+	if len(exits.sets) != 1 || exits.sets[0] != "ams-1" {
+		t.Errorf("Set calls = %v, want [ams-1] once", exits.sets)
+	}
+	ams = statusOf(t, m, "amsterdam")
+	if !ams.Online || ams.Address != "100.64.0.9" || ams.Monitor != "100.64.0.9" || ams.Active {
+		t.Errorf("online exit-node gateway = %+v", ams)
+	}
+	target := targetOf(t, pol.last(t), "amsterdam")
+	if !target.Block || len(target.Tiers) != 1 || !target.Tiers[0][0].Device ||
+		!target.Tiers[0][0].V4 || !target.Tiers[0][0].V6 || !target.Tiers[0][0].Online {
+		t.Errorf("policy target = %+v, want dual-stack online blocking device hop", target)
+	}
+
+	// Explicit monitor probes that address instead of the tailnet IPv4.
+	cfg.Gateways[1].Monitor = "1.1.1.1"
+	prober.setFail("1.1.1.1", true)
+	tick(m, FailAfter)
+	if statusOf(t, m, "amsterdam").Online {
+		t.Error("exit-node gateway stayed online when explicit monitor failed")
+	}
+	prober.setFail("1.1.1.1", false)
+	tick(m, RiseAfter)
+	ams = statusOf(t, m, "amsterdam")
+	if !ams.Online || ams.Monitor != "1.1.1.1" || ams.Address != "100.64.0.9" {
+		t.Errorf("with explicit monitor = %+v", ams)
+	}
+
+	demoted, restored := router.calls()
+	if len(demoted) != 0 || slices.Contains(restored, "amsterdam") {
+		t.Errorf("demoted %v, restored %v; exit-node gateway must never move default routes", demoted, restored)
+	}
+}

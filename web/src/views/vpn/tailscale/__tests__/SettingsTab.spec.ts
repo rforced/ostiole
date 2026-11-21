@@ -38,4 +38,29 @@ describe('Tailscale SettingsTab', () => {
     await input.setValue(false)
     expect(config.dirty).toBe(false)
   })
+
+  it('hints when an enabled exit-node gateway prevents advertising as an exit node', () => {
+    const config = useConfigStore()
+    const cfg = {
+      ...emptyConfig(),
+      version: 16,
+      zones: [{ name: 'lan' }, { name: 'tailnet' }],
+      interfaces: [
+        iface({
+          name: 'tailscale0',
+          zone: 'tailnet',
+          enabled: true,
+          ipv4: { mode: 'none' },
+          ipv6: { mode: 'none' },
+          tailscale: { port: 41641 },
+        }),
+      ],
+      gateways: [{ name: 'amsterdam', enabled: true, interface: 'tailscale0', exitNode: 'ams-1' }],
+    }
+    config.replaceDraft(cfg)
+    const wrapper = mount(SettingsTab, { global: { stubs: { RouterLink: true } } })
+    expect(wrapper.text()).toContain(
+      'Cannot advertise an exit node while gateway amsterdam uses one.',
+    )
+  })
 })

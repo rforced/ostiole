@@ -374,6 +374,7 @@ export interface Gateway {
   enabled: boolean
   interface: string
   address?: string
+  exitNode?: string
   priority?: number
   monitor?: string
   slowAboveMs?: number
@@ -1150,6 +1151,7 @@ export interface GatewayStatus {
   name: string
   interface: string
   address?: string
+  exitNode?: string
   monitor?: string
   priority: number
   metric: number
@@ -3056,6 +3058,7 @@ export interface TailscaleStatus {
   magicDnsSuffix?: string
   keyExpiry?: string
   version?: string
+  exitNode?: string
   health: string[] | null
   peers: TailscalePeer[] | null
 }

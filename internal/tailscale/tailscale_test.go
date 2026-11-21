@@ -19,7 +19,7 @@ func TestPrefArgsWritesEveryFlag(t *testing.T) {
 		Hostname:          "gateway",
 		AdvertiseRoutes:   []string{"192.168.1.0/24", "10.0.0.0/8"},
 		AdvertiseExitNode: true,
-	})
+	}, "")
 	want := []string{
 		"--netfilter-mode=off",
 		"--accept-dns=false",
@@ -28,6 +28,7 @@ func TestPrefArgsWritesEveryFlag(t *testing.T) {
 		"--advertise-exit-node=true",
 		"--accept-routes=false",
 		"--exit-node=",
+		"--exit-node-allow-lan-access=false",
 		"--ssh=false",
 	}
 	got := strings.Join(args, " ")
@@ -38,10 +39,25 @@ func TestPrefArgsWritesEveryFlag(t *testing.T) {
 	}
 
 	// An empty model still clears everything, so a revert is a replay.
-	bare := strings.Join(PrefArgs(model.Tailscale{}), " ")
-	for _, w := range []string{"--hostname=", "--advertise-routes=", "--advertise-exit-node=false"} {
+	bare := strings.Join(PrefArgs(model.Tailscale{}, ""), " ")
+	for _, w := range []string{"--hostname=", "--advertise-routes=", "--advertise-exit-node=false", "--exit-node=", "--exit-node-allow-lan-access=false"} {
 		if !strings.Contains(bare, w) {
 			t.Errorf("missing %s in %s", w, bare)
+		}
+	}
+
+	// When an exit-node gateway is configured, apply leaves --exit-node and
+	// --exit-node-allow-lan-access alone for the gateway monitor to set together.
+	withExit := strings.Join(PrefArgs(model.Tailscale{Hostname: "gateway"}, "ams-1"), " ")
+	for _, forbidden := range []string{"--exit-node=", "--exit-node-allow-lan-access="} {
+		if strings.Contains(withExit, forbidden) {
+			t.Errorf("with an exit node configured, prefs must omit %s: %s", forbidden, withExit)
+		}
+	}
+	upWithExit := strings.Join(UpArgs(model.Tailscale{Hostname: "gateway"}, "ams-1"), " ")
+	for _, forbidden := range []string{"--exit-node=", "--exit-node-allow-lan-access="} {
+		if strings.Contains(upWithExit, forbidden) {
+			t.Errorf("with an exit node configured, up must omit %s: %s", forbidden, upWithExit)
 		}
 	}
 }
@@ -52,20 +68,20 @@ func TestPrefArgsWritesEveryFlag(t *testing.T) {
 func TestUpArgsLeaveOutTheFlagsUpDoesNotTake(t *testing.T) {
 	t.Parallel()
 	setOnly := []string{"--auto-update=", "--update-check=", "--webclient="}
-	up := strings.Join(UpArgs(model.Tailscale{}), " ")
+	up := strings.Join(UpArgs(model.Tailscale{}, ""), " ")
 	for _, flag := range setOnly {
 		if strings.Contains(up, flag) {
 			t.Errorf("up was given %s, which it does not define: %s", flag, up)
 		}
 	}
-	all := strings.Join(PrefArgs(model.Tailscale{}), " ")
+	all := strings.Join(PrefArgs(model.Tailscale{}, ""), " ")
 	for _, flag := range setOnly {
 		if !strings.Contains(all, flag) {
 			t.Errorf("set was not given %s: %s", flag, all)
 		}
 	}
 	// Everything else is in both, so a login and an apply agree.
-	for _, arg := range UpArgs(model.Tailscale{}) {
+	for _, arg := range UpArgs(model.Tailscale{}, "") {
 		if !strings.Contains(all, arg) {
 			t.Errorf("%s is on up but not on set", arg)
 		}
@@ -211,5 +227,58 @@ func TestSetAndLogoutCarryTheCommandsOutput(t *testing.T) {
 	}
 	if got := strings.Join(run.calls[0], " "); got != "tailscale set --ssh=false" {
 		t.Errorf("argv = %q", got)
+	}
+}
+
+func TestStatusExitNodeHelpers(t *testing.T) {
+	t.Parallel()
+	const raw = `{
+		"BackendState": "Running",
+		"ExitNodeStatus": {"ID": "n1", "Online": true, "TailscaleIPs": ["100.64.0.9/32", "fd7a:115c:a1e0::9/128"]},
+		"Peer": {
+			"n1": {
+				"HostName": "ams-vps",
+				"DNSName": "ams-1.tail1234.ts.net.",
+				"TailscaleIPs": ["100.64.0.9", "fd7a:115c:a1e0::9"],
+				"Online": true,
+				"ExitNodeOption": true,
+				"ExitNode": true
+			},
+			"n2": {
+				"HostName": "laptop",
+				"DNSName": "laptop.tail1234.ts.net.",
+				"TailscaleIPs": ["100.64.0.10"],
+				"Online": true,
+				"ExitNodeOption": false,
+				"ExitNode": false
+			}
+		}
+	}`
+	st, err := ParseStatus([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name, ok := st.ActiveExitNode(); !ok || name != "ams-1" {
+		t.Errorf("ActiveExitNode() = %q, %v; want ams-1, true", name, ok)
+	}
+	for _, match := range []string{"ams-1", "AMS-1", "ams-vps", "ams-1.tail1234.ts.net", "ams-1.tail1234.ts.net.", "100.64.0.9", "fd7a:115c:a1e0::9"} {
+		if !st.MatchesExitNode(match) {
+			t.Errorf("MatchesExitNode(%q) = false, want true", match)
+		}
+		if ip, ok := st.ExitNodeIPv4(match); !ok || ip != "100.64.0.9" {
+			t.Errorf("ExitNodeIPv4(%q) = %q, %v; want 100.64.0.9, true", match, ip, ok)
+		}
+	}
+	// A peer not offering an exit node is never resolved as one.
+	if ip, ok := st.ExitNodeIPv4("laptop"); ok {
+		t.Errorf("ExitNodeIPv4(non-exit peer) = %q, true; want false", ip)
+	}
+	if st.MatchesExitNode("tok-1") {
+		t.Error("MatchesExitNode(tok-1) = true, want false")
+	}
+	// When tailscaled is not Running, ExitNodeIPv4 returns false.
+	st.BackendState = StateStopped
+	if ip, ok := st.ExitNodeIPv4("ams-1"); ok {
+		t.Errorf("ExitNodeIPv4 while Stopped = %q, true; want false", ip)
 	}
 }

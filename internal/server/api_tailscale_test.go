@@ -370,3 +370,14 @@ func TestServicesStatusReportsTailscale(t *testing.T) {
 		t.Errorf("services status = %+v", got)
 	}
 }
+
+func TestTailscaleStatusReportsActiveExitNode(t *testing.T) {
+	t.Parallel()
+	const raw = `{"BackendState":"Running","Peer":{
+"a":{"HostName":"ams-vps","DNSName":"ams-1.tail1.ts.net.","TailscaleIPs":["100.64.0.9"],"Online":true,"ExitNodeOption":true,"ExitNode":true}}}`
+	srv, _ := newTailscaleServer(t, tsUnit{installed: true, active: true}, &tsCLI{status: raw}, nil)
+	got := getTailscaleStatus(t, srv)
+	if got.ExitNode != "ams-1" {
+		t.Errorf("exitNode = %q, want ams-1", got.ExitNode)
+	}
+}

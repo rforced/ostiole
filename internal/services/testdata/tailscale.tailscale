@@ -14,6 +14,7 @@ FLAGS=--no-logs-no-support
 --advertise-connector=false
 --report-posture=false
 --exit-node=
+--exit-node-allow-lan-access=false
 --hostname=gateway
 --advertise-routes=192.168.1.0/24
 --advertise-exit-node=true

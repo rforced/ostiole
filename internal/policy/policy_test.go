@@ -211,6 +211,21 @@ func TestNewHopMakesATunnelGatewayADevice(t *testing.T) {
 	if w := NewHop(cfg, cfg.Gateways[1], "203.0.113.1", true); w.Device || w.Address != "203.0.113.1" {
 		t.Errorf("WAN hop = %+v, want its next hop", w)
 	}
+
+	// A Tailscale exit-node gateway is a device hop in both families.
+	tsCfg := &model.Config{
+		Version: model.SchemaVersion,
+		Interfaces: []model.Interface{{
+			Name: model.TailscaleDevice, Enabled: true, Tailscale: &model.Tailscale{Port: 41641},
+		}},
+		Gateways: []model.Gateway{{
+			Name: "amsterdam", Enabled: true, Interface: model.TailscaleDevice, ExitNode: "ams-1",
+		}},
+	}
+	eh := NewHop(tsCfg, tsCfg.Gateways[0], "100.64.0.9", true)
+	if !eh.Device || eh.Address != "" || eh.Interface != model.TailscaleDevice || !eh.V4 || !eh.V6 {
+		t.Errorf("exit-node hop = %+v, want dual-stack device hop on %s", eh, model.TailscaleDevice)
+	}
 }
 
 // A tunnel gateway on its own blocks while it is down, where an ordinary

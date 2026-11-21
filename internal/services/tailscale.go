@@ -97,8 +97,12 @@ func (t *Tailscale) Render(cfg *model.Config) (network.Files, error) {
 		return files, nil
 	}
 	in, _ := cfg.TailscaleInterface()
+	exitNode := ""
+	if gw, ok := cfg.ExitNode(); ok {
+		exitNode = gw.ExitNode
+	}
 	files[tailscaleEnvName] = tailscale.DaemonEnv(*in.Tailscale)
-	files[tailscalePrefsName] = strings.Join(tailscale.PrefArgs(*in.Tailscale), "\n") + "\n"
+	files[tailscalePrefsName] = strings.Join(tailscale.PrefArgs(*in.Tailscale, exitNode), "\n") + "\n"
 	return files, nil
 }
 

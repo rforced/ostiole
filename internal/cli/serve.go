@@ -434,6 +434,7 @@ at your own.`,
 				// window and undone when the window expires.
 				mon.Source = eng.Effective
 				mon.Policy = policy.NewInstaller(slog.Default())
+				mon.ExitNodes = gateway.NewTailscaleExitNodes(deps.TSClient)
 				mon.Removed = policy.WatchRemoved
 				// The same tick puts back a queue whose link has only just
 				// come up, which is the boot and redial case.

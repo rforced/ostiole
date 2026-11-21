@@ -89,6 +89,13 @@ const logout = useAsync(async () => {
               <dt>Tailnet</dt>
               <dd>{{ status.tailnet }}</dd>
             </template>
+            <template v-if="status.exitNode">
+              <dt>Exit node</dt>
+              <dd>
+                <span class="font-mono">{{ status.exitNode }}</span> ·
+                <RouterLink to="/routing" class="link">Gateways</RouterLink>
+              </dd>
+            </template>
             <template v-if="expiring">
               <dt>Key</dt>
               <dd>expires {{ expiring }}</dd>

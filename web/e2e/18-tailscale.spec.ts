@@ -47,6 +47,42 @@ test('peers say nothing while the daemon is not running', async ({ page }) => {
   await expect(page.getByRole('cell', { name: 'Tailscale is not running.' })).toBeVisible()
 })
 
+test('route through a Tailscale exit node gateway and apply', async ({ page }) => {
+  await login(page)
+  // Turn off advertiseExitNode first: Tailscale cannot advertise and use an exit node at once.
+  await page.goto('/vpn/tailscale')
+  await page.getByLabel('Advertise as exit node').uncheck()
+
+  // In-app navigation keeps the draft; a page load would drop it.
+  await sidebar(page, 'Routing')
+  await page.getByRole('button', { name: 'Add gateway' }).click()
+  let dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name').fill('amsterdam')
+  await dialog.getByLabel('Interface').selectOption('tailscale0')
+  await dialog.getByLabel('Exit node').fill('ams-1')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  const row = page.getByRole('row').filter({ hasText: 'amsterdam' })
+  await expect(row).toContainText('ams-1')
+  await expect(row).toContainText('the exit node')
+
+  await sidebar(page, 'Firewall', 'Rules')
+  await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
+  await page.getByRole('button', { name: 'Add rule' }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Description').fill('Route via Tailscale exit node')
+  await dialog.getByLabel('Route through').selectOption('amsterdam')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+
+  await applyAndConfirm(page)
+
+  await sidebar(page, 'Diagnostics', 'Ruleset')
+  await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
+  const ruleset = page.getByLabel('confirmed ruleset')
+  await expect(ruleset).toContainText('tunnel-nat:tailscale0')
+  await expect(ruleset).toContainText('tunnel-mss')
+  await expect(ruleset).toContainText('kill-switch:amsterdam')
+})
+
 test('removing the node takes its interface with it', async ({ page }) => {
   await login(page)
   await page.goto('/vpn/tailscale')

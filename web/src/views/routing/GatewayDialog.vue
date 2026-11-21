@@ -5,8 +5,9 @@ import type { PropType } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { api } from '@/lib/api'
 import { interfaceLabel, isTunnel } from '@/lib/interfaces'
-import type { Gateway } from '@/lib/types.gen'
+import type { Gateway, TailscalePeer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 interface GatewayForm {
@@ -15,6 +16,7 @@ interface GatewayForm {
   enabled: boolean
   interface: string
   address: string
+  exitNode: string
   monitor: string
   priority: number
   slow: number | ''
@@ -31,6 +33,7 @@ const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 const form = ref<GatewayForm>(blank())
+const exitNodePeers = ref<TailscalePeer[]>([])
 
 function blank(): GatewayForm {
   return {
@@ -39,6 +42,7 @@ function blank(): GatewayForm {
     enabled: true,
     interface: '',
     address: '',
+    exitNode: '',
     monitor: '',
     priority: 0,
     slow: '',
@@ -76,11 +80,51 @@ watch(
   { immediate: true },
 )
 
+const selectedIface = computed(() => config.interfaces.find((i) => i.name === form.value.interface))
 /** A WireGuard or OpenVPN tunnel: with no address, rules send traffic into it. */
-const onTunnel = computed(() =>
-  isTunnel(config.interfaces.find((i) => i.name === form.value.interface)),
+const onTunnel = computed(() => isTunnel(selectedIface.value))
+/** The Tailscale interface: gateways on it route through an exit node. */
+const onTailscale = computed(() => Boolean(selectedIface.value?.tailscale))
+const tunnelGateway = computed(
+  () => (onTunnel.value && !form.value.address.trim()) || onTailscale.value,
 )
-const tunnelGateway = computed(() => onTunnel.value && !form.value.address.trim())
+
+/** What gets saved for a Tailscale peer: its MagicDNS label, falling back to hostName. */
+function peerExitValue(p: TailscalePeer): string {
+  const label = (p.dnsName ?? '').replace(/\.$/, '').split('.')[0]
+  return label || p.hostName
+}
+
+const exitNodeOptions = computed(() =>
+  exitNodePeers.value.map((p) => {
+    const value = peerExitValue(p)
+    const label = p.online ? value : `${value} (offline)`
+    return { value, label }
+  }),
+)
+
+const hasSavedExitOption = computed(
+  () =>
+    Boolean(form.value.exitNode) &&
+    exitNodeOptions.value.some((o) => o.value === form.value.exitNode),
+)
+
+watch(
+  () => [open.value, onTailscale.value] as const,
+  async ([isOpen, isTS]) => {
+    if (!isOpen || !isTS) {
+      exitNodePeers.value = []
+      return
+    }
+    try {
+      const st = await api.tailscale.status()
+      exitNodePeers.value = st.running ? (st.peers ?? []).filter((p) => p.exitNode) : []
+    } catch {
+      exitNodePeers.value = []
+    }
+  },
+  { immediate: true },
+)
 
 /**
  * The resolver's first upstream the gateway can probe, offered as its
@@ -106,10 +150,14 @@ const upstream = computed(() => {
 function save() {
   const f = form.value
   const out: Gateway = { name: f.name.trim(), enabled: f.enabled, interface: f.interface }
-  // A tunnel gateway never carries the default route.
+  // A tunnel or exit-node gateway never carries the default route.
   if (!tunnelGateway.value && Number(f.priority) > 0) out.priority = Number(f.priority)
   if (f.description) out.description = f.description
-  if (f.address) out.address = f.address.trim()
+  if (onTailscale.value) {
+    if (f.exitNode.trim()) out.exitNode = f.exitNode.trim()
+  } else if (f.address) {
+    out.address = f.address.trim()
+  }
   if (f.monitor) out.monitor = f.monitor.trim()
   // Empty keeps the default; 0 turns the warning off.
   if (f.slow !== '' && f.slow != null) out.slowAboveMs = Number(f.slow)
@@ -127,9 +175,11 @@ function save() {
     v-model:open="open"
     :title="gateway ? `Gateway ${gateway.name}` : 'Add gateway'"
     :description="
-      tunnelGateway
-        ? 'With the tunnel down, its traffic is dropped.'
-        : 'The lowest priority that answers its monitor carries the default route. The others wait.'
+      onTailscale
+        ? 'With the exit node down, its traffic is dropped.'
+        : tunnelGateway
+          ? 'With the tunnel down, its traffic is dropped.'
+          : 'The lowest priority that answers its monitor carries the default route. The others wait.'
     "
   >
     <form id="gateway-form" class="space-y-4" @submit.prevent="save">
@@ -155,6 +205,38 @@ function save() {
           </select>
         </FormField>
         <FormField
+          v-if="onTailscale"
+          id="gw-exit-node"
+          label="Exit node"
+          hint="One per router. The exit node is a tailnet peer and can reach whatever its zone's rules allow, including router DNS."
+        >
+          <select
+            v-if="exitNodeOptions.length"
+            id="gw-exit-node"
+            v-model="form.exitNode"
+            class="input font-mono"
+            required
+          >
+            <option value="" disabled>Choose</option>
+            <option v-if="form.exitNode && !hasSavedExitOption" :value="form.exitNode">
+              {{ form.exitNode }}
+            </option>
+            <option v-for="o in exitNodeOptions" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </option>
+          </select>
+          <input
+            v-else
+            id="gw-exit-node"
+            v-model="form.exitNode"
+            class="input font-mono"
+            required
+            spellcheck="false"
+            placeholder="ams-1 or 100.64.x.y"
+          />
+        </FormField>
+        <FormField
+          v-else
           id="gw-addr"
           label="Gateway address"
           :hint="
@@ -169,9 +251,11 @@ function save() {
           id="gw-monitor"
           label="Monitor address"
           :hint="
-            tunnelGateway
-              ? 'An IPv4 address beyond the tunnel. The provider\'s DNS server keeps the probe inside its network.'
-              : 'Empty probes the next hop, which says the line is up. An address past your provider measures the path beyond it too.'
+            onTailscale
+              ? 'Empty pings the exit node. An internet address proves the whole path.'
+              : tunnelGateway
+                ? 'An IPv4 address beyond the tunnel. The provider\'s DNS server keeps the probe inside its network.'
+                : 'Empty probes the next hop, which says the line is up. An address past your provider measures the path beyond it too.'
           "
         >
           <input
@@ -179,8 +263,8 @@ function save() {
             v-model="form.monitor"
             class="input font-mono"
             spellcheck="false"
-            :placeholder="tunnelGateway ? '' : 'the next hop'"
-            :required="tunnelGateway"
+            :placeholder="onTailscale ? 'the exit node' : tunnelGateway ? '' : 'the next hop'"
+            :required="tunnelGateway && !onTailscale"
           />
           <button
             v-if="upstream && form.monitor.trim() !== upstream"

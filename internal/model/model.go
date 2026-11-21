@@ -1596,6 +1596,10 @@ type Gateway struct {
 	// Address is the next hop. Empty means whatever DHCP or a router
 	// advertisement gives the interface, which is the usual WAN case.
 	Address string `json:"address,omitempty"`
+	// ExitNode names a Tailscale exit node (DNS label, dotted hostname, or
+	// tailnet IP) when Interface is the Tailscale interface. Empty for all
+	// other gateways.
+	ExitNode string `json:"exitNode,omitempty"`
 	// Priority orders failover, lowest first. Equal priorities are left
 	// to the kernel, which spreads traffic over them.
 	Priority int `json:"priority,omitempty"`
@@ -1908,6 +1912,20 @@ func (c *Config) Gateway(name string) (*Gateway, bool) {
 		}
 	}
 	return nil, false
+}
+
+// ExitNode returns the enabled gateway that routes through a Tailscale
+// exit node, if one is configured.
+func (c *Config) ExitNode() (Gateway, bool) {
+	for _, g := range c.Gateways {
+		if !g.Enabled || g.ExitNode == "" {
+			continue
+		}
+		if in, ok := c.Interface(g.Interface); ok && in.Tailscale != nil {
+			return g, true
+		}
+	}
+	return Gateway{}, false
 }
 
 // CanFailover reports whether there is more than one enabled gateway, which

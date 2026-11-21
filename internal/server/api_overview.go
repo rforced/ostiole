@@ -925,7 +925,11 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		if g.Unknown || g.Online || g.NeverAnswered {
 			continue
 		}
-		detail := fmt.Sprintf("%s on %s stopped answering", g.Monitor, g.Interface)
+		target := g.Monitor
+		if target == "" {
+			target = g.ExitNode
+		}
+		detail := fmt.Sprintf("%s on %s stopped answering", target, g.Interface)
 		if g.LastError != "" {
 			detail += " (" + g.LastError + ")"
 		}
