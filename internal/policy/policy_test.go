@@ -295,26 +295,34 @@ func TestLinesCarryTheirPortsAndTunnels(t *testing.T) {
 	}
 }
 
-// A line's rule comes after every translation's and before every
-// gateway's, the source rules after every gateway's, and all of them sit
-// in the ranges every release has reconciled, so each removes what
-// another left behind.
+// Every rule Ostiole installs sits ahead of Tailscale's 5210-5270 block:
+// the tailnet lookup at 4100, translations, lines, gateways, source rules,
+// and the main jump at 5200. ownPriority covers all of them plus the
+// earlier 21000/22000 ranges, and never covers Tailscale's priorities.
 func TestLinePrioritiesSitBetweenTheOthers(t *testing.T) {
 	t.Parallel()
 	lastTranslation := TranslatePriorityBase + model.MaxPolicyTargets
 	firstLine, lastLine := LinePriorityBase+1, LinePriorityBase+model.MaxReplyLines
 	_, lastGateway := Target{Index: model.MaxPolicyTargets}.Priorities()
-	if firstLine <= lastTranslation || lastLine >= RulePriorityBase || SourcePriority <= lastGateway {
-		t.Errorf("lines at %d-%d, sources at %d: want them after the translations (to %d), "+
-			"before the gateways (from %d) and after them (to %d)",
-			firstLine, lastLine, SourcePriority, lastTranslation, RulePriorityBase, lastGateway)
+	if TailnetPriority >= TranslatePriorityBase || firstLine <= lastTranslation ||
+		lastLine >= RulePriorityBase || SourcePriority <= lastGateway || SourcePriority+1 >= MainPriority {
+		t.Errorf("tailnet %d, translations to %d, lines %d-%d, gateways %d-%d, sources %d-%d, main %d: out of order",
+			TailnetPriority, lastTranslation, firstLine, lastLine,
+			RulePriorityBase+2, lastGateway, SourcePriority, SourcePriority+1, MainPriority)
 	}
-	for _, p := range []int{firstLine, lastLine, SourcePriority, SourcePriority + 1} {
+	for _, p := range []int{
+		TailnetPriority, TranslatePriorityBase + 1, firstLine, lastLine,
+		RulePriorityBase + 2, lastGateway, SourcePriority, SourcePriority + 1, MainPriority,
+		oldTranslatePriorityBase + 1, oldTranslatePriorityBase + model.MaxPolicyTargets + model.MaxReplyLines,
+		oldRulePriorityBase + 2, oldRulePriorityBase + 2*(model.MaxPolicyTargets+1) + 1,
+	} {
 		if !ownPriority(p) {
 			t.Errorf("priority %d is outside the range Ostiole reconciles", p)
 		}
 	}
-	if lastLine != 21255 || SourcePriority+1 > 22511 {
-		t.Errorf("lines end at %d and sources at %d, outside the ranges older releases reconcile", lastLine, SourcePriority+1)
+	for _, p := range []int{5210, 5230, 5250, 5270, 32766} {
+		if ownPriority(p) {
+			t.Errorf("priority %d must not be touched by Ostiole", p)
+		}
 	}
 }

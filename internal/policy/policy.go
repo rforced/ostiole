@@ -13,26 +13,56 @@ import (
 	"ostiole/internal/model"
 )
 
-// RulePriorityBase is where Ostiole's ip rules start. Each target uses two
-// consecutive priorities, well below the kernel's main lookup at 32766 so
-// policy routing gets its say first.
-const RulePriorityBase = 22000
+// Tailscale puts its own ip rules at 5210, 5230, 5250 (bypass mark
+// 0x80000/0xff0000) and 5270 (lookup 52). Ostiole sits ahead of them so an
+// exit node's default route in table 52 never takes over the router:
+// TailnetPriority keeps tailnet destinations in table 52 winning for
+// everyone except tailscaled's own packets, and MainPriority jumps
+// everything else over Tailscale's rules to the kernel's main lookup at
+// 32766.
+const (
+	// TailnetPriority looks up Tailscale's table 52 without its default
+	// route for every packet not carrying Tailscale's bypass mark.
+	TailnetPriority = 4100
 
-// TranslatePriorityBase is where the rules of tunnels that show networks
-// under other prefixes start, one each. They come before every gateway's:
-// the real networks they route have this side's numbers, which the main
-// table would otherwise answer.
-const TranslatePriorityBase = 21000
+	// TranslatePriorityBase is where the rules of tunnels that show networks
+	// under other prefixes start, one each. They come before every gateway's:
+	// the real networks they route have this side's numbers, which the main
+	// table would otherwise answer.
+	TranslatePriorityBase = 4200
 
-// LinePriorityBase is where the lines' rules start, one each (ADR-0037).
-// They come before every gateway's, so an answer goes back out its line
-// even when a rule routed its connection's first packet elsewhere.
-const LinePriorityBase = TranslatePriorityBase + model.MaxPolicyTargets
+	// LinePriorityBase is where the lines' rules start, one each (ADR-0004).
+	// They come before every gateway's, so an answer goes back out its line
+	// even when a rule routed its connection's first packet elsewhere.
+	LinePriorityBase = TranslatePriorityBase + model.MaxPolicyTargets
 
-// SourcePriority holds the rules that keep WireGuard's answers on the line
-// a peer called: the suppress rules at it, the lookups one after. They come
-// after every gateway's, so a lookup a gateway's mark routes keeps it.
-const SourcePriority = RulePriorityBase + 2*(model.MaxPolicyTargets+1)
+	// RulePriorityBase is where Ostiole's gateway ip rules start. Each target
+	// uses two consecutive priorities.
+	RulePriorityBase = 4500
+
+	// SourcePriority holds the rules that keep WireGuard's answers on the line
+	// a peer called: the suppress rules at it, the lookups one after. They come
+	// after every gateway's, so a lookup a gateway's mark routes keeps it.
+	SourcePriority = RulePriorityBase + 2*(model.MaxPolicyTargets+1)
+
+	// MainPriority jumps every packet not carrying Tailscale's bypass mark
+	// straight to the kernel's main lookup at 32766, past Tailscale's 5270.
+	MainPriority = 5200
+)
+
+// Tailscale's routing constants and the kernel's main lookup priority.
+const (
+	tailscaleTable      = 52
+	tailscaleBypassMark = 0x80000
+	tailscaleBypassMask = 0xff0000
+	mainRulePriority    = 32766
+
+	// Earlier releases placed Ostiole's rules here; ownPriority still covers
+	// both ranges so an upgrade removes them on the first pass and Clear
+	// removes both old and new.
+	oldTranslatePriorityBase = 21000
+	oldRulePriorityBase      = 22000
+)
 
 // Hop is one gateway as the monitor currently sees it.
 type Hop struct {

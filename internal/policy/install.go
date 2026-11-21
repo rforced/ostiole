@@ -35,18 +35,27 @@ func NewInstaller(log *slog.Logger) *Installer {
 func (i *Installer) Sync(targets []Target) error {
 	var errs []error
 	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
-		if err := i.syncFamily(family, targets); err != nil {
+		if err := i.syncFamily(family, targets, true); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
 }
 
-// Clear removes every table and rule Ostiole owns. It is the uninstall path:
-// a daemon that stops leaves them, so routing holds across a restart.
-func (i *Installer) Clear() error { return i.Sync(nil) }
+// Clear removes every table and rule Ostiole owns. It is the uninstall and
+// update-rollback path: a daemon that stops leaves them, so routing holds
+// across a restart.
+func (i *Installer) Clear() error {
+	var errs []error
+	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
+		if err := i.syncFamily(family, nil, false); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
 
-func (i *Installer) syncFamily(family int, targets []Target) error {
+func (i *Installer) syncFamily(family int, targets []Target, bracket bool) error {
 	existing, err := netlink.Routes(family, netlink.RouteFilter{AllTables: true})
 	if err != nil {
 		return fmt.Errorf("list policy routes: %w", err)
@@ -59,6 +68,9 @@ func (i *Installer) syncFamily(family int, targets []Target) error {
 	}
 	wantRoutes := map[int][]*netlink.Route{}
 	var wantRules []netlink.Rule
+	if bracket {
+		wantRules = append(wantRules, bracketRules(family)...)
+	}
 	for _, t := range targets {
 		var routes []*netlink.Route
 		link := 0
@@ -108,14 +120,44 @@ func WatchRemoved(ctx context.Context) (<-chan struct{}, error) {
 	return netlink.WatchRouteDeletes(ctx, func(r netlink.Route) bool { return ownTable(r.Table) })
 }
 
+// bracketRules place Ostiole's policy routing ahead of Tailscale's 5210-5270
+// block: TailnetPriority keeps non-default routes in table 52 winning for
+// everything except tailscaled's own bypass-marked packets, and MainPriority
+// jumps everything else over Tailscale's rules straight to the kernel's main
+// lookup at 32766 so an exit node's default route in table 52 is never used
+// unasked.
+func bracketRules(family int) []netlink.Rule {
+	tailnet := netlink.NewRule()
+	tailnet.Family = family
+	tailnet.Priority = TailnetPriority
+	tailnet.Invert = true
+	tailnet.Mark = tailscaleBypassMark
+	tailnet.Mask = tailscaleBypassMask
+	tailnet.Table = tailscaleTable
+	tailnet.SuppressPrefixlen = 0
+
+	main := netlink.NewRule()
+	main.Family = family
+	main.Priority = MainPriority
+	main.Invert = true
+	main.Mark = tailscaleBypassMark
+	main.Mask = tailscaleBypassMask
+	main.Goto = mainRulePriority
+
+	return []netlink.Rule{tailnet, main}
+}
+
 // ownPriority reports whether an ip rule priority belongs to policy routing:
-// the translations' and the lines', then the gateways' and the source rules.
-// They are the ranges every release has owned, so a release removes what
-// another left behind.
+// the tailnet/main bracket, the translations and lines, the gateways and
+// source rules, plus the earlier 21000/22000 ranges so an upgrade removes
+// them on its first pass. Tailscale's 5210-5270 are never covered.
 func ownPriority(p int) bool {
 	const numbers = model.MaxPolicyTargets + model.MaxReplyLines + 1
-	return (p >= TranslatePriorityBase && p < TranslatePriorityBase+numbers) ||
-		(p >= RulePriorityBase && p < RulePriorityBase+2*numbers)
+	return p == TailnetPriority || p == MainPriority ||
+		(p >= TranslatePriorityBase && p < TranslatePriorityBase+numbers) ||
+		(p >= RulePriorityBase && p < RulePriorityBase+2*numbers) ||
+		(p >= oldTranslatePriorityBase && p < oldTranslatePriorityBase+numbers) ||
+		(p >= oldRulePriorityBase && p < oldRulePriorityBase+2*numbers)
 }
 
 // syncRoutes makes the policy tables among existing, every route of the
@@ -198,7 +240,12 @@ func (i *Installer) syncRules(family int, want []netlink.Rule) error {
 			errs = append(errs, fmt.Errorf("add ip rule %d: %w", rule.Priority, err))
 			continue
 		}
-		args := []any{"priority", rule.Priority, "mark", fmt.Sprintf("0x%x", rule.Mark), "table", rule.Table}
+		args := []any{"priority", rule.Priority, "mark", fmt.Sprintf("0x%x", rule.Mark)}
+		if rule.Goto > 0 {
+			args = append(args, "goto", rule.Goto)
+		} else {
+			args = append(args, "table", rule.Table)
+		}
 		if rule.Src.IsValid() {
 			args = append(args, "from", rule.Src, "sport", rule.Sport.Start)
 		}

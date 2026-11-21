@@ -381,6 +381,84 @@ func TestRulesSendAMarkToItsTable(t *testing.T) {
 	}
 }
 
+// Inverted rules and goto rules round-trip through the real kernel in both
+// families, and jump over an intervening table lookup when the mark is
+// absent while letting marked traffic fall through.
+func TestInvertedAndGotoRulesWorkInKernel(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	wan0 := netnstest.Dummy(t, "wan0", "203.0.113.2/24", "2001:db8:1::2/64")
+	tun0 := netnstest.Dummy(t, "tun0", "100.64.0.2/32", "fd7a:115c:a1e0::2/128")
+	for _, r := range []netlink.Route{
+		{LinkIndex: wan0.Index, Gw: net.ParseIP("203.0.113.1")},
+		{LinkIndex: wan0.Index, Dst: cidr("::/0"), Gw: net.ParseIP("2001:db8:1::1")},
+		{Table: 52, Dst: cidr("0.0.0.0/0"), LinkIndex: tun0.Index},
+		{Table: 52, Dst: cidr("100.64.0.0/10"), LinkIndex: tun0.Index},
+		{Table: 52, Dst: cidr("::/0"), LinkIndex: tun0.Index},
+		{Table: 52, Dst: cidr("fd7a:115c:a1e0::/48"), LinkIndex: tun0.Index},
+	} {
+		if err := netlink.AddRoute(r); err != nil {
+			t.Fatalf("route %+v: %v", r, err)
+		}
+	}
+	var added []netlink.Rule
+	for _, fam := range []int{unix.AF_INET, unix.AF_INET6} {
+		tailnet := netlink.NewRule()
+		tailnet.Family, tailnet.Priority, tailnet.Invert = fam, 4100, true
+		tailnet.Mark, tailnet.Mask, tailnet.Table, tailnet.SuppressPrefixlen = 0x80000, 0xff0000, 52, 0
+		jump := netlink.NewRule()
+		jump.Family, jump.Priority, jump.Invert = fam, 5200, true
+		jump.Mark, jump.Mask, jump.Goto = 0x80000, 0xff0000, 32766
+		foreign := netlink.NewRule()
+		foreign.Family, foreign.Priority, foreign.Table = fam, 5270, 52
+		added = append(added, tailnet, jump, foreign)
+	}
+	for _, r := range added {
+		if err := netlink.AddRule(r); err != nil {
+			t.Fatalf("add %+v: %v", r, err)
+		}
+	}
+	for _, want := range added {
+		have, err := netlink.Rules(want.Family)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(have, want) {
+			t.Errorf("rules %+v lack %+v", have, want)
+		}
+	}
+	for _, tc := range []struct {
+		dst   string
+		mark  uint32
+		table int
+	}{
+		{"1.1.1.1", 0, unix.RT_TABLE_MAIN},
+		{"100.64.0.9", 0, 52},
+		{"100.64.0.9", 0x80000, 52},
+		{"2606:4700::1111", 0, unix.RT_TABLE_MAIN},
+		{"fd7a:115c:a1e0::9", 0, 52},
+	} {
+		routes, err := netlink.RouteGet(netlink.RouteQuery{Dst: net.ParseIP(tc.dst), Mark: tc.mark})
+		if err != nil || len(routes) != 1 || routes[0].Table != tc.table {
+			t.Errorf("route to %s mark %#x = %+v (%v), want table %d", tc.dst, tc.mark, routes, err, tc.table)
+		}
+	}
+	for _, r := range added {
+		if err := netlink.DeleteRule(r); err != nil {
+			t.Fatalf("delete %+v: %v", r, err)
+		}
+	}
+	for _, fam := range []int{unix.AF_INET, unix.AF_INET6} {
+		have, _ := netlink.Rules(fam)
+		for _, r := range added {
+			if r.Family == fam && slices.Contains(have, r) {
+				t.Errorf("rule %+v survived DeleteRule", r)
+			}
+		}
+	}
+}
+
 // A rule can match a source address and a source port, as the ones that
 // keep WireGuard's answers on a line do: a lookup from that address and
 // port goes to the rule's table, one from another port or address, or to

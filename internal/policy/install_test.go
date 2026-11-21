@@ -87,11 +87,11 @@ func TestSyncInstallsAndReconciles(t *testing.T) {
 		t.Fatalf("group table = %+v, want the best tier's gateway", routes)
 	}
 
-	// Two rules per target: the main table without its default route, then
-	// the policy table.
+	// Two bracket rules (tailnet and main) plus two rules per target: the
+	// main table without its default route, then the policy table.
 	rules := policyRules(t)
-	if len(rules) != 2*len(targets) {
-		t.Fatalf("installed %d rules, want %d", len(rules), 2*len(targets))
+	if len(rules) != 2+2*len(targets) {
+		t.Fatalf("installed %d rules, want %d", len(rules), 2+2*len(targets))
 	}
 	suppress, lookup := group.Priorities()
 	if r := rules[suppress]; r.Table != unix.RT_TABLE_MAIN || r.SuppressPrefixlen != 0 || r.Mark != group.Mark {
@@ -147,8 +147,8 @@ func TestSyncInstallsAndReconciles(t *testing.T) {
 	if r := tableRoutes(t, group.Table); len(r) != 0 {
 		t.Errorf("stale routes left behind: %+v", r)
 	}
-	if rules := policyRules(t); len(rules) != 2 {
-		t.Errorf("rules after removal = %d, want only the surviving gateway's pair", len(rules))
+	if rules := policyRules(t); len(rules) != 4 {
+		t.Errorf("rules after removal = %d, want the bracket pair plus the surviving gateway's pair", len(rules))
 	}
 
 	if err := inst.Clear(); err != nil {
@@ -913,4 +913,198 @@ func TestATunnelsLineRoutesIntoTheTunnel(t *testing.T) {
 		}
 	}
 	noChurn(t, inst, []Target{line})
+}
+
+// Ostiole's bracket rules (4100 and 5200) keep Tailscale's table 52 default
+// route from taking over the router while keeping tailnet destinations and
+// tailscaled's own bypass-marked traffic working, sweep away rules left in
+// the older 21000/22000 bands on upgrade, and leave Tailscale's 5210-5270
+// rules untouched on both Sync and Clear.
+func TestBracketKeepsTailscaleTable52FromTakingOver(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	wan0 := netnstest.Dummy(t, "wan0", "203.0.113.2/24", "2001:db8:1::2/64")
+	wan1 := netnstest.Dummy(t, "wan1", "198.51.100.2/24", "2001:db8:2::2/64")
+	ts := netnstest.Dummy(t, "tailscale0", "100.64.0.2/32", "fd7a:115c:a1e0::2/128")
+	netnstest.Dummy(t, "lan0", "192.168.1.1/24", "2001:db8:10::1/64")
+	forwarding(t)
+
+	mainDefaults := []netlink.Route{
+		{LinkIndex: wan0.Index, Dst: ipNet(t, "0.0.0.0/0"), Gw: net.ParseIP("203.0.113.1"), Priority: 10},
+		{LinkIndex: wan0.Index, Dst: ipNet(t, "::/0"), Gw: net.ParseIP("2001:db8:1::1"), Priority: 10},
+	}
+	for _, r := range append(slices.Clone(mainDefaults),
+		netlink.Route{LinkIndex: wan1.Index, Dst: ipNet(t, "0.0.0.0/0"), Gw: net.ParseIP("198.51.100.1"), Priority: 20},
+		netlink.Route{LinkIndex: wan1.Index, Dst: ipNet(t, "::/0"), Gw: net.ParseIP("2001:db8:2::1"), Priority: 20},
+		netlink.Route{Table: tailscaleTable, Dst: ipNet(t, "0.0.0.0/0"), LinkIndex: ts.Index},
+		netlink.Route{Table: tailscaleTable, Dst: ipNet(t, "100.64.0.0/10"), LinkIndex: ts.Index},
+		netlink.Route{Table: tailscaleTable, Dst: ipNet(t, "::/0"), LinkIndex: ts.Index},
+		netlink.Route{Table: tailscaleTable, Dst: ipNet(t, "fd7a:115c:a1e0::/48"), LinkIndex: ts.Index},
+	) {
+		if err := netlink.AddRoute(r); err != nil {
+			t.Fatalf("add route %+v: %v", r, err)
+		}
+	}
+
+	// Seed Tailscale's ip rules (5210, 5230, 5270) and stale rules from an
+	// earlier Ostiole release (21001, 22002) in both families.
+	var tsRules []netlink.Rule
+	for _, fam := range []int{unix.AF_INET, unix.AF_INET6} {
+		r5210 := netlink.NewRule()
+		r5210.Family, r5210.Priority, r5210.Mark, r5210.Mask, r5210.Table = fam, 5210, tailscaleBypassMark, tailscaleBypassMask, unix.RT_TABLE_MAIN
+		r5230 := netlink.NewRule()
+		r5230.Family, r5230.Priority, r5230.Mark, r5230.Mask, r5230.Table = fam, 5230, tailscaleBypassMark, tailscaleBypassMask, unix.RT_TABLE_DEFAULT
+		r5270 := netlink.NewRule()
+		r5270.Family, r5270.Priority, r5270.Table = fam, 5270, tailscaleTable
+		tsRules = append(tsRules, r5210, r5230, r5270)
+
+		oldTrans := netlink.NewRule()
+		oldTrans.Family, oldTrans.Priority, oldTrans.Mark, oldTrans.Mask, oldTrans.Table = fam, oldTranslatePriorityBase+1, 0x10000, model.PolicyMarkMask, 2201
+		oldGw := netlink.NewRule()
+		oldGw.Family, oldGw.Priority, oldGw.Mark, oldGw.Mask, oldGw.Table = fam, oldRulePriorityBase+2, 0x10000, model.PolicyMarkMask, 2201
+		for _, r := range []netlink.Rule{r5210, r5230, r5270, oldTrans, oldGw} {
+			if err := netlink.AddRule(r); err != nil {
+				t.Fatalf("seed rule %+v: %v", r, err)
+			}
+		}
+	}
+
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		Zones:   []model.Zone{{Name: "wan", External: true}, {Name: "lan"}},
+		Interfaces: []model.Interface{
+			{Name: "wan0", Zone: "wan", Enabled: true},
+			{Name: "wan1", Zone: "wan", Enabled: true},
+			{Name: "lan0", Zone: "lan", Enabled: true},
+		},
+		Gateways: []model.Gateway{
+			{Name: "backup", Enabled: true, Interface: "wan1", Address: "198.51.100.1"},
+			{Name: "backup6", Enabled: true, Interface: "wan1", Address: "2001:db8:2::1"},
+		},
+	}
+	hops := map[string]Hop{
+		"backup":  {Gateway: "backup", Address: "198.51.100.1", Interface: "wan1", Online: true},
+		"backup6": {Gateway: "backup6", Address: "2001:db8:2::1", Interface: "wan1", Online: true},
+	}
+	targets := append(Plan(cfg, hops), Lines(cfg, nil)...)
+	inst := NewInstaller(slog.New(slog.DiscardHandler))
+	if err := inst.Sync(targets); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	backup4, _ := targetByName(targets, "backup")
+	backup6, _ := targetByName(targets, "backup6")
+	var line1 Target
+	for _, tg := range targets {
+		if tg.Line == "wan1" {
+			line1 = tg
+		}
+	}
+
+	// Stale 21000/22000 rules are gone; Tailscale's 5210/5230/5270 and
+	// Ostiole's 4100/5200 are in place in both families.
+	for _, fam := range []int{unix.AF_INET, unix.AF_INET6} {
+		have, err := netlink.Rules(fam)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range have {
+			if r.Priority >= oldTranslatePriorityBase && r.Priority < oldRulePriorityBase+512 {
+				t.Errorf("family %d: stale rule survived Sync: %+v", fam, r)
+			}
+		}
+		for _, want := range bracketRules(fam) {
+			if !slices.Contains(have, want) {
+				t.Errorf("family %d: missing bracket rule %+v", fam, want)
+			}
+		}
+		for _, want := range tsRules {
+			if want.Family == fam && !slices.Contains(have, want) {
+				t.Errorf("family %d: Sync disturbed Tailscale rule %+v", fam, want)
+			}
+		}
+	}
+
+	for _, c := range []struct {
+		what  string
+		dst   string
+		src   string
+		mark  uint32
+		table int
+		link  int
+	}{
+		{"unmarked v4 internet", "1.1.1.1", "192.168.1.10", 0, unix.RT_TABLE_MAIN, wan0.Index},
+		{"unmarked v6 internet", "2606:4700::1111", "2001:db8:10::10", 0, unix.RT_TABLE_MAIN, wan0.Index},
+		{"unmarked v4 tailnet", "100.64.0.9", "192.168.1.10", 0, tailscaleTable, ts.Index},
+		{"unmarked v6 tailnet", "fd7a:115c:a1e0::9", "2001:db8:10::10", 0, tailscaleTable, ts.Index},
+		{"policy-marked v4 internet", "1.1.1.1", "192.168.1.10", backup4.Mark, backup4.Table, wan1.Index},
+		{"policy-marked v6 internet", "2606:4700::1111", "2001:db8:10::10", backup6.Mark, backup6.Table, wan1.Index},
+		{"policy-marked v4 tailnet stays on tailnet", "100.64.0.9", "192.168.1.10", backup4.Mark, tailscaleTable, ts.Index},
+		{"line-marked v4 reply", "1.1.1.1", "192.168.1.10", line1.Mark, line1.Table, wan1.Index},
+		{"line-marked v6 reply", "2606:4700::1111", "2001:db8:10::10", line1.Mark, line1.Table, wan1.Index},
+		{"tailscale bypass-marked v4 to tailnet takes main", "100.64.0.9", "192.168.1.10", tailscaleBypassMark, unix.RT_TABLE_MAIN, wan0.Index},
+		{"tailscale bypass-marked v6 to tailnet takes main", "fd7a:115c:a1e0::9", "2001:db8:10::10", tailscaleBypassMark, unix.RT_TABLE_MAIN, wan0.Index},
+	} {
+		got, err := netlink.RouteGet(netlink.RouteQuery{
+			Dst: net.ParseIP(c.dst), Src: net.ParseIP(c.src), Iif: netnstest.Link(t, "lan0").Index, Mark: c.mark,
+		})
+		if err != nil || len(got) != 1 {
+			t.Fatalf("%s: %+v, %v", c.what, got, err)
+		}
+		if got[0].Table != c.table || got[0].LinkIndex != c.link {
+			t.Errorf("%s: table %d link %d, want table %d link %d", c.what, got[0].Table, got[0].LinkIndex, c.table, c.link)
+		}
+	}
+
+	// Second pass changes nothing (bracket rules read back equal).
+	noChurn(t, inst, targets)
+
+	// Without any default route in main, an unmarked lookup must be
+	// unreachable — never silently fall through to table 52's exit-node default.
+	for _, r := range append(mainDefaults,
+		netlink.Route{LinkIndex: wan1.Index, Dst: ipNet(t, "0.0.0.0/0"), Gw: net.ParseIP("198.51.100.1"), Priority: 20},
+		netlink.Route{LinkIndex: wan1.Index, Dst: ipNet(t, "::/0"), Gw: net.ParseIP("2001:db8:2::1"), Priority: 20},
+	) {
+		if err := netlink.DeleteRoute(r); err != nil {
+			t.Fatalf("delete main default %+v: %v", r, err)
+		}
+	}
+	for _, tc := range []struct{ dst, src string }{
+		{"1.1.1.1", "192.168.1.10"},
+		{"2606:4700::1111", "2001:db8:10::10"},
+	} {
+		if got, err := netlink.RouteGet(netlink.RouteQuery{
+			Dst: net.ParseIP(tc.dst), Src: net.ParseIP(tc.src), Iif: netnstest.Link(t, "lan0").Index,
+		}); err == nil {
+			t.Errorf("with no default in main, lookup to %s fell through to %+v instead of failing", tc.dst, got)
+		}
+	}
+
+	// Clear removes both bracket rules, new policy rules, and any leftover
+	// old-band rule, while leaving Tailscale's 5210/5230/5270 untouched.
+	stale := netlink.NewRule()
+	stale.Family, stale.Priority, stale.Mark, stale.Mask, stale.Table = unix.AF_INET, oldRulePriorityBase+4, 0x20000, model.PolicyMarkMask, 2202
+	if err := netlink.AddRule(stale); err != nil {
+		t.Fatal(err)
+	}
+	if err := inst.Clear(); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	for _, fam := range []int{unix.AF_INET, unix.AF_INET6} {
+		have, err := netlink.Rules(fam)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range have {
+			if ownPriority(r.Priority) {
+				t.Errorf("family %d: Clear left rule %+v behind", fam, r)
+			}
+		}
+		for _, want := range tsRules {
+			if want.Family == fam && !slices.Contains(have, want) {
+				t.Errorf("family %d: Clear disturbed Tailscale rule %+v", fam, want)
+			}
+		}
+	}
 }
