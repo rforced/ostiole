@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -480,4 +481,129 @@ func searchList(t *testing.T, opt []byte) []string {
 		i = next
 	}
 	return names
+}
+
+// In DoT or Recursive mode, dnsmasq sends time server names straight to
+// the plain upstream instead of unbound, so a router whose clock breaks
+// unbound's TLS or DNSSEC can still resolve its time servers while every
+// other name still goes through unbound.
+func TestDnsmasqLooksUpTimeServersInTheClear(t *testing.T) {
+	if !netnstest.Enter(t, "dnsmasq") {
+		return
+	}
+	bin := dhcpNetworks(t)
+
+	// 127.0.0.53 plays unbound with a wrong clock: every query gets SERVFAIL.
+	unboundHits := startStubDNS(t, "127.0.0.53:53", nil)
+	// 10.99.0.2 plays the plain upstream on port 53 (on v1). Use a public
+	// address in the answer so stop-dns-rebind lets it through.
+	if err := netlink.AddAddr(netnstest.Link(t, "v1").Index, netip.MustParsePrefix("10.99.0.2/24")); err != nil {
+		t.Fatal(err)
+	}
+	plainHits := startStubDNS(t, "10.99.0.2:53", map[string][4]byte{
+		"2.pool.ntp.org": {93, 184, 216, 34},
+	})
+
+	dir := t.TempDir()
+	d := &Dnsmasq{Dir: dir, Leases: filepath.Join(dir, "leases")}
+	cfg := namesRouter()
+	cfg.Services.DNS.Resolver = model.ResolverTLS
+	cfg.Services.DNS.TLSUpstreams = []model.TLSUpstream{
+		{Address: "10.99.0.2", Hostname: "dns.example.test"},
+	}
+	startDnsmasq(t, bin, d, cfg)
+
+	if got := lookup(t, "2.pool.ntp.org"); got != "93.184.216.34" {
+		log, _ := os.ReadFile(filepath.Join(dir, "log"))
+		t.Errorf("2.pool.ntp.org = %q, want 93.184.216.34 (plain=%v unbound=%v)\n%s",
+			got, plainHits(), unboundHits(), log)
+	}
+	if got := lookup(t, "other.example.test"); got != "" {
+		t.Errorf("other.example.test = %q, want SERVFAIL from unbound", got)
+	}
+	if !slices.Contains(unboundHits(), "other.example.test") {
+		t.Errorf("other.example.test did not go to unbound: unbound=%v plain=%v", unboundHits(), plainHits())
+	}
+	if slices.Contains(unboundHits(), "2.pool.ntp.org") {
+		t.Errorf("2.pool.ntp.org went to unbound: unbound=%v", unboundHits())
+	}
+}
+
+// startStubDNS runs a tiny UDP DNS server answering A queries for answers
+// and returning SERVFAIL for everything else.
+func startStubDNS(t *testing.T, addr string, answers map[string][4]byte) func() []string {
+	t.Helper()
+	pc, err := net.ListenPacket("udp4", addr)
+	if err != nil {
+		t.Fatalf("listen %s: %v", addr, err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+	var mu sync.Mutex
+	var seen []string
+	go func() {
+		buf := make([]byte, 512)
+		for {
+			n, from, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			if n < 12 {
+				continue
+			}
+			qname, qend := readQName(buf[:n], 12)
+			if qend+4 > n {
+				continue
+			}
+			mu.Lock()
+			seen = append(seen, strings.ToLower(qname))
+			mu.Unlock()
+			qtype := binary.BigEndian.Uint16(buf[qend : qend+2])
+			reply := make([]byte, 0, qend+20)
+			reply = append(reply, buf[:qend+4]...)
+			reply[2] = 0x81 // QR=1, RD=1
+			ip, ok := answers[strings.ToLower(qname)]
+			if ok && qtype == 1 {
+				reply[3] = 0x80 // RA=1, NOERROR
+				binary.BigEndian.PutUint16(reply[6:8], 1)
+				reply = append(reply,
+					0xc0, 0x0c, // pointer to question name
+					0x00, 0x01, // TYPE A
+					0x00, 0x01, // CLASS IN
+					0x00, 0x00, 0x00, 0x3c, // TTL 60
+					0x00, 0x04, // RDLENGTH 4
+					ip[0], ip[1], ip[2], ip[3],
+				)
+			} else {
+				reply[3] = 0x82 // RA=1, SERVFAIL
+				binary.BigEndian.PutUint16(reply[6:8], 0)
+			}
+			binary.BigEndian.PutUint16(reply[8:10], 0)
+			binary.BigEndian.PutUint16(reply[10:12], 0)
+			_, _ = pc.WriteTo(reply, from)
+		}
+	}()
+	return func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), seen...)
+	}
+}
+
+// readQName decodes an uncompressed DNS question name starting at off and
+// returns it without a trailing dot along with the offset after the zero label.
+func readQName(pkt []byte, off int) (string, int) {
+	var labels []string
+	for off < len(pkt) {
+		n := int(pkt[off])
+		off++
+		if n == 0 {
+			return strings.Join(labels, "."), off
+		}
+		if off+n > len(pkt) {
+			return "", len(pkt)
+		}
+		labels = append(labels, string(pkt[off:off+n]))
+		off += n
+	}
+	return "", off
 }

@@ -128,8 +128,9 @@ const viaGroups = computed(() => config.gatewayGroups.filter((g) => g.enabled).m
 /** Who can read the names looked up, which is what the choice comes down to. */
 const resolverHints = {
   forward: 'Unencrypted. The upstream resolvers and your ISP see every lookup.',
-  recursive: 'Unencrypted. No single server sees every lookup, but your ISP can.',
-  tls: 'Encrypted. Only the servers below see every lookup.',
+  recursive:
+    'Unencrypted. No single server sees every lookup, but your ISP can. Time server names are looked up in the clear without DNSSEC so the clock can start.',
+  tls: 'Encrypted. Only the servers below see every lookup. Time server names are looked up in the clear without DNSSEC so the clock can start.',
 }
 
 /** One "address hostname" pair per line, which is how DoT servers are quoted. */

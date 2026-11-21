@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -178,6 +179,17 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 			// proxy-dnssec passes its verdict on to clients.
 			fmt.Fprintf(&b, "server=%s#%d\n", UnboundAddress, UnboundPort)
 			b.WriteString("proxy-dnssec\n")
+			// DNS over TLS and DNSSEC both need a roughly right clock, and
+			// chrony finds its servers through this DNS. Look up only the
+			// time servers' names in the clear, without DNSSEC, so a router
+			// that boots with a badly wrong clock can still set it.
+			if resolvers := plainNTPResolvers(cfg); len(resolvers) > 0 {
+				for _, host := range plainNTPHosts(cfg) {
+					for _, r := range resolvers {
+						fmt.Fprintf(&b, "server=/%s/%s\n", host, r)
+					}
+				}
+			}
 		} else {
 			for _, u := range cfg.DNSForwarders() {
 				fmt.Fprintf(&b, "server=%s\n", u)
@@ -728,6 +740,114 @@ func dnsmasqServer(s string) string {
 		return ap.Addr().String()
 	}
 	return fmt.Sprintf("%s#%d", ap.Addr(), ap.Port())
+}
+
+// plainNTPResolvers are the upstream resolvers dnsmasq asks in the clear
+// for the time servers' hostnames while unbound is in use. In DoT mode it
+// asks the same resolvers on plain port 53 so no new third party is added;
+// in recursive mode it takes the system's servers, then the forwarders,
+// then Quad9 so a router with a wrong clock can still start. Without IPv6
+// out, IPv6 addresses are left out while an IPv4 one is present.
+func plainNTPResolvers(cfg *model.Config) []string {
+	var raw []string
+	switch cfg.Services.DNS.Resolver {
+	case model.ResolverTLS:
+		for _, u := range cfg.Services.DNS.TLSUpstreams {
+			raw = append(raw, u.Address)
+		}
+	case model.ResolverRecursive:
+		switch {
+		case len(cfg.System.DNSServers) > 0:
+			raw = cfg.System.DNSServers
+		case len(cfg.Services.DNS.Upstreams) > 0:
+			raw = cfg.Services.DNS.Upstreams
+		default:
+			raw = model.Quad9()
+		}
+	default:
+		return nil
+	}
+	var all, v4 []string
+	seen := map[string]bool{}
+	for _, s := range raw {
+		ip, err := model.ParseIP(s)
+		if err != nil {
+			continue
+		}
+		addr := ip.String()
+		if seen[addr] {
+			continue
+		}
+		seen[addr] = true
+		all = append(all, addr)
+		if ip.Is4() {
+			v4 = append(v4, addr)
+		}
+	}
+	if !cfg.IPv6Out() && len(v4) > 0 {
+		return v4
+	}
+	return all
+}
+
+// plainNTPHosts are the configured time servers' hostnames that need a
+// plain lookup when unbound is in use: literal addresses and names already
+// answered locally, by a domain override, or by MagicDNS are left alone.
+func plainNTPHosts(cfg *model.Config) []string {
+	dns := cfg.Services.DNS
+	local := model.NormalizeDomain(dns.Domain)
+	hosted := map[string]bool{}
+	for _, o := range dns.HostOverrides {
+		d := local
+		if !o.Local(local) {
+			d = model.NormalizeDomain(o.Domain)
+		}
+		for _, label := range append([]string{o.Hostname}, o.Aliases...) {
+			l := strings.ToLower(strings.TrimSpace(label))
+			if d != "" {
+				hosted[l+"."+d] = true
+			}
+			if o.Local(local) {
+				hosted[l] = true
+			}
+		}
+	}
+	var delegated []string
+	if local != "" {
+		delegated = append(delegated, local)
+	}
+	for _, ov := range dns.DomainOverrides {
+		if d := model.NormalizeDomain(ov.Domain); d != "" {
+			delegated = append(delegated, d)
+		}
+	}
+	if nft.TailscaleEnabled(cfg) {
+		delegated = append(delegated, TailnetDomain)
+	}
+	covered := func(host string) bool {
+		if hosted[host] {
+			return true
+		}
+		for _, d := range delegated {
+			if host == d || strings.HasSuffix(host, "."+d) {
+				return true
+			}
+		}
+		return false
+	}
+	var hosts []string
+	for _, s := range cfg.NTPServers() {
+		if _, err := netip.ParseAddr(strings.TrimSpace(s.Host)); err == nil {
+			continue
+		}
+		h := model.NormalizeDomain(s.Host)
+		if h == "" || covered(h) {
+			continue
+		}
+		hosts = append(hosts, h)
+	}
+	slices.Sort(hosts)
+	return slices.Compact(hosts)
 }
 
 func writeFile(path, content string) error { return writeMode(path, content, 0o644) }

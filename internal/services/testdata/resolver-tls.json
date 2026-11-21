@@ -437,11 +437,6 @@
           "interface": "eth1.20",
           "enabled": true,
           "mode": "slaac"
-        },
-        {
-          "interface": "eth0",
-          "enabled": false,
-          "mode": "stateless"
         }
       ]
     },

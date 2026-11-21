@@ -1085,3 +1085,78 @@ func TestTheResolversRunAsTheAccountsTheRulesetMarks(t *testing.T) {
 		t.Errorf("the ruleset marks the lookups of %v", nft.ResolverAccounts)
 	}
 }
+
+// While unbound is in use, time server hostnames leave dnsmasq in the clear
+// without DNSSEC so a router that boots with a wrong clock can still sync
+// it. Literal addresses and names already answered locally or by an
+// override stay untouched, and IPv6 resolvers are skipped without IPv6 out.
+func TestPlainTimeServerLookups(t *testing.T) {
+	t.Parallel()
+	d := &Dnsmasq{Dir: DefaultDir, Leases: LeaseFile}
+
+	// DoT without IPv6 out: only IPv4 TLS upstreams, and skips literals,
+	// local names, host overrides and domain overrides.
+	cfg := loadConfig(t, "testdata/resolver-tls.json")
+	cfg.Interfaces[0].IPv6 = model.IPv6{Mode: model.AddrNone}
+	cfg.Services.DNS.DomainOverrides = []model.DomainOverride{
+		{Domain: "corp.example", Servers: []string{"10.10.0.53"}},
+	}
+	cfg.Services.DNS.HostOverrides = append(cfg.Services.DNS.HostOverrides,
+		model.HostOverride{Hostname: "clock", Domain: "hosted.example", IP: "10.10.0.123"})
+	cfg.Services.NTP.Servers = []model.NTPServer{
+		{Host: "time.cloudflare.com", NTS: true},
+		{Host: "198.51.100.123"},
+		{Host: "ntp.lan"},
+		{Host: "ntp.corp.example"},
+		{Host: "clock.hosted.example"},
+	}
+	files, err := d.Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := files[confName]
+	if !strings.Contains(conf, "\nserver=/time.cloudflare.com/1.1.1.1\n") {
+		t.Errorf("missing plain lookup for time.cloudflare.com:\n%s", conf)
+	}
+	for _, unwanted := range []string{
+		"server=/time.cloudflare.com/2620:fe::fe",
+		"server=/198.51.100.123/",
+		"server=/ntp.lan/",
+		"server=/ntp.corp.example/",
+		"server=/clock.hosted.example/",
+	} {
+		if strings.Contains(conf, unwanted) {
+			t.Errorf("unexpected %q in:\n%s", unwanted, conf)
+		}
+	}
+
+	// Recursive prefers system.dnsServers, then upstreams, then Quad9.
+	rec := loadConfig(t, "testdata/resolver-recursive.json")
+	rec.System.DNSServers = []string{"192.0.2.53"}
+	files, err = d.Render(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(files[confName], "\nserver=/2.pool.ntp.org/192.0.2.53\n") {
+		t.Errorf("recursive did not prefer system.dnsServers:\n%s", files[confName])
+	}
+	rec.System.DNSServers = nil
+	rec.Services.DNS.Upstreams = nil
+	files, err = d.Render(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(files[confName], "\nserver=/2.pool.ntp.org/9.9.9.9\n") {
+		t.Errorf("recursive with no forwarders did not fall back to Quad9:\n%s", files[confName])
+	}
+
+	// Forward mode already resolves in the clear, so it writes nothing extra.
+	fwd := loadConfig(t, "testdata/full.json")
+	files, err = d.Render(fwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(files[confName], "2.pool.ntp.org") {
+		t.Errorf("forward mode should not add NTP server= lines:\n%s", files[confName])
+	}
+}
