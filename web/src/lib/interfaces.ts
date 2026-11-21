@@ -11,6 +11,14 @@ export function interfaceLabel(i?: Pick<Interface, 'name' | 'description'> | nul
 }
 
 /**
+ * Whether an interface is a VPN tunnel that can back a tunnel gateway
+ * (WireGuard or OpenVPN). Mirrors the server's Interface.Tunnel.
+ */
+export function isTunnel(i?: Pick<Interface, 'wireguard' | 'openvpn'> | null): boolean {
+  return Boolean(i?.wireguard || i?.openvpn)
+}
+
+/**
  * Where a LAN-side service answers when no interface is picked: every
  * enabled interface in a zone that is not external. Mirrors the server's
  * own reading of an empty list.

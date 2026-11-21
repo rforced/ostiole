@@ -5,7 +5,7 @@ import type { PropType } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import { interfaceLabel } from '@/lib/interfaces'
+import { interfaceLabel, isTunnel } from '@/lib/interfaces'
 import type { Gateway } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
@@ -76,9 +76,9 @@ watch(
   { immediate: true },
 )
 
-/** A WireGuard tunnel as the interface: with no address, rules send traffic into it. */
-const onTunnel = computed(
-  () => !!config.interfaces.find((i) => i.name === form.value.interface)?.wireguard,
+/** A WireGuard or OpenVPN tunnel: with no address, rules send traffic into it. */
+const onTunnel = computed(() =>
+  isTunnel(config.interfaces.find((i) => i.name === form.value.interface)),
 )
 const tunnelGateway = computed(() => onTunnel.value && !form.value.address.trim())
 

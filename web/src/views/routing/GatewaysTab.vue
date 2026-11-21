@@ -11,6 +11,7 @@ import { api } from '@/lib/api'
 import { type AsyncLoad, emptyText, useAsync } from '@/lib/async'
 import { tone } from '@/lib/badge'
 import { neverHint, stateOf } from '@/lib/gateways'
+import { isTunnel } from '@/lib/interfaces'
 import type {
   DetectedGatewayReply,
   FamilyStatus,
@@ -48,7 +49,7 @@ const gatewayRows = computed(() =>
     live: props.live.find((l) => l.name === g.name) ?? null,
     // No address on a tunnel: rules send traffic into it, and it never
     // carries the default route.
-    tunnel: !g.address && Boolean(config.interfaces.find((i) => i.name === g.interface)?.wireguard),
+    tunnel: !g.address && isTunnel(config.interfaces.find((i) => i.name === g.interface)),
   })),
 )
 

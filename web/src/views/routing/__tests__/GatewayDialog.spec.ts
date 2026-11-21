@@ -43,6 +43,14 @@ function open(gateway: Gateway | null = null, more: DeepPartial<Config> = {}) {
           ipv6: { mode: 'none' },
           wireguard: { privateKey: 'x', peers: [] },
         },
+        {
+          name: 'tun0',
+          zone: 'vpn',
+          enabled: true,
+          ipv4: { mode: 'none' },
+          ipv6: { mode: 'none' },
+          openvpn: { remotes: [{ host: '198.51.100.7', port: 1194, proto: 'udp' }], caPem: 'x' },
+        },
       ],
       gateways: gateway ? [gateway] : [{ name: 'wan', enabled: true, interface: 'eth0' }],
       rules: [],
@@ -197,6 +205,23 @@ describe('GatewayDialog', () => {
     await wrapper.find('form').trigger('submit')
     expect(must(config.gateways[0]).downAfterProbes).toBe(5)
     expect(must(config.gateways[0]).upAfterProbes).toBe(1)
+  })
+  it('treats an OpenVPN tunnel with no address as a tunnel gateway too', async () => {
+    const { wrapper, config } = open()
+    await wrapper.find('#gw-if').setValue('tun0')
+    expect(wrapper.find('#gw-prio').exists()).toBe(false)
+    expect(wrapper.find('#gw-monitor').attributes('required')).toBeDefined()
+    expect(wrapper.text()).toContain('Empty sends traffic from rules into the tunnel.')
+
+    await wrapper.find('#gw-name').setValue('ovpn')
+    await wrapper.find('#gw-monitor').setValue('10.8.0.1')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways.find((g) => g.name === 'ovpn')).toEqual({
+      name: 'ovpn',
+      enabled: true,
+      interface: 'tun0',
+      monitor: '10.8.0.1',
+    })
   })
 })
 

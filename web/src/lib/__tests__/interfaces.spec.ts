@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
-import { facesInternet } from '@/lib/interfaces'
+import { facesInternet, isTunnel } from '@/lib/interfaces'
 import type { Config } from '@/lib/types.gen'
 
 import cases from './faces-internet.json'
+
+describe('isTunnel', () => {
+  it('recognises WireGuard and OpenVPN interfaces alone', () => {
+    expect(isTunnel({ wireguard: { privateKey: 'x' } })).toBe(true)
+    expect(isTunnel({ openvpn: { remotes: [], caPem: 'x' } })).toBe(true)
+    expect(isTunnel({})).toBe(false)
+    expect(isTunnel(null)).toBe(false)
+  })
+})
 
 describe('facesInternet', () => {
   // The server reads the same cases, so the two cannot drift.
