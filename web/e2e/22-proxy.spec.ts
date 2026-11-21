@@ -58,6 +58,9 @@ test('publish a site through a pool and apply it', async ({ page }) => {
   await dialog.getByLabel('Name', { exact: true }).fill('shop')
   await dialog.getByLabel('Hostnames').fill('shop.example.com')
   await dialog.getByLabel('WAF profile').selectOption('watch')
+  await dialog.getByLabel('Hidden path prefixes').fill('s/')
+  await expect(dialog.getByRole('button', { name: 'Save to draft' })).toBeDisabled()
+  await dialog.getByLabel('Hidden path prefixes').fill('/s/')
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   const site = page.getByRole('row').filter({ hasText: 'shop' })
   await expect(site).toContainText('shop.example.com')
@@ -91,6 +94,17 @@ test('publish a site through a pool and apply it', async ({ page }) => {
   await page.screenshot({ path: shot('111-proxy-access'), fullPage: true })
 
   await applyAndConfirm(page)
+
+  // Reopen the confirmed site to verify hidden path prefixes persisted.
+  await page.getByRole('tab', { name: 'Sites' }).click()
+  await page
+    .getByRole('row')
+    .filter({ hasText: 'shop' })
+    .getByRole('button', { name: 'Edit' })
+    .click()
+  dialog = page.getByRole('dialog')
+  await expect(dialog.getByLabel('Hidden path prefixes')).toHaveValue('/s/')
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
 
   // Each rule opens its ports at the tail of the zone's chain, in order.
   const ruleset = await page.evaluate(async () => {
