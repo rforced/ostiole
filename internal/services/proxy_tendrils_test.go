@@ -69,7 +69,7 @@ var tdTitles = []string{"Eat potato’s", "Call the plumber about the sink", "Re
 	"Set a time to find my keys", "Watch the retrieval logs", "Watch this, then nice work", "Share one event with a non-user (.ics download)",
 	"Attach the file (PDF) to the claim", "Install the app on the old router for Sam /personal #", "Ask about the shared shelf toggle #",
 	"Check the deploy against the old schema (item 43)", "Migrate the database (v2) first", `Move the readers into pkg\storage (item 8)`,
-	`Back up C:\Users\sam\Documents`}
+	`Back up C:\Users\sam\Documents`, "HTTP/3 on the proxy"}
 
 // tdProse is what goes in notes, comments and the journal: Markdown with
 // lists, links, emphasis and code, and plain sentences.
@@ -104,7 +104,7 @@ var tdQuestions = []string{"What are the top three tasks to complete in the spac
 	"Which tasks wait on the plumber?", "Was habe ich diese Woche erledigt?", "Who's doing the groceries & the dishes?", "Sleep or work first?"}
 
 // tdSearches are what people type into the search box.
-var tdSearches = []string{"plumber", "Sam's", "café", "trip, day", "Q4 — work", "who", "schema (item 43)", "information_schema", `\d+ in the parser`}
+var tdSearches = []string{"plumber", "Sam's", "café", "trip, day", "Q4 — work", "who", "schema (item 43)", "information_schema", `\d+ in the parser`, "http/3"}
 
 func (g td) title() string { return g.pick(tdTitles...) }
 func (g td) prose() string { return g.pick(tdProse...) }
@@ -907,6 +907,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "information_schema"})},
 		// And JavaScript run without brackets.
 		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "[x].sort.call`a`"})},
+		// Or HTTP/3 in a title or search, which is read in non-text fields.
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "color": "http/3"})},
 		// Only recall's labels may come more than once.
 		{3, tdGet(api + "/spaces/" + space + "/recall?" + url.Values{"title": {"x"}, "label": {"ai", "fea"}, "q": {"a", "b"}}.Encode())},
 		{3, tdGet(api + "/search?" + url.Values{"q": {"x"}, "label": {"a", "b"}}.Encode())},
@@ -952,6 +954,12 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 			"_meta": map[string]any{"claudecode/toolUseId": "1' OR '1'='1"}})},
 		{1, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
 			"_meta": map[string]any{"claudecode/.claude": 1}})},
+		{1, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
+			"_meta": map[string]any{"antigravity.google/artifacts_dir": "/home/sam; cat /etc/passwd"}})},
+		{3, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
+			"_meta": map[string]any{"antigravity.google/conversation_id": "a);(b"}})},
+		{3, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
+			"_meta": map[string]any{"antigravity.google/other": "a);(b"}})},
 		{1, g.mcp(false, "tools/call' UNION SELECT password FROM users--", nil)},
 		// The same with only brackets, which fewer rules read.
 		{3, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "due": "2026-10-13);("})},

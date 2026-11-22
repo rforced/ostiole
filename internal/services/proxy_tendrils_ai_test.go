@@ -101,6 +101,22 @@ func (g td) claudeCode(method string, params map[string]any) tdRequest {
 	return g.mcp(false, method, params)
 }
 
+// antigravity is a call from Antigravity CLI, which carries its artifacts
+// directory and conversation ids under _meta.antigravity.google/.
+func (g td) antigravity(method string, params map[string]any) tdRequest {
+	if params == nil {
+		params = map[string]any{}
+	}
+	conv := g.id()
+	params["_meta"] = map[string]any{
+		"antigravity.google/artifacts_dir":        "/home/sam/.gemini/antigravity-cli/brain/" + conv,
+		"antigravity.google/conversation_id":      conv,
+		"antigravity.google/root_conversation_id": conv,
+		"progressToken":                           "tok-" + g.b64url(12),
+	}
+	return g.mcp(false, method, params)
+}
+
 func (g td) minute() string { return g.day() + "T" + g.clock() }
 
 // mcpRequests is a session of an agent's: the start, the tool list and
@@ -134,7 +150,10 @@ func (g td) mcpRequests(legacy bool) []tdRequest {
 		rs = append(rs, g.claudeCode("server/discover", nil), g.claudeCode("tools/list", nil),
 			g.claudeCode("tools/call", map[string]any{"name": "create_task", "arguments": map[string]any{"title": g.title(), "notes": g.agentText()}}),
 			g.claudeCode("tools/call", map[string]any{"name": "update_task", "arguments": map[string]any{"task_id": task, "version": 2,
-				"notes_append": g.agentText()}}))
+				"notes_append": g.agentText()}}),
+			g.antigravity("tools/call", map[string]any{"name": "list_pages", "arguments": map[string]any{"space_id": space, "limit": 50}}),
+			g.antigravity("tools/call", map[string]any{"name": "get_page", "arguments": map[string]any{"page_id": g.id()}}),
+			g.antigravity("tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task}}))
 	}
 	if legacy {
 		rs = append(rs, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18",
