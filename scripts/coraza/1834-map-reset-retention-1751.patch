@@ -1,0 +1,38 @@
+# - internal/collections/map.go: Map.Reset cleared index and entries in
+#   place, keeping peak map buckets and slice capacity in txPool after an
+#   argument-heavy request. Drop and rebuild past 256 keys (PR #1751
+#   adapted to PR #1834's ordered map layout).
+#   Upstream: PR #1751 (2026-10-12) on top of PR #1834, open at 1cfa4f9.
+diff --git a/internal/collections/map.go b/internal/collections/map.go
+index 7c8fca9..3b1dec7 100644
+--- a/internal/collections/map.go
++++ b/internal/collections/map.go
+@@ -303,13 +303,23 @@ func (c *Map) Name() string {
+ 	return c.variable.Name()
+ }
+ 
++// Changed by Ostiole: bound pooled Map retention after Reset (upstream PR #1751, adapted for #1834).
++// maxRetainedKeys bounds what a pooled transaction keeps after Reset: Go maps
++// never shrink and large entry slices stay pinned in the pool.
++const maxRetainedKeys = 256
++
+ // Reset removes all key/value pairs from the map.
+ func (c *Map) Reset() {
+-	clear(c.index)
+-	// Zero the slots so a pooled transaction does not keep the previous
+-	// request's values alive through the backing array.
+-	clear(c.entries)
+-	c.entries = c.entries[:0]
++	if len(c.index) > maxRetainedKeys || cap(c.entries) > maxRetainedKeys {
++		c.index = map[string]int{}
++		c.entries = nil
++	} else {
++		clear(c.index)
++		// Zero the slots so a pooled transaction does not keep the previous
++		// request's values alive through the backing array.
++		clear(c.entries)
++		c.entries = c.entries[:0]
++	}
+ 	c.deleted = 0
+ 	c.totalValues = 0
+ }

@@ -29,7 +29,6 @@ import (
 	"github.com/corazawaf/coraza/v3/internal/corazarules"
 	"github.com/corazawaf/coraza/v3/internal/corazatypes"
 	"github.com/corazawaf/coraza/v3/internal/environment"
-	stringsutil "github.com/corazawaf/coraza/v3/internal/strings"
 	urlutil "github.com/corazawaf/coraza/v3/internal/url"
 	"github.com/corazawaf/coraza/v3/types"
 	"github.com/corazawaf/coraza/v3/types/variables"
@@ -119,8 +118,8 @@ type Transaction struct {
 	// We must reuse it in the future
 	Capture bool
 
-	// Contains duration in useconds per phase
-	stopWatches map[types.RulePhase]int64
+	// Contains duration in nanoseconds per phase, indexed by phase number
+	stopWatches [types.PhaseLogging + 1]int64
 
 	// Contains a WAF instance for the current transaction
 	WAF *WAF
@@ -447,10 +446,13 @@ func (tx *Transaction) AddResponseHeader(key string, value string) {
 	keyl := strings.ToLower(key)
 	tx.variables.responseHeaders.Add(key, value)
 
-	// Most headers can be managed like that
-	if keyl == "content-type" {
+	// Changed by Ostiole: keep first trimmed Content-Type and match response MIME case-insensitively (upstream PR #1765).
+	// RESPONSE_CONTENT_TYPE is the media type of the first Content-Type header,
+	// the one clients honour, without parameters. ModSecurity v2 reads it the
+	// same way (apr_table_get returns the first value).
+	if keyl == "content-type" && tx.variables.responseContentType.Get() == "" {
 		name, _, _ := strings.Cut(value, ";")
-		tx.variables.responseContentType.Set(name)
+		tx.variables.responseContentType.Set(strings.TrimSpace(name))
 	}
 }
 
@@ -675,27 +677,43 @@ func (tx *Transaction) GetField(rv ruleVariableParams) []types.MatchData {
 		matches = col.FindAll()
 	}
 
-	// in the most common scenario filteredMatches length will be
-	// the same as matches length, so we avoid allocating per result.
-	// We reuse the matches slice to store filtered results avoiding extra allocation.
-	filteredCount := 0
-	for _, c := range matches {
-		isException := false
-		lkey := strings.ToLower(c.Key())
-		for _, ex := range rv.Exceptions {
-			// KeyStr is only meaningful without KeyRx: a regex exception from ctl
-			// carries an empty KeyStr, which would otherwise match a key named "".
-			if (ex.KeyRx != nil && ex.KeyRx.MatchString(lkey)) || (ex.KeyRx == nil && (ex.KeyStr == "" || strings.ToLower(ex.KeyStr) == lkey)) {
-				isException = true
-				break
+	// Changed by Ostiole: skip exception filtering when empty and avoid
+	// allocating strings.ToLower(c.Key()) unless a regex exception runs
+	// (upstream PR #1750, plus lazy lowercase for #1856).
+	if len(rv.Exceptions) > 0 {
+		// in the most common scenario filteredMatches length will be
+		// the same as matches length, so we avoid allocating per result.
+		// We reuse the matches slice to store filtered results avoiding extra allocation.
+		filteredCount := 0
+		for _, c := range matches {
+			isException := false
+			key := c.Key()
+			lkey := ""
+			lkeyReady := false
+			for _, ex := range rv.Exceptions {
+				// KeyStr is only meaningful without KeyRx: a regex exception from ctl
+				// carries an empty KeyStr, which would otherwise match a key named "".
+				if ex.KeyRx != nil {
+					if !lkeyReady {
+						lkey = strings.ToLower(key)
+						lkeyReady = true
+					}
+					if ex.KeyRx.MatchString(lkey) {
+						isException = true
+						break
+					}
+				} else if ex.KeyStr == "" || strings.EqualFold(key, ex.KeyStr) {
+					isException = true
+					break
+				}
+			}
+			if !isException {
+				matches[filteredCount] = c
+				filteredCount++
 			}
 		}
-		if !isException {
-			matches[filteredCount] = c
-			filteredCount++
-		}
+		matches = matches[:filteredCount]
 	}
-	matches = matches[:filteredCount]
 
 	if rv.Count {
 		count := len(matches)
@@ -1158,13 +1176,11 @@ func (tx *Transaction) ProcessRequestBody() (*types.Interruption, error) {
 	// Default variables.ReqbodyProcessor values
 	// XML and JSON must be forced with ctl:requestBodyProcessor=JSON
 	if tx.ForceRequestBodyVariable {
-		// We force URLENCODED if mimeType is x-www... or we have an empty RBP and ForceRequestBodyVariable
+		// Changed by Ostiole: default forced body processor to RAW rather than
+		// URLENCODED so binary/unknown bodies populate REQUEST_BODY without being
+		// split into garbage ARGS_POST / ARGS_POST_NAMES (upstream #1628, #1856).
 		if rbp == "" {
-			// TODO(4.x): Evaluate if the new RAW body parser fits better than URLENCODED for the
-			// default forced body processor. See some reasoning in https://github.com/corazawaf/coraza/issues/938:
-			// "meaning that parsing a body of unknown type might waste some time by trying to parse it as urlencoded
-			// for nothing (and possibly set some "garbage" variables if you happen to have a & in it)"
-			rbp = "URLENCODED"
+			rbp = "RAW"
 		}
 		tx.variables.reqbodyProcessor.Set(rbp)
 	}
@@ -1242,8 +1258,15 @@ func (tx *Transaction) IsResponseBodyProcessable() bool {
 		// we force the response body to be processed because of the ctl:forceResponseBodyVariable
 		return true
 	}
+	// Media types are case-insensitive (RFC 9110 8.3.1): "Text/HTML" must be
+	// inspected when SecResponseBodyMimeType lists text/html.
 	ct := tx.variables.responseContentType.Get()
-	return stringsutil.InSlice(ct, tx.WAF.ResponseBodyMimeTypes)
+	for _, mimeType := range tx.WAF.ResponseBodyMimeTypes {
+		if strings.EqualFold(ct, mimeType) {
+			return true
+		}
+	}
+	return false
 }
 
 // WriteResponseBody writes bytes from a slice of bytes into the response body,
@@ -1607,9 +1630,12 @@ func (tx *Transaction) AuditLog() *auditlog.Log {
 		case types.AuditLogPartRequestBody:
 			reader, err := tx.requestBodyBuffer.Reader()
 			if err == nil {
-				content, err := io.ReadAll(reader)
-				if err == nil {
-					al.Transaction_.Request_.Body_ = string(content)
+				// Changed by Ostiole: stream audit body via WriterTo (upstream PR #1751).
+				// io.Copy into a Builder uses the reader's WriteTo: one write and
+				// no []byte -> string copy, unlike io.ReadAll.
+				var body strings.Builder
+				if _, err := io.Copy(&body, reader); err == nil {
+					al.Transaction_.Request_.Body_ = body.String()
 				}
 			}
 
@@ -1756,8 +1782,11 @@ func (tx *Transaction) Close() error {
 	}
 
 	tx.variables.reset()
-	// The entries of the last evaluated phase point to values the collections have
-	// just released, and would keep them alive while the transaction sits in the pool.
+	// Changed by Ostiole: cache is emptied at phase end (upstream PR #1865).
+	// Each phase empties the cache when it ends, so entries are only left here when a
+	// phase did not finish, for instance after a panic in a rule that the caller
+	// recovered (net/http does). They point to values the collections have just
+	// released, and would keep them alive while the transaction sits in the pool.
 	for k := range tx.transformationCache {
 		delete(tx.transformationCache, k)
 	}

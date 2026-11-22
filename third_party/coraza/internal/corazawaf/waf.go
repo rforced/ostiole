@@ -230,7 +230,8 @@ func (w *WAF) newTransaction(opts Options) *Transaction {
 	tx.Skip = 0
 	tx.AllowType = 0
 	tx.Capture = false
-	tx.stopWatches = map[types.RulePhase]int64{}
+	// Changed by Ostiole: stopWatches is a fixed array per phase (upstream PR #1750).
+	tx.stopWatches = [len(tx.stopWatches)]int64{}
 	tx.WAF = w
 	tx.debugLogger = w.Logger.With(debuglog.Str("tx_id", tx.id))
 	tx.Timestamp = time.Now().UnixNano()

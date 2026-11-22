@@ -8,12 +8,52 @@
 # (github.com/corazawaf/coraza/security/advisories) are checked by hand.
 #
 # Changes, each marked "Changed by Ostiole" in the source:
+# - internal/corazawaf/transaction.go: ctl:forceRequestBodyVariable=On
+#   (CRS 901340) defaulted the body processor to URLENCODED for unknown
+#   and binary Content-Types such as application/octet-stream, copying the
+#   body into REQUEST_BODY and also parsing it into garbage ARGS_POST /
+#   ARGS_POST_NAMES, which amplified CRS memory and CPU by ~10-100x.
+#   Default to RAW so REQUEST_BODY is populated without bogus form args.
+#   Upstream: issues #1628 and #1856, open at 1cfa4f9.
+# - internal/transformations/css_decode.go: cssDecode only folded LF
+#   after a backslash, leaving CR, CRLF and FF as literal characters so
+#   payloads like aler\<CRLF>t(1) slipped past CRS 941xxx XSS rules.
+#   Fold CR, CRLF and FF as CSS newlines and consume CRLF after hex escapes.
+#   Upstream: PR #1677 (2026-08-02), approved and open at 1cfa4f9.
+# - internal/corazawaf/rule.go, transaction.go and waf.go: RULE:msg and
+#   RULE:logdata were macro-expanded for every evaluated rule rather than
+#   at match time, chain-child loggers allocated with debug logging off,
+#   stopWatches allocated a map per transaction, and Transaction.GetField
+#   called strings.ToLower on every key even with no exceptions or plain
+#   string exceptions (amplifying large keys by 3x on invalid UTF-8).
+#   Expand RULE:msg/logdata on match, guard chain-child logging, use a
+#   fixed [6]int64 stopWatches array, skip GetField filtering when there
+#   are no exceptions, and compare plain exceptions with strings.EqualFold
+#   while lowercasing lazily only for regex exceptions.
+#   Upstream: PR #1750 (2026-10-12) and issue #1856, open at 1cfa4f9.
+# - internal/corazawaf/body_buffer.go and transaction.go: bodyBufferReader
+#   now implements io.WriterTo so body processors and audit logging read
+#   in-memory bodies in one write without a 32 KiB scratch buffer, and
+#   BodyBuffer.Reset drops buffers larger than 64 KiB instead of pinning
+#   them in txPool.
+#   Upstream: PR #1751 (2026-10-12), open at 1cfa4f9.
+# - internal/collections/named.go: NamedCollectionNames.FindString looked
+#   up keys without lowercasing, so ARGS_NAMES:Key with uppercase letters
+#   silently never matched. Lowercase the key when the collection is
+#   case-insensitive, matching Map.FindString.
+#   Upstream: PR #1757 (2026-10-14), open at 1cfa4f9.
 # - internal/bodyprocessors/multipart.go: parts were read with NextPart,
 #   which decodes a part sent with Content-Transfer-Encoding
 #   quoted-printable and hides that header. Backends are handed the raw
 #   bytes, so a payload written with =XX escapes or soft line breaks got
 #   past rules that match the raw form. Parts are read with NextRawPart.
 #   Upstream: PR #1759 (2026-10-14), open at 1cfa4f9.
+# - internal/corazawaf/transaction.go: RESPONSE_CONTENT_TYPE took the
+#   last Content-Type header untrimmed and IsResponseBodyProcessable
+#   matched SecResponseBodyMimeType case-sensitively, so responses with
+#   Text/HTML or trailing spaces skipped phase 4 inspection. Keep the
+#   first trimmed Content-Type and compare with strings.EqualFold.
+#   Upstream: PR #1765 (2026-10-15), open at 1cfa4f9.
 # - internal/collections, internal/bodyprocessors, internal/cookies,
 #   internal/url, internal/corazawaf and http: collections were Go maps, so
 #   ARGS, cookies, headers and their _NAMES came out in a new order on every
@@ -23,6 +63,11 @@
 #   order, and the parsers add in input order. coraza-caddy feeds headers
 #   itself, from a map, so header order under it is still unsorted.
 #   Upstream: issue #1815 and PR #1834 (2026-10-26), open at 1cfa4f9.
+# - internal/collections/map.go: Map.Reset cleared index and entries in
+#   place, keeping peak map buckets and slice capacity in txPool after an
+#   argument-heavy request. Drop and rebuild past 256 keys (PR #1751
+#   adapted to PR #1834's ordered map layout).
+#   Upstream: PR #1751 (2026-10-12) on top of PR #1834, open at 1cfa4f9.
 # - internal/actions/ctl.go, internal/corazawaf/rulegroup.go, transaction.go
 #   and waf.go, internal/seclang/directives.go: ctl:ruleRemoveTargetById,
 #   ByTag and ByMsg, and ctl:ruleRemoveByTag and ByMsg, walked every rule by
@@ -35,4 +80,10 @@
 #   touched by ctl removals: all share ID 0, so one removal hit them all and
 #   skipped every SecMarker (the ctl part of upstream PR #1782).
 #   Upstream: issue #1848 and PR #1849 (2026-11-08), open at 1cfa4f9.
+# - internal/corazawaf/rulegroup.go and transaction.go: empty the
+#   transformation cache at the end of each phase instead of the start of
+#   the next so phase-2 transformed strings are not held in memory while
+#   waiting on upstreams or open WebSockets, and replace the map past
+#   8192 entries so oversized bucket arrays are not retained in txPool.
+#   Upstream: PR #1865 (2026-11-14), open at 1cfa4f9.
 v3.8.2-0.20261114225743-1cfa4f955a19

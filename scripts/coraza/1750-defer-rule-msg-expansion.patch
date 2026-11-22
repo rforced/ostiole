@@ -1,0 +1,179 @@
+# - internal/corazawaf/rule.go, transaction.go and waf.go: RULE:msg and
+#   RULE:logdata were macro-expanded for every evaluated rule rather than
+#   at match time, chain-child loggers allocated with debug logging off,
+#   stopWatches allocated a map per transaction, and Transaction.GetField
+#   called strings.ToLower on every key even with no exceptions or plain
+#   string exceptions (amplifying large keys by 3x on invalid UTF-8).
+#   Expand RULE:msg/logdata on match, guard chain-child logging, use a
+#   fixed [6]int64 stopWatches array, skip GetField filtering when there
+#   are no exceptions, and compare plain exceptions with strings.EqualFold
+#   while lowercasing lazily only for regex exceptions.
+#   Upstream: PR #1750 (2026-10-12) and issue #1856, open at 1cfa4f9.
+diff --git a/internal/corazawaf/rule.go b/internal/corazawaf/rule.go
+index 0f20b88..f61ef8c 100644
+--- a/internal/corazawaf/rule.go
++++ b/internal/corazawaf/rule.go
+@@ -198,16 +198,7 @@ func (r *Rule) doEvaluate(logger debuglog.Logger, phase types.RulePhase, tx *Tra
+ 
+ 	ruleCol := tx.variables.rule
+ 	ruleCol.SetIndex("id", 0, r.LogID())
+-	if r.Msg != nil {
+-		// Expand the message using the current TX variables so that %{rule.msg} in setvar actions
+-		// returns the fully expanded message, matching ModSecurity behavior.
+-		ruleCol.SetIndex("msg", 0, r.Msg.Expand(tx))
+-	}
+ 	ruleCol.SetIndex("rev", 0, r.Rev_)
+-	if r.LogData != nil {
+-		// Same expansion for logdata, matching ModSecurity behavior for %{rule.logdata}.
+-		ruleCol.SetIndex("logdata", 0, r.LogData.Expand(tx))
+-	}
+ 	ruleCol.SetIndex("severity", 0, r.Severity_.String())
+ 	// SecMark and SecAction uses nil operator
+ 	if r.operator == nil {
+@@ -330,6 +321,7 @@ func (r *Rule) doEvaluate(logger debuglog.Logger, phase types.RulePhase, tx *Tra
+ 							// part of the last rule of the chain if the evaluated chained variables already matched. This avoids incrementing the CRS anomaly score multiple
+ 							// time from the same variables chain.
+ 							tx.matchVariable(mr)
++							r.expandRuleCollection(tx)
+ 							for _, a := range r.actions {
+ 								if a.Function.Type() == plugintypes.ActionTypeNondisruptive {
+ 									vLog.Debug().Str("action", a.Name).Msg("Evaluating action")
+@@ -372,11 +364,13 @@ func (r *Rule) doEvaluate(logger debuglog.Logger, phase types.RulePhase, tx *Tra
+ 			}
+ 			chainLevel++
+ 
+-			var nrLogger debuglog.Logger
+-			if nr.ID_ == noID {
+-				nrLogger = logger.With(debuglog.Str("chain_rule_ref", fmt.Sprintf("%s#L%d", nr.File_, nr.Line_)))
+-			} else {
+-				nrLogger = logger.With(debuglog.Int("chain_rule_id", nr.ID_))
++			nrLogger := logger
++			if logger.Debug().IsEnabled() {
++				if nr.ID_ == noID {
++					nrLogger = logger.With(debuglog.Str("chain_rule_ref", fmt.Sprintf("%s#L%d", nr.File_, nr.Line_)))
++				} else {
++					nrLogger = logger.With(debuglog.Int("chain_rule_id", nr.ID_))
++				}
+ 			}
+ 
+ 			matchedChainValues := nr.doEvaluate(nrLogger, phase, tx, collectiveMatchedValues, chainLevel, cache)
+@@ -509,6 +503,20 @@ func (r *Rule) transformArg(arg types.MatchData, cache map[transformationKey]tra
+ 	return value, errs
+ }
+ 
++// Changed by Ostiole: expand RULE:msg and RULE:logdata at match time instead
++// of on every evaluated rule (upstream PR #1750).
++// expandRuleCollection publishes the expanded msg and logdata of the rule in
++// the RULE collection so that %{rule.msg} and %{rule.logdata} in the rule's
++// own actions see the expanded value.
++func (r *Rule) expandRuleCollection(tx *Transaction) {
++	if r.Msg != nil {
++		tx.variables.rule.SetIndex("msg", 0, r.Msg.Expand(tx))
++	}
++	if r.LogData != nil {
++		tx.variables.rule.SetIndex("logdata", 0, r.LogData.Expand(tx))
++	}
++}
++
+ func (r *Rule) matchVariable(tx *Transaction, m *corazarules.MatchData) {
+ 	rid := r.ID_
+ 	if rid == noID {
+@@ -528,6 +536,7 @@ func (r *Rule) matchVariable(tx *Transaction, m *corazarules.MatchData) {
+ 	// SecActions (r.operator == nil) are always executed
+ 	if !multiphaseEvaluation || r.operator == nil {
+ 		tx.matchVariable(m)
++		r.expandRuleCollection(tx)
+ 		for _, a := range r.actions {
+ 			if a.Function.Type() == plugintypes.ActionTypeNondisruptive {
+ 				tx.DebugLogger().Debug().Str("action", a.Name).Msg("Evaluating action")
+diff --git a/internal/corazawaf/transaction.go b/internal/corazawaf/transaction.go
+index e128daf..9af4b15 100644
+--- a/internal/corazawaf/transaction.go
++++ b/internal/corazawaf/transaction.go
+@@ -119,8 +119,8 @@ type Transaction struct {
+ 	// We must reuse it in the future
+ 	Capture bool
+ 
+-	// Contains duration in useconds per phase
+-	stopWatches map[types.RulePhase]int64
++	// Contains duration in nanoseconds per phase, indexed by phase number
++	stopWatches [types.PhaseLogging + 1]int64
+ 
+ 	// Contains a WAF instance for the current transaction
+ 	WAF *WAF
+@@ -677,27 +677,43 @@ func (tx *Transaction) GetField(rv ruleVariableParams) []types.MatchData {
+ 		matches = col.FindAll()
+ 	}
+ 
+-	// in the most common scenario filteredMatches length will be
+-	// the same as matches length, so we avoid allocating per result.
+-	// We reuse the matches slice to store filtered results avoiding extra allocation.
+-	filteredCount := 0
+-	for _, c := range matches {
+-		isException := false
+-		lkey := strings.ToLower(c.Key())
+-		for _, ex := range rv.Exceptions {
+-			// KeyStr is only meaningful without KeyRx: a regex exception from ctl
+-			// carries an empty KeyStr, which would otherwise match a key named "".
+-			if (ex.KeyRx != nil && ex.KeyRx.MatchString(lkey)) || (ex.KeyRx == nil && (ex.KeyStr == "" || strings.ToLower(ex.KeyStr) == lkey)) {
+-				isException = true
+-				break
++	// Changed by Ostiole: skip exception filtering when empty and avoid
++	// allocating strings.ToLower(c.Key()) unless a regex exception runs
++	// (upstream PR #1750, plus lazy lowercase for #1856).
++	if len(rv.Exceptions) > 0 {
++		// in the most common scenario filteredMatches length will be
++		// the same as matches length, so we avoid allocating per result.
++		// We reuse the matches slice to store filtered results avoiding extra allocation.
++		filteredCount := 0
++		for _, c := range matches {
++			isException := false
++			key := c.Key()
++			lkey := ""
++			lkeyReady := false
++			for _, ex := range rv.Exceptions {
++				// KeyStr is only meaningful without KeyRx: a regex exception from ctl
++				// carries an empty KeyStr, which would otherwise match a key named "".
++				if ex.KeyRx != nil {
++					if !lkeyReady {
++						lkey = strings.ToLower(key)
++						lkeyReady = true
++					}
++					if ex.KeyRx.MatchString(lkey) {
++						isException = true
++						break
++					}
++				} else if ex.KeyStr == "" || strings.EqualFold(key, ex.KeyStr) {
++					isException = true
++					break
++				}
++			}
++			if !isException {
++				matches[filteredCount] = c
++				filteredCount++
+ 			}
+ 		}
+-		if !isException {
+-			matches[filteredCount] = c
+-			filteredCount++
+-		}
++		matches = matches[:filteredCount]
+ 	}
+-	matches = matches[:filteredCount]
+ 
+ 	if rv.Count {
+ 		count := len(matches)
+diff --git a/internal/corazawaf/waf.go b/internal/corazawaf/waf.go
+index a65a9f5..c06cfa7 100644
+--- a/internal/corazawaf/waf.go
++++ b/internal/corazawaf/waf.go
+@@ -229,7 +229,8 @@ func (w *WAF) newTransaction(opts Options) *Transaction {
+ 	tx.Skip = 0
+ 	tx.AllowType = 0
+ 	tx.Capture = false
+-	tx.stopWatches = map[types.RulePhase]int64{}
++	// Changed by Ostiole: stopWatches is a fixed array per phase (upstream PR #1750).
++	tx.stopWatches = [len(tx.stopWatches)]int64{}
+ 	tx.WAF = w
+ 	tx.debugLogger = w.Logger.With(debuglog.Str("tx_id", tx.id))
+ 	tx.Timestamp = time.Now().UnixNano()

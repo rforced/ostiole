@@ -912,6 +912,110 @@ func TestProxyReadsLikeAndCharsetIntroducersAsSQL(t *testing.T) {
 	}
 }
 
+// cssDecode folds CR, CRLF and FF after a backslash as CSS line
+// continuations, not only LF (upstream PR #1677). CRS 941xxx runs jsDecode
+// right before cssDecode, so a doubled backslash reaches cssDecode intact;
+// without the fix CR, CRLF and FF split the scheme and pass at paranoia 1.
+func TestProxyDecodesCSSLineContinuations(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	for _, tc := range []struct {
+		name string
+		val  string
+	}{
+		{"cr", "java\\\\\rscript:alert(1)"},
+		{"crlf", "java\\\\\r\nscript:alert(1)"},
+		{"ff", "java\\\\\fscript:alert(1)"},
+	} {
+		body := "q=" + url.QueryEscape(tc.val)
+		if got := post(t, plain, "http://web.example.com/search", "application/x-www-form-urlencoded", body); got != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", tc.name, got)
+		}
+	}
+}
+
+// Response body inspection matches SecResponseBodyMimeType case-insensitively,
+// trims whitespace around the media type, and reads the first Content-Type
+// header (upstream PR #1765). Without it, Text/HTML or trailing spaces before
+// "; charset=utf-8" skipped phase 4 and leaked backend errors.
+func TestProxyInspectsMixedCaseResponseContentTypes(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	const sqlLeak = "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/mixed":
+			w.Header().Set("Content-Type", "Text/HTML; charset=utf-8")
+		case "/spaced":
+			w.Header().Set("Content-Type", "text/html ; charset=utf-8")
+		case "/multi":
+			w.Header()["Content-Type"] = []string{"text/html", "application/octet-stream"}
+		}
+		_, _ = io.WriteString(w, sqlLeak)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: srv.Listener.Addr().String()}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1, InspectResponses: true}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	for _, path := range []string{"/mixed", "/spaced", "/multi"} {
+		if got, _ := fetch(t, plain, "", "http://web.example.com"+path); got != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", path, got)
+		}
+	}
+}
+
+// Unknown and binary Content-Types forced by CRS 901340 use the RAW body
+// processor rather than URLENCODED (upstream issues #1628 and #1856): the
+// bytes populate REQUEST_BODY for inspection, without being split into
+// garbage ARGS_POST / ARGS_POST_NAMES that trip argument-count or name-length
+// rules and blow up memory.
+func TestProxyReadsOpaqueBinaryBodiesAsRaw(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools: []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{
+			ID: "p1", Mode: "block", Paranoia: 1,
+			// Lift CRS 920420 (allowed request content-type) so octet-stream
+			// reaches phase 2, as upload endpoints do.
+			Exclusions: []model.WAFExclusion{{Rule: "920420"}},
+		}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	manyAmps := strings.Repeat("a=1&", 1100)
+	if got := post(t, plain, "http://web.example.com/upload", "application/octet-stream", manyAmps); got != http.StatusOK {
+		t.Errorf("octet-stream with 1100 ampersands: status %d, want 200", got)
+	}
+	longBlob := strings.Repeat("A", 512)
+	if got := post(t, plain, "http://web.example.com/upload", "application/octet-stream", longBlob); got != http.StatusOK {
+		t.Errorf("512-byte octet-stream blob: status %d, want 200", got)
+	}
+	// REQUEST_BODY is still populated and inspected by CRS (e.g. 944110).
+	if got := post(t, plain, "http://web.example.com/upload", "application/octet-stream", "java.lang.Runtime.getRuntime().exec(cmd)"); got != http.StatusForbidden {
+		t.Errorf("octet-stream with Java RCE payload: status %d, want 403", got)
+	}
+}
+
 // A profile that passes larger bodies lets an upload past the limit
 // through with its first part inspected, and a body cut at the limit is
 // not refused as one that does not parse. That padding hides what comes

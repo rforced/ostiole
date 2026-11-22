@@ -303,13 +303,23 @@ func (c *Map) Name() string {
 	return c.variable.Name()
 }
 
+// Changed by Ostiole: bound pooled Map retention after Reset (upstream PR #1751, adapted for #1834).
+// maxRetainedKeys bounds what a pooled transaction keeps after Reset: Go maps
+// never shrink and large entry slices stay pinned in the pool.
+const maxRetainedKeys = 256
+
 // Reset removes all key/value pairs from the map.
 func (c *Map) Reset() {
-	clear(c.index)
-	// Zero the slots so a pooled transaction does not keep the previous
-	// request's values alive through the backing array.
-	clear(c.entries)
-	c.entries = c.entries[:0]
+	if len(c.index) > maxRetainedKeys || cap(c.entries) > maxRetainedKeys {
+		c.index = map[string]int{}
+		c.entries = nil
+	} else {
+		clear(c.index)
+		// Zero the slots so a pooled transaction does not keep the previous
+		// request's values alive through the backing array.
+		clear(c.entries)
+		c.entries = c.entries[:0]
+	}
 	c.deleted = 0
 	c.totalValues = 0
 }

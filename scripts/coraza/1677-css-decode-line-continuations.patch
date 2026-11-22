@@ -1,0 +1,41 @@
+# - internal/transformations/css_decode.go: cssDecode only folded LF
+#   after a backslash, leaving CR, CRLF and FF as literal characters so
+#   payloads like aler\<CRLF>t(1) slipped past CRS 941xxx XSS rules.
+#   Fold CR, CRLF and FF as CSS newlines and consume CRLF after hex escapes.
+#   Upstream: PR #1677 (2026-08-02), approved and open at 1cfa4f9.
+diff --git a/internal/transformations/css_decode.go b/internal/transformations/css_decode.go
+index be984af..dd2beeb 100644
+--- a/internal/transformations/css_decode.go
++++ b/internal/transformations/css_decode.go
+@@ -80,15 +80,29 @@ func cssDecodeInplace(input string, pos int) string {
+ 
+ 					/* We must ignore a single whitespace after a hex escape */
+ 					if (i+j < inputLen) && isspace(input[i+j]) {
++						// Changed by Ostiole: treat CR, CRLF and FF as CSS newlines (upstream PR #1677).
++						if input[i+j] == '\r' && i+j+1 < inputLen && input[i+j+1] == '\n' {
++							j++
++						}
+ 						j++
+ 					}
+ 
+ 					/* Move over. */
+ 					i += j
+-				case input[i] == '\n':
++				case input[i] == '\n', input[i] == '\f':
+ 					/* No hexadecimal digits after backslash */
+-					/* A newline character following backslash is ignored. */
++					/* A newline character following backslash is ignored.
++					 * CSS treats CR and FF as newlines as well, both are
++					 * turned into LF before the escape is read. */
+ 					i++
++				case input[i] == '\r':
++					/* CR is a newline too, and CRLF is a single one, so the
++					 * LF has to go with it rather than being copied out as a
++					 * normal character. */
++					i++
++					if i < inputLen && input[i] == '\n' {
++						i++
++					}
+ 				default:
+ 					/* The character after backslash is not a hexadecimal digit,
+ 					 * nor a newline. */

@@ -1,0 +1,74 @@
+# - internal/corazawaf/rulegroup.go and transaction.go: empty the
+#   transformation cache at the end of each phase instead of the start of
+#   the next so phase-2 transformed strings are not held in memory while
+#   waiting on upstreams or open WebSockets, and replace the map past
+#   8192 entries so oversized bucket arrays are not retained in txPool.
+#   Upstream: PR #1865 (2026-11-14), open at 1cfa4f9.
+diff --git a/internal/corazawaf/rulegroup.go b/internal/corazawaf/rulegroup.go
+index 40eef8c..a788943 100644
+--- a/internal/corazawaf/rulegroup.go
++++ b/internal/corazawaf/rulegroup.go
+@@ -197,10 +197,8 @@ func (rg *RuleGroup) Eval(phase types.RulePhase, tx *Transaction) bool {
+ 	tx.lastPhase = phase
+ 	usedRules := 0
+ 	ts := time.Now().UnixNano()
++	// The previous phase emptied the cache when it ended, see below.
+ 	transformationCache := tx.transformationCache
+-	for k := range transformationCache {
+-		delete(transformationCache, k)
+-	}
+ 	// The logging phase always runs, as in ModSecurity: a plain allow issued in an
+ 	// earlier phase skips the remaining request and response phases, not this one.
+ 	// An allow issued by a logging phase rule still stops the rest of the phase.
+@@ -334,6 +332,21 @@ RulesLoop:
+ 	// Reset Skip counter at the end of each phase. Skip actions work only within the current processing phase
+ 	tx.Skip = 0
+ 
++	// The cache is only valid within a phase, and its entries keep every transformed
++	// value alive. Empty it now rather than when the next phase starts: a connector
++	// waits for the upstream between the request and the response phases, and with
++	// many arguments (a large JSON body under CRS) the entries can weigh far more
++	// than the request itself. Deleting the entries keeps the map's table, which is
++	// what makes reusing it cheap; past a size that only such requests reach, drop
++	// the map instead so the table goes too.
++	if len(transformationCache) > maxRetainedTransformationCacheEntries {
++		tx.transformationCache = map[transformationKey]transformationValue{}
++	} else {
++		for k := range transformationCache {
++			delete(transformationCache, k)
++		}
++	}
++
+ 	tx.stopWatches[phase] = time.Now().UnixNano() - ts
+ 	return tx.IsInterrupted()
+ }
+@@ -346,6 +359,11 @@ func NewRuleGroup() RuleGroup {
+ 	return RuleGroup{}
+ }
+ 
++// Changed by Ostiole: empty transformation cache at end of phase and bound its size (upstream PR #1865).
++// maxRetainedTransformationCacheEntries is the size past which a phase's
++// transformation cache is dropped rather than emptied in place.
++const maxRetainedTransformationCacheEntries = 8192
++
+ type transformationKey struct {
+ 	// TODO(anuraaga): This is a big hack to support performance on TinyGo. TinyGo
+ 	// cannot efficiently compute a hashcode for a struct if it has embedded non-fixed
+diff --git a/internal/corazawaf/transaction.go b/internal/corazawaf/transaction.go
+index 9ccf65e..962ced5 100644
+--- a/internal/corazawaf/transaction.go
++++ b/internal/corazawaf/transaction.go
+@@ -1784,8 +1784,11 @@ func (tx *Transaction) Close() error {
+ 	}
+ 
+ 	tx.variables.reset()
+-	// The entries of the last evaluated phase point to values the collections have
+-	// just released, and would keep them alive while the transaction sits in the pool.
++	// Changed by Ostiole: cache is emptied at phase end (upstream PR #1865).
++	// Each phase empties the cache when it ends, so entries are only left here when a
++	// phase did not finish, for instance after a panic in a rule that the caller
++	// recovered (net/http does). They point to values the collections have just
++	// released, and would keep them alive while the transaction sits in the pool.
+ 	for k := range tx.transformationCache {
+ 		delete(tx.transformationCache, k)
+ 	}
