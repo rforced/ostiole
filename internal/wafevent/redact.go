@@ -260,6 +260,11 @@ func secretName(name string) bool {
 	if n, err := url.QueryUnescape(name); err == nil {
 		name = n
 	}
+	// MCP's progressToken only pairs progress notifications with a request,
+	// and an exclusion for an agent's calls needs its form.
+	if strings.EqualFold(name[strings.LastIndexAny(name, ".:/")+1:], "progressToken") {
+		return false
+	}
 	n := strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':

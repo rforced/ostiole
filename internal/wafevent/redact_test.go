@@ -26,6 +26,7 @@ func TestCredentialsAreRedacted(t *testing.T) {
 		{"/t/" + token + "/go", "/t/REDACTED/go"},
 		{"/?token=&q=1", "/?token=&q=1"},
 		{"/turkeyJerkyRecipes?author", "/turkeyJerkyRecipes?author"},
+		{"/mcp?progressToken=7:x&access_token=abc", "/mcp?progressToken=7:x&access_token=REDACTED"},
 	} {
 		if got := redactURI(c.in); got != c.want {
 			t.Errorf("URI %s became %s, want %s", c.in, got, c.want)
@@ -59,6 +60,14 @@ func TestCredentialsAreRedacted(t *testing.T) {
 			"Matched Data: REDACTED found within XML:/*: REDACTED"},
 		{"Matched Data: <script> found within ARGS:q: <script>alert(1)</script>",
 			"Matched Data: <script> found within ARGS:q: <script>alert(1)</script>"},
+		// MCP's progress token is no credential, unless it holds one.
+		{"Matched Data: -5c7a- found within ARGS:json.params._meta.progressToken: 9d92b7d8-5c7a:3",
+			"Matched Data: -5c7a- found within ARGS:json.params._meta.progressToken: 9d92b7d8-5c7a:3"},
+		{"ARGS:json.params._meta.progressToken=a:b=c", "ARGS:json.params._meta.progressToken=a:b=c"},
+		{"Matched Data: x found within ARGS:json.params._meta.progressToken: " + token,
+			"Matched Data: x found within ARGS:json.params._meta.progressToken: REDACTED"},
+		{"Matched Data: x found within ARGS:json.params._meta.progressTokenSecret: abc",
+			"Matched Data: REDACTED found within ARGS:json.params._meta.progressTokenSecret: REDACTED"},
 		{"Found 3 byte(s) outside the range", "Found 3 byte(s) outside the range"},
 	} {
 		if got := redactData(c.in); got != c.want {
