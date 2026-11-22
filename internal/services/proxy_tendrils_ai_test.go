@@ -102,17 +102,19 @@ func (g td) claudeCode(method string, params map[string]any) tdRequest {
 }
 
 // antigravity is a call from Antigravity CLI, which carries its artifacts
-// directory and conversation ids under _meta.antigravity.google/.
+// directory and conversation ids under _meta.antigravity.google/, and a
+// progress token. The WAF's events hide its value; these forms use only the
+// characters its rule hits allow.
 func (g td) antigravity(method string, params map[string]any) tdRequest {
 	if params == nil {
 		params = map[string]any{}
 	}
-	conv := g.id()
+	conv, step := g.id(), fmt.Sprint(1+g.r.IntN(400))
 	params["_meta"] = map[string]any{
 		"antigravity.google/artifacts_dir":        "/home/sam/.gemini/antigravity-cli/brain/" + conv,
 		"antigravity.google/conversation_id":      conv,
 		"antigravity.google/root_conversation_id": conv,
-		"progressToken":                           "tok-" + g.b64url(12),
+		"progressToken":                           g.pick(conv+":"+step, step+":"+conv, "tok-"+g.b64url(12), "conv="+conv+"&step="+step, conv+","+step),
 	}
 	return g.mcp(false, method, params)
 }

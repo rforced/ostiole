@@ -960,6 +960,10 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 			"_meta": map[string]any{"antigravity.google/conversation_id": "a);(b"}})},
 		{3, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
 			"_meta": map[string]any{"antigravity.google/other": "a);(b"}})},
+		{3, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
+			"_meta": map[string]any{"progressToken": "a);(b"}})},
+		{1, g.mcp(false, "tools/call", map[string]any{"name": "get_task", "arguments": map[string]any{"task_id": task},
+			"_meta": map[string]any{"progressToken": "1' OR '1'='1"}})},
 		{1, g.mcp(false, "tools/call' UNION SELECT password FROM users--", nil)},
 		// The same with only brackets, which fewer rules read.
 		{3, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "due": "2026-10-13);("})},
