@@ -5,12 +5,14 @@ package netnstest
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -80,11 +82,40 @@ func Dummy(t *testing.T, name string, addrs ...string) netlink.Link {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := netlink.AddAddr(link.Index, p); err != nil {
-			t.Fatalf("address %s on %s: %v", addr, name, err)
-		}
+		AddAddr(t, link.Index, p)
 	}
 	return Link(t, name)
+}
+
+// AddAddr puts p on an up link and, for IPv6, waits until the kernel's
+// asynchronous DAD work has installed its local route. Even on loopback and
+// dummy links, RTM_NEWADDR queues addrconf_dad_work and returns before the
+// address leaves tentative state or enters table local.
+func AddAddr(t *testing.T, link int, p netip.Prefix) {
+	t.Helper()
+	if err := netlink.AddAddr(link, p); err != nil {
+		t.Fatalf("address %s on link %d: %v", p, link, err)
+	}
+	if addr := p.Addr().Unmap(); addr.Is6() {
+		waitLocal(t, link, addr)
+	}
+}
+
+// waitLocal waits until the kernel routes addr locally on link.
+func waitLocal(t *testing.T, link int, addr netip.Addr) {
+	t.Helper()
+	ip := net.IP(addr.AsSlice())
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		routes, err := netlink.RouteGet(netlink.RouteQuery{Dst: ip, Iif: link})
+		if err == nil && len(routes) > 0 && routes[0].Type == unix.RTN_LOCAL {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("address %s on link %d never became local (routes=%+v, err=%v)", addr, link, routes, err)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 // Link looks a link up by name.

@@ -349,9 +349,7 @@ func TestICMPProbeReachesALinkLocalNextHop(t *testing.T) {
 	if err := netlink.SetLinkUp(lo.Index); err != nil {
 		t.Fatal(err)
 	}
-	if err := netlink.AddAddr(lo.Index, netip.MustParsePrefix("fe80::1/64")); err != nil {
-		t.Fatal(err)
-	}
+	netnstest.AddAddr(t, lo.Index, netip.MustParsePrefix("fe80::1/64"))
 	if _, err := NewICMPProber().Probe(context.Background(), "fe80::1", "lo", 2*time.Second); err != nil {
 		t.Errorf("probe: %v", err)
 	}
