@@ -164,7 +164,8 @@ func (g cv) requests() []cvRequest {
 		{method: "DELETE", path: api + "/admin/activity/history"},
 		cvBody("PUT", api+"/admin/settings/smtp", map[string]any{"enabled": true, "host": "smtp.example.com", "port": 587,
 			"security": "starttls", "username": "no-reply@example.com", "password": "", "clearPassword": false,
-			"from": "no-reply@example.com", "publicUrl": g.pick("https://media.example.com", "https://media.example.com/cavu", "")}),
+			"from":      g.pick("no-reply@example.com", "Cavu <no-reply@example.com>", "Media Server <alerts+1@mail.example.org>"),
+			"publicUrl": g.pick("https://media.example.com", "https://media.example.com/cavu", "")}),
 		cvGet(api + "/admin/browse?" + url.Values{"path": {g.pick(cvPaths...)}}.Encode()),
 		cvGet(g.asset()),
 		cvRange(api + "/stream/" + g.token() + "/t-" + g.id() + "-orig." + g.pick("flac", "mp3")),
@@ -350,7 +351,7 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 			}
 			for _, pw := range []string{`<Tr0ub4dor&3>`, `p@ss'w0rd"; --`, `correct horse; battery's "staple"`, "a;b|c`d$(e)"} {
 				send(cvBody("PUT", "/api/v1/admin/settings/smtp", map[string]any{"enabled": true, "host": "smtp.example.com", "port": 465,
-					"security": "tls", "username": "mailer", "password": pw, "from": "no-reply@example.com",
+					"security": "tls", "username": "mailer", "password": pw, "from": "Cavu <no-reply@example.com>",
 					"publicUrl": "https://media.example.com"}), " (a mail server's password)")
 			}
 			for _, profiles := range cvProfiles {
@@ -483,8 +484,14 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvBody("POST", api+"/items/"+item+"/played", map[string]any{"key": "x' UNION SELECT password FROM users--"})},
 		{1, cvBody("POST", api+"/auth/login", map[string]any{"username": "x' UNION SELECT password FROM users--", "password": "x"})},
 		{1, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"username": "x' UNION SELECT password FROM users--", "password": "x"})},
-		// The address mails link to is a URL with no query.
+		// The address mails link to is a URL with no query, and from is a bare
+		// address or "Name <addr>" only in mail settings.
 		{4, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "publicUrl": "https://media.example.com/a);(b"})},
+		{1, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "from": "Cavu <script>alert(1)</script>"})},
+		{1, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "from": "Cavu <x' OR 1=1--@example.com>"})},
+		{4, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "from": "a);(b"})},
+		{2, cvBody("POST", api+"/admin/settings/smtp", map[string]any{"host": "smtp.example.com", "from": "Cavu <no-reply@example.com>", "From": "x <y@example.com>"})},
+		{2, cvBody("POST", api+"/music/connect/transfer", map[string]any{"id": g.id(), "from": "Cavu <no-reply@example.com>", "clientId": client, "to": g.id()})},
 		// Only a new file's identify takes the name wholeUnit.
 		{3, cvBody("POST", api+"/admin/items/"+item+"/identify", map[string]any{"provider": "tmdb", "id": "12345", "wholeUnit": true})},
 		{3, cvBody("POST", api+"/admin/ingest/files/"+item+"/identify", map[string]any{"kind": "movie", "wholeUnits": true})},
