@@ -39,7 +39,10 @@ func Enter(t *testing.T, needs ...string) bool {
 		}
 	}
 	cmd := exec.CommandContext(t.Context(), "unshare", "-Urn", os.Args[0], "-test.run", "^"+t.Name()+"$", "-test.v") //nolint:gosec // this test binary, run again
-	cmd.Env = append(os.Environ(), env+"=1")
+	// A race-built binary sleeps a second before it exits. The copy skips
+	// it, since every namespaced test paid it once more; the outer binary
+	// still sleeps.
+	cmd.Env = append(os.Environ(), env+"=1", "GORACE="+strings.TrimSpace(os.Getenv("GORACE")+" atexit_sleep_ms=0"))
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return false
