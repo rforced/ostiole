@@ -912,6 +912,34 @@ func TestProxyReadsLikeAndCharsetIntroducersAsSQL(t *testing.T) {
 	}
 }
 
+// A TAB or CR inside a URL scheme does not hide it, raw or as &Tab;, since
+// browsers strip both. libinjection-go 0.3.6 read them as part of the
+// scheme, so a data: or view-source: link split by one got past every rule
+// at paranoia level 1 (GHSA-3xx6-w25q-cx8h).
+func TestProxyReadsASchemeSplitByWhitespace(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	for _, q := range []string{
+		`<a href="da&Tab;ta:text/html,x">x</a>`,
+		"<a href=\"da\tta:x\">x</a>",
+		`<a href="view-so&Tab;urce:http://x">x</a>`,
+	} {
+		body := "q=" + url.QueryEscape(q)
+		if got := post(t, plain, "http://web.example.com/search", "application/x-www-form-urlencoded", body); got != http.StatusForbidden {
+			t.Errorf("%q: status %d, want 403", q, got)
+		}
+	}
+}
+
 // cssDecode folds CR, CRLF and FF after a backslash as CSS line
 // continuations, not only LF (upstream PR #1677). CRS 941xxx runs jsDecode
 // right before cssDecode, so a doubled backslash reaches cssDecode intact;
