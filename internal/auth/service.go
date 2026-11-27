@@ -124,6 +124,8 @@ func NewService(dir string) (*Service, error) {
 	}
 	s.mu.RUnlock()
 	s.sessions.keepOnly(known)
+	// Made now, so the first unknown-user sign-in is not the slow one.
+	dummyHash()
 	return s, nil
 }
 
@@ -522,10 +524,10 @@ func (s *Service) DeleteUser(username string) error {
 }
 
 // dummyHash keeps unknown-user logins as slow as wrong-password logins.
-var dummyHash = func() string {
+var dummyHash = sync.OnceValue(func() string {
 	h, _ := HashPassword("not-a-real-password-just-for-timing")
 	return h
-}()
+})
 
 // verify checks a password under the sign-in limiter. It counts a failure
 // against remote and leaves a success to the caller, which knows whether the
@@ -550,7 +552,7 @@ func (s *Service) verify(username, password, remote string) (User, error) {
 	s.mu.RLock()
 	u, ok := s.users[username]
 	s.mu.RUnlock()
-	hash := dummyHash
+	hash := dummyHash()
 	if ok {
 		hash = u.Hash
 	}

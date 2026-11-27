@@ -20,10 +20,11 @@ import (
 	"ostiole/internal/store"
 )
 
-// The backup tests encrypt and decrypt, each at a cost of seconds under
-// the race detector at age's own work factor.
+// Under the race detector, age's own work factor costs the backup tests
+// seconds a file, and the router's password hashing costs every sign-in.
 func TestMain(m *testing.M) {
 	backup.WorkFactor = 10
+	auth.HashMemory = 64
 	m.Run()
 }
 

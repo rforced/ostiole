@@ -11,6 +11,12 @@ import (
 
 const goodPassword = "correct horse battery"
 
+// Hashes here cost a sliver of the router's, but for TestHashAndVerify's.
+func TestMain(m *testing.M) {
+	HashMemory = 64
+	m.Run()
+}
+
 func newService(t *testing.T) (*Service, *time.Time) {
 	t.Helper()
 	s, err := NewService(t.TempDir())
@@ -24,7 +30,7 @@ func newService(t *testing.T) (*Service, *time.Time) {
 
 func TestHashAndVerify(t *testing.T) {
 	t.Parallel()
-	h, err := HashPassword(goodPassword)
+	h, err := hashPassword(goodPassword, argonMemory)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,8 +33,16 @@ const (
 // ErrWeakPassword is returned for passwords outside the policy.
 var ErrWeakPassword = fmt.Errorf("password must be %d to %d characters", MinPasswordLength, MaxPasswordLength)
 
+// HashMemory is the memory, in KiB, a new hash costs. Only tests lower it:
+// under the race detector the router's cost is most of their time.
+var HashMemory uint32 = argonMemory
+
 // HashPassword returns a PHC-formatted argon2id hash.
 func HashPassword(password string) (string, error) {
+	return hashPassword(password, HashMemory)
+}
+
+func hashPassword(password string, memory uint32) (string, error) {
 	if err := checkPassword(password); err != nil {
 		return "", err
 	}
@@ -42,9 +50,9 @@ func HashPassword(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	key := argon2.IDKey([]byte(password), salt, argonTime, memory, argonThreads, argonKeyLen)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-		argon2.Version, argonMemory, argonTime, argonThreads,
+		argon2.Version, memory, argonTime, argonThreads,
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(key)), nil
 }
