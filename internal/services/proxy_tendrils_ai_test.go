@@ -33,7 +33,7 @@ var tdAgentText = []string{
 var tdAgentPages = []string{
 	"**Shell traps.** A pipe hides the exit status: `go test ./... | tail -5 && git commit` once committed on a failing test. Check with `nft -c -f <file>` in `unshare -Urn`, and keep scratch work in `$(mktemp -d)` under /var/tmp.",
 	"```bash\ncd web && bunx eslint .\ngit archive HEAD | tar -x -C /var/tmp/<dir>\nsystemctl restart example.service 2>/dev/null || true\n```",
-	"Time servers and network boot, DNS with overrides and blocklists, then wget the release and tar -xO it to read the notes.",
+	"Time servers and network boot, DNS with overrides and blocklists, then `wget -qO- <release> | tar -xO` to read the notes.",
 	"List modules behind with `go list -m -u -f '{{if and (not .Indirect) .Update}}{{.Path}}{{end}}' all`, then `gh api repos/<repo>/compare/<old>...<new> --jq '[.files[].filename]'`.",
 	"The unit sets `ProtectHome=yes` and reads `${STATE_DIRECTORY}`; a Vue file opens with `<script setup lang=\"ts\">` and the dialog with `<template>`.",
 	"Zones are `[lan,vpn]` and the listener is `[::]:443`. Files: `crs/{before,config}.conf`, fields `{\"username\",\"password\"}`.",

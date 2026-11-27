@@ -48,7 +48,7 @@ func (r cvRequest) with(cookies string) cvRequest {
 // what people search for, in the shapes that trip the rules.
 var cvTitles = []string{"The Lantern Keeper", "Night Ferry (2006)", "Kill the Lights", "Who's Watching?", "Echo & the Tide",
 	"Sleep No More: Part 2", "100% Juice", "Unter den Linden", "夏の雨", "山の音楽隊", "MOON SIGNAL", "Paper Kites", "Watch Hill",
-	"the harbo", "river ki", "Tide Line 2004", "Small Hours", "ECHO 3", "Notes On A Quiet Summer"}
+	"the harbo", "river ki", "Tide Line 2004", "Small Hours", "ECHO 3", "Notes On A Quiet Summer", "Room 9 / $5 a Night"}
 
 // cvDevices are what the client calls a device, as it names one and as a
 // person renames it.
