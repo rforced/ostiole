@@ -77,6 +77,8 @@ func TestVerdict(t *testing.T) {
 		{true, xss, VerdictBlocked},
 		{false, append(xss, Hit{ID: 949110}), VerdictWouldBlock},
 		{false, []Hit{{ID: 959100}}, VerdictWouldBlock},
+		{false, append(xss, Hit{ID: 10007}), VerdictWouldBlock},
+		{true, []Hit{{ID: 19007}}, VerdictBlocked},
 		{false, xss, VerdictMatched},
 		{false, nil, VerdictMatched},
 	} {

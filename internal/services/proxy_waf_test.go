@@ -3,6 +3,9 @@ package services
 import (
 	"encoding/json"
 	"os"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -82,5 +85,38 @@ func TestRenderedWAFNamesThePrefixesOfEveryEnabledSite(t *testing.T) {
 	raw := files[proxyConfName]
 	if !strings.Contains(raw, strings.Trim(string(want), `"`)) || strings.Count(raw, wafevent.RedactSignature) != 2 {
 		t.Errorf("the WAF directives do not name the prefixes:\n%s", raw)
+	}
+}
+
+// A rule a profile writes to deny outright reads as would-block when it
+// matches under detection only, and no other rule it writes does, so an
+// event in detect mode says what block mode would have refused.
+func TestOnlyTheDenyRulesReadAsBlocking(t *testing.T) {
+	t.Parallel()
+	rule := regexp.MustCompile(`"id:([0-9]+),([^"]*)"`)
+	profiles := []model.WAFProfile{
+		{RefuseMultipart: true, Exclusions: []model.WAFExclusion{{Rule: "942100", Path: "/search"}, {Rule: "920273", Target: "ARGS:q"}}},
+		{PassLargeBodies: true},
+	}
+	var deny, other int
+	for _, p := range profiles {
+		for _, m := range rule.FindAllStringSubmatch(wafDirectives("/etc/ostiole/proxy", p, "shop"), -1) {
+			id, err := strconv.Atoi(m[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			denies := slices.Contains(strings.Split(m[2], ","), "deny")
+			if denies {
+				deny++
+			} else {
+				other++
+			}
+			if blocking := wafevent.Verdict(false, []wafevent.Hit{{ID: id}}) == wafevent.VerdictWouldBlock; blocking != denies {
+				t.Errorf("rule %d denies %v but reads as blocking %v", id, denies, blocking)
+			}
+		}
+	}
+	if deny == 0 || other == 0 {
+		t.Errorf("read %d rules that deny and %d that do not", deny, other)
 	}
 }

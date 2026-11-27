@@ -168,7 +168,8 @@ func TestProxyResponsesNameNoSoftware(t *testing.T) {
 
 // An event says what the client got and why: the WAF's 403 to a request
 // or a response it stopped, and the site's own answer to one it only
-// flagged. The rules that inspect responses log like the rest.
+// flagged. The rules that inspect responses log like the rest, and
+// Ostiole's own, which deny without a score, would block like CRS's.
 func TestProxyEventsSayWhatTheClientGot(t *testing.T) {
 	t.Parallel()
 	bin := sidecar(t)
@@ -190,6 +191,7 @@ func TestProxyEventsSayWhatTheClientGot(t *testing.T) {
 		{"leak", "block", "leaky", "/", http.StatusForbidden, wafevent.VerdictBlocked, []int{951230, 959100}},
 		{"spill", "detect", "leaky", "/", http.StatusOK, wafevent.VerdictWouldBlock, []int{951230, 959100}},
 		{"vault", "block", "missing", attack + "&access_token=" + token, http.StatusForbidden, wafevent.VerdictBlocked, []int{941100, 949110}},
+		{"crowd", "detect", "missing", "/?" + strings.Repeat("a=1&", 1001), http.StatusNotFound, wafevent.VerdictWouldBlock, []int{10006}},
 	}
 	cfg := &model.Config{}
 	cfg.Services.Proxy = model.Proxy{

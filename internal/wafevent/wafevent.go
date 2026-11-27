@@ -64,10 +64,13 @@ const (
 	VerdictMatched    = "matched"
 )
 
-// blockingRules are the anomaly-score rules that stop a request and a
-// response. A match on either under detection-only is what would have
-// been blocked.
-var blockingRules = []int{949110, 959100}
+// blockingRules stop a request or a response: CRS's anomaly-score rules,
+// and the rules every profile writes to deny outright, numbered by
+// wafDirectives in internal/services, whose test keeps the two in step. A
+// match on one under detection-only is what would have been blocked.
+var blockingRules = []int{949110, 959100,
+	10000, 10005, 10006, 10007, 10008,
+	19001, 19002, 19003, 19004, 19005, 19006, 19007, 19008, 19010}
 
 // Verdict is what came of a transaction: stopped, what would have been
 // stopped with the engine on, or only matched.
