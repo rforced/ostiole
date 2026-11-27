@@ -164,6 +164,11 @@ func memMeasuring() bool { return os.Getenv("OSTIOLE_STARTMEM") != "" }
 
 func memCount(name string, def int) int {
 	if !memMeasuring() {
+		// The race detector makes writing and reading back twenty times
+		// slower; a tenth of the entries still holds to the figures.
+		if raceEnabled {
+			return def / 10
+		}
 		return def
 	}
 	if n, err := strconv.Atoi(os.Getenv(name)); err == nil && n > 0 {
