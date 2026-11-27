@@ -41,5 +41,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.spec.ts'],
+    // jsdom is made once per worker rather than once per file; each file
+    // still runs in a context of its own.
+    pool: 'vmThreads',
+    maxWorkers: 2,
   },
 })
