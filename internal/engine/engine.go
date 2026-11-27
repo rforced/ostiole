@@ -754,7 +754,13 @@ func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	}
 	// After the firewall, which a slow clock or sshd must not hold up.
 	if confirmed, ok := e.confirmed(); ok {
-		e.applyHost(ctx, confirmed, p.previousKernel)
+		before := p.previousKernel
+		if confirmed == nil && before == nil {
+			// nf_conntrack was not loaded before the apply, so Current could
+			// not read tcp_loose; restoring it puts back the kernel default.
+			before = &sysctl.Settings{TCPLoose: "1"}
+		}
+		e.applyHost(ctx, confirmed, before)
 		e.retime(ctx, p.previous)
 	}
 	return errors.Join(errs...)

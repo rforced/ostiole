@@ -1067,7 +1067,7 @@ func healSysctl(ctx context.Context, eng *engine.Engine, log *slog.Logger) {
 			log.Warn("a kernel setting had changed; put it back", "key", d.Key, "found", d.Found, "set", d.Want)
 		}
 		if err != nil {
-			log.Warn("could not put kernel settings back; the next apply, restart or hourly check tries again", "err", err)
+			log.Warn("could not check or put back kernel settings; the next apply, restart or hourly check tries again", "err", err)
 		}
 	}
 }

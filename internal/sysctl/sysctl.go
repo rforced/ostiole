@@ -102,9 +102,10 @@ var Tuning = map[string]string{
 	"net/core/netdev_budget":       "600",
 	"net/core/netdev_budget_usecs": "8000",
 	// The router's own outgoing connections start above every port it
-	// listens on by default, the web UI's 9443 included. The kernel shows
-	// the pair with a tab between.
-	"net/ipv4/ip_local_port_range": "10000 65535",
+	// listens on by default, the web UI's 9443 included, and stop below
+	// the discovery relay's 61900-61999 reply range (ADR-0045). The
+	// kernel shows the pair with a tab between.
+	"net/ipv4/ip_local_port_range": "10000 60999",
 }
 
 // Hardening closes the doors a router never needs open. Nothing here

@@ -211,10 +211,11 @@ func TestPPPoEClampsTheSegmentSizeInKernel(t *testing.T) {
 }
 
 // Any link narrower than Ethernet clamps the SYNs that leave by it, not
-// only PPPoE: a WireGuard tunnel at 1420, a VLAN set to 1400, and a VLAN
-// left to its parent, which is set to 1400. The LAN's host offers 1460 to
-// a device behind each, in IPv6 too through the VLAN that has it, and the
-// SYNs leave offering what fits. ACKs out the same links are not touched.
+// only PPPoE: a WireGuard tunnel at 1420, a VLAN set to 1400, a VLAN left
+// to its parent at 1400, and a VLAN whose configured 1500 the kernel caps
+// at that parent's 1400. The LAN's host offers 1460 to a device behind
+// each, in IPv6 too through the VLAN that has it, and the SYNs leave
+// offering what fits. ACKs out the same links are not touched.
 func TestNarrowLinksClampTheSegmentSizeInKernel(t *testing.T) {
 	if !netnstest.Enter(t, "nft") {
 		return
@@ -237,6 +238,10 @@ func TestNarrowLinksClampTheSegmentSizeInKernel(t *testing.T) {
 			Name: "eth2.40", Zone: "lan", Enabled: true, VLAN: &model.VLAN{Parent: "eth2", ID: 40},
 			IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.40.1/24"}, IPv6: none,
 		},
+		model.Interface{
+			Name: "eth2.60", Zone: "lan", Enabled: true, MTU: 1500, VLAN: &model.VLAN{Parent: "eth2", ID: 60},
+			IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.60.1/24"}, IPv6: none,
+		},
 	)
 	ruleset, err := Render(cfg)
 	if err != nil {
@@ -256,6 +261,7 @@ func TestNarrowLinksClampTheSegmentSizeInKernel(t *testing.T) {
 	tunnel := narrow("wg0", 1420, "10.66.0.1/24")
 	vlan := narrow("eth1.30", 1400, "192.168.30.1/24", "2001:db8:30::1/64")
 	inherited := narrow("eth2.40", 1400, "192.168.40.1/24")
+	capped := narrow("eth2.60", 1400, "192.168.60.1/24")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	x := &Exec{}
@@ -287,6 +293,7 @@ func TestNarrowLinksClampTheSegmentSizeInKernel(t *testing.T) {
 		{vlan, "192.168.30.5", 1400 - 40},
 		{vlan, "2001:db8:30::5", 1400 - 60},
 		{inherited, "192.168.40.5", 1400 - 40},
+		{capped, "192.168.60.5", 1400 - 40},
 	}
 	for i, c := range cases {
 		dst, syn, ack := net.ParseIP(c.dst), 40001+uint16(i), 40101+uint16(i)

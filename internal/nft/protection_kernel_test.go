@@ -225,14 +225,33 @@ func TestAntiLockoutOutsideAnswersToTheFloodLimitInKernel(t *testing.T) {
 	if !held("scanners_wan_v4", "192.0.2.10") || !held("scanners_wan_v6", "2001:db8:77::") {
 		t.Fatal("the sources knocking on closed ports were not held")
 	}
+	// The scanners' own knocks after their hold count here too.
+	scanned := waitForCounter(ctx, t, x, "zone_wan/protect:scanner", 0)
 	syn(wan, "2001:db8:77::11", "2001:db8:ff::2", 41000, 443)
 	syn(wan, "192.0.2.10", "198.51.100.2", 41001, 9443)
 	syn(wan, "2001:db8:77::11", "2001:db8:ff::2", 41002, 9443)
 	if n := waitForCounter(ctx, t, x, "input/anti-lockout:wan", 2); n != 2 {
 		t.Errorf("the held sources' connections to the web port were let in %d times, want twice", n)
 	}
+	if n := waitForCounter(ctx, t, x, "zone_wan/protect:scanner", scanned+1); n <= scanned {
+		t.Error("the scanner hold did not drop the held /64's neighbour")
+	}
 	if n := waitForCounter(ctx, t, x, "web-in", 0); n != 0 {
 		t.Errorf("the held /64's neighbour reached the web site %d times", n)
+	}
+
+	// Two addresses in one IPv6 /64 send fifteen SYNs each to the web port
+	// (thirty against a burst of twenty): neither exceeds the burst alone,
+	// so drops prove the IPv6 anti-lockout flood guard shares one /64 bucket.
+	for i := range uint16(15) {
+		syn(wan, "2001:db8:88::10", "2001:db8:ff::2", 41100+i, 9443)
+		syn(wan, "2001:db8:88::11", "2001:db8:ff::2", 41200+i, 9443)
+	}
+	if n := waitForCounter(ctx, t, x, "input/anti-lockout-flood:wan", 1); n < 1 {
+		t.Error("none of thirty IPv6 SYNs from one /64 was cut at the WAN's management limit")
+	}
+	if !held("synflood_wan_v6", "2001:db8:88::") {
+		t.Errorf("the WAN's IPv6 flood set holds %q, want 2001:db8:88::", setElements(ctx, t, "synflood_wan_v6"))
 	}
 
 	for i := range uint16(100) {
@@ -240,13 +259,11 @@ func TestAntiLockoutOutsideAnswersToTheFloodLimitInKernel(t *testing.T) {
 		syn(wan2, "192.0.2.30", "203.0.113.2", 42000+i, 9443)
 		syn(lan, "192.168.1.20", "192.168.1.1", 42000+i, 9443)
 	}
-	for key, where := range map[string]string{
-		"input/anti-lockout-flood:wan":           "the WAN",
-		"plog_wan2_lockflood/anti-lockout-flood": "the second WAN",
-	} {
-		if n := waitForCounter(ctx, t, x, key, 1); n < 1 {
-			t.Errorf("none of a hundred SYNs from one source was cut on %s", where)
-		}
+	if n := waitForCounter(ctx, t, x, "input/anti-lockout-flood:wan", 50); n < 50 {
+		t.Errorf("the WAN cut %d management SYNs across IPv6 and IPv4 floods, want at least 50", n)
+	}
+	if n := waitForCounter(ctx, t, x, "plog_wan2_lockflood/anti-lockout-flood", 1); n < 1 {
+		t.Error("none of a hundred SYNs from one source was cut on the second WAN")
 	}
 	if n := waitForCounter(ctx, t, x, "input/anti-lockout:lan", 100); n != 100 {
 		t.Errorf("the LAN let in %d of a hundred SYNs to the web port, want all", n)

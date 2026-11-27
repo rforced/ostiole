@@ -287,7 +287,7 @@ func TestHealWritesNothingWhileTheSettingsHold(t *testing.T) {
 		ConntrackTCPLooseKey: "0", ConntrackTCPEstablishedKey: "86400"})
 	maps.Copy(files, conntrackFixed)
 	// As the kernel shows the pair.
-	files["net/ipv4/ip_local_port_range"] = "10000\t65535"
+	files["net/ipv4/ip_local_port_range"] = "10000\t60999"
 	root := fakeKernel(t, files)
 	moved, err := (Proc{Root: root}).Heal(Settings{ConntrackMax: 1_000_000, Configured: true})
 	if err != nil || len(moved) != 0 {
@@ -412,6 +412,7 @@ func TestConntrackTimeoutsAndTheHandshakeRule(t *testing.T) {
 	}{
 		{"unconfigured", Settings{}, map[string]string{ConntrackTCPEstablishedKey: "86400", ConntrackTCPLooseKey: "1"}},
 		{"configured", Settings{Configured: true}, map[string]string{ConntrackTCPEstablishedKey: "86400", ConntrackTCPLooseKey: "0"}},
+		{"configured overrides tcpLoose", Settings{Configured: true, TCPLoose: "1"}, map[string]string{ConntrackTCPEstablishedKey: "86400", ConntrackTCPLooseKey: "0"}},
 		{"a set idle time", Settings{Configured: true, TCPEstablished: 18000}, map[string]string{ConntrackTCPEstablishedKey: "18000", ConntrackTCPLooseKey: "0"}},
 	} {
 		root := fakeKernel(t, kernel)
@@ -483,7 +484,7 @@ func TestHealWatchesTheConntrackTimeouts(t *testing.T) {
 func TestHealReadsAPortRangeAsTheKernelShowsIt(t *testing.T) {
 	t.Parallel()
 	const key = "net/ipv4/ip_local_port_range"
-	root := fakeKernel(t, map[string]string{key: "10000\t65535"})
+	root := fakeKernel(t, map[string]string{key: "10000\t60999"})
 	if moved, err := (Proc{Root: root}).Heal(Settings{}); err != nil || len(moved) != 0 {
 		t.Fatalf("Heal = %+v, %v; want nothing moved", moved, err)
 	}
@@ -492,10 +493,10 @@ func TestHealReadsAPortRangeAsTheKernelShowsIt(t *testing.T) {
 	}
 	root = fakeKernel(t, map[string]string{key: "32768\t60999"})
 	moved, err := (Proc{Root: root}).Heal(Settings{})
-	if err != nil || !slices.Equal(moved, []Drift{{Key: key, Found: "32768 60999", Want: "10000 65535"}}) {
+	if err != nil || !slices.Equal(moved, []Drift{{Key: key, Found: "32768 60999", Want: "10000 60999"}}) {
 		t.Fatalf("Heal = %+v, %v; want the kernel's own range reported", moved, err)
 	}
-	if raw, _ := os.ReadFile(filepath.Join(root, key)); strings.TrimSpace(string(raw)) != "10000 65535" {
+	if raw, _ := os.ReadFile(filepath.Join(root, key)); strings.TrimSpace(string(raw)) != "10000 60999" {
 		t.Errorf("%s = %q", key, raw)
 	}
 }

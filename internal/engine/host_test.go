@@ -76,6 +76,7 @@ type kernelFake struct {
 	now         sysctl.Settings
 	established int
 	strict      bool
+	unloaded    bool
 	asked       []sysctl.Settings
 	drift       []sysctl.Drift
 	healErr     error
@@ -101,6 +102,7 @@ func (f *kernelFake) Apply(s sysctl.Settings) error {
 		f.now = sysctl.Settings{ConntrackMax: s.ConntrackMax, ConntrackBuckets: s.ConntrackBuckets}
 	}
 	f.established = cmp.Or(s.TCPEstablished, sysctl.DefaultTCPEstablished)
+	f.unloaded = false
 	switch {
 	case s.Configured:
 		f.strict = true
@@ -113,6 +115,9 @@ func (f *kernelFake) Apply(s sysctl.Settings) error {
 func (f *kernelFake) Current() (sysctl.Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.unloaded {
+		return sysctl.Settings{}, os.ErrNotExist
+	}
 	now := f.now
 	now.TCPEstablished = f.established
 	now.TCPLoose = "1"
@@ -535,6 +540,32 @@ func TestAnUnconfiguredRouterKeepsPickingConnectionsUp(t *testing.T) {
 	}
 	if got := kernel.last(); got.Configured || cmp.Or(got.TCPEstablished, sysctl.DefaultTCPEstablished) != kernel.established {
 		t.Errorf("the hourly check after the undo asked for %+v against an idle time of %d", got, kernel.established)
+	}
+}
+
+// A first apply started before nf_conntrack was loaded has no snapshot of
+// the pickup rule in its pending record; undoing it still restores pickup
+// without writing a conntrack ceiling.
+func TestUndoingAFirstApplyStartedWithoutConntrackRestoresPickup(t *testing.T) {
+	t.Parallel()
+	calls := &hostCalls{}
+	kernel := &kernelFake{hostCalls: calls, now: kernelOwn, unloaded: true}
+	e, _ := hostEngine(t, store.New(t.TempDir()), calls, kernel)
+	ctx := context.Background()
+	if _, err := e.Apply(ctx, unconfirmed(), ApplyOptions{ConfirmTimeout: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if !kernel.strict {
+		t.Fatal("the first apply left picking connections up midway on")
+	}
+	if err := e.Revert(ctx, tester); err != nil {
+		t.Fatal(err)
+	}
+	if kernel.strict {
+		t.Error("undoing a first apply with no conntrack snapshot left picking connections up midway off")
+	}
+	if got := kernel.last(); got != (sysctl.Settings{TCPLoose: "1"}) {
+		t.Errorf("undo asked for %+v, want only TCPLoose 1", got)
 	}
 }
 

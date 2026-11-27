@@ -2722,6 +2722,34 @@ func TestValidateConntrackTCPEstablished(t *testing.T) {
 	}
 }
 
+// Loopback stays managed by the kernel and cannot be declared as a router
+// interface, whatever features are configured on it.
+func TestValidateRejectsLoopbackInterface(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{
+		Version: SchemaVersion,
+		Zones:   []Zone{{Name: "lan"}},
+		Interfaces: []Interface{{
+			Name: "lo", Zone: "lan", Enabled: true,
+			IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+		}},
+		NAT: NAT{Outbound: OutboundNAT{Mode: OutboundAutomatic}},
+	}
+	ve, ok := errors.AsType[*ValidationError](cfg.Validate())
+	if !ok {
+		t.Fatal("interface named lo was accepted")
+	}
+	found := false
+	for _, issue := range ve.Issues {
+		if issue.Path == "interfaces[0].name" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("issues = %v, want interfaces[0].name", ve.Issues)
+	}
+}
+
 func TestGatewayThresholds(t *testing.T) {
 	t.Parallel()
 	off, big, neg := 0, MaxSlowAboveMS+1, -1

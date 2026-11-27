@@ -92,9 +92,12 @@ func (c *Config) Validate() error {
 	tailscales := 0
 	for i, in := range c.Interfaces {
 		path := fmt.Sprintf("interfaces[%d]", i)
-		if !ifaceRe.MatchString(in.Name) {
+		switch {
+		case !ifaceRe.MatchString(in.Name):
 			v.add(path+".name", "%q is not a valid interface name", in.Name)
-		} else if ifaces[in.Name] {
+		case in.Name == "lo":
+			v.add(path+".name", "%q is the loopback interface and stays managed by the kernel", in.Name)
+		case ifaces[in.Name]:
 			v.add(path+".name", "duplicate interface %q", in.Name)
 		}
 		ifaces[in.Name] = true
@@ -2052,9 +2055,6 @@ func (v *validator) shaping(c *Config, masters map[string]string) {
 		}
 		if !slices.Contains(LinkTypes, s.LinkType()) {
 			v.add(path+".link", "unknown link type %q", s.Link)
-		}
-		if in.Name == "lo" {
-			v.add(path, "loopback traffic never leaves this router, so there is nothing to queue")
 		}
 		if master, ok := masters[in.Name]; ok {
 			v.add(path, "%q is part of %q, which carries the traffic", in.Name, master)

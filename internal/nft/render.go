@@ -785,7 +785,7 @@ func (r *renderer) chainForward() {
 // clampSegments lowers the segment size a TCP handshake offers out a link
 // narrower than Ethernet to what fits in it: PPPoE, a WireGuard, OpenVPN
 // or Tailscale tunnel, a tunnel a gateway sends into, and any link set to
-// an MTU under 1500, a VLAN left to its parent's included. A client at
+// an MTU under 1500, a VLAN capped at its parent's included. A client at
 // 1500 behind such a link otherwise stalls on every site whose path MTU
 // discovery is broken. It comes before the connection state, since the
 // answer to a forwarded port's SYN is already an established packet, and
@@ -805,8 +805,10 @@ func (r *renderer) clampSegments() {
 			continue
 		}
 		mtu := in.MTU
-		if mtu == 0 && in.VLAN != nil {
-			mtu = set[in.VLAN.Parent]
+		if in.VLAN != nil {
+			if pm := set[in.VLAN.Parent]; pm > 0 && (mtu == 0 || pm < mtu) {
+				mtu = pm
+			}
 		}
 		tunnel := in.PPPoE != nil || in.WireGuard != nil || in.OpenVPN != nil || in.Tailscale != nil
 		if tunnel || gateway[in.Name] || (mtu > 0 && mtu < 1500) {

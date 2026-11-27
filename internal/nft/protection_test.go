@@ -281,6 +281,14 @@ func TestExternalAntiLockoutSitsBehindTheFloodLimitOnly(t *testing.T) {
 	if strings.Contains(input, "synflood_lan") || strings.Contains(input, "synflood_guest") {
 		t.Errorf("an internal zone's management is held to a flood limit:\n%s", input)
 	}
+	for _, want := range []string{
+		"@synflood_wan_v6 { " + sourceNetV6 + " ",
+		"@synflood_wan2_v6 { " + sourceNetV6 + " ",
+	} {
+		if !strings.Contains(input, want) {
+			t.Errorf("input lacks IPv6 /64 anti-lockout flood guard %q:\n%s", want, input)
+		}
+	}
 
 	rows, err := SystemRules(cfg, nil)
 	if err != nil {
