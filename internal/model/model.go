@@ -511,6 +511,10 @@ type System struct {
 	// the one that runs out, where the symptom is dropped packets and a
 	// line in dmesg nobody reads.
 	ConntrackMax int `json:"conntrackMax,omitempty"`
+	// ConntrackTCPEstablished is how many seconds an established TCP
+	// connection may carry nothing before the kernel forgets it. Zero
+	// keeps sysctl.DefaultTCPEstablished, a day.
+	ConntrackTCPEstablished int `json:"conntrackTcpEstablished,omitempty"`
 }
 
 // LogLevel is how much the daemons Ostiole runs write to the journal.

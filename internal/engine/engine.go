@@ -229,17 +229,22 @@ func (e *Engine) WithSysctl(a sysctl.Applier) *Engine {
 // that is the first moment the ceiling can be written at all. before is
 // what the kernel had ahead of an apply being undone: a ceiling the kernel
 // was left to choose goes back to what it chose, since nothing else would
-// lower one the apply raised.
+// lower one the apply raised. The idle time of a connection has a default
+// of its own, so it follows the configuration, or the default without one,
+// as the hourly heal holds it. Undoing an apply that leaves no
+// configuration puts back the pickup rule the kernel had.
 func (e *Engine) applySysctl(cfg *model.Config, before *sysctl.Settings) {
 	if e.sysctl == nil {
 		return
 	}
-	var s sysctl.Settings
-	if cfg != nil {
-		s.ConntrackMax = cfg.System.ConntrackMax
-	}
-	if s.ConntrackMax == 0 && before != nil {
-		s = *before
+	s := KernelSettings(cfg)
+	if before != nil {
+		if s.ConntrackMax == 0 {
+			s.ConntrackMax, s.ConntrackBuckets = before.ConntrackMax, before.ConntrackBuckets
+		}
+		if cfg == nil {
+			s.TCPLoose = before.TCPLoose
+		}
 	}
 	err := e.sysctl.Apply(s)
 	e.noteSysctl(err)
@@ -250,8 +255,10 @@ func (e *Engine) applySysctl(cfg *model.Config, before *sysctl.Settings) {
 
 // HealSysctl puts back the kernel settings something else moved since the
 // start or the last apply wrote them, and says which. While they hold it
-// writes nothing. It holds the apply lock and the store's, so a ceiling an
-// apply is changing is not taken for one that moved.
+// writes nothing. A configuration it cannot read heals nothing, rather
+// than take the router for an unconfigured one. It holds the apply lock
+// and the store's, so a ceiling an apply is changing is not taken for one
+// that moved.
 func (e *Engine) HealSysctl() ([]sysctl.Drift, error) {
 	h, ok := e.sysctl.(sysctl.Healer)
 	if !ok {
@@ -266,13 +273,31 @@ func (e *Engine) HealSysctl() ([]sysctl.Drift, error) {
 	defer unlock()
 	var s sysctl.Settings
 	if e.pending != nil {
-		s.ConntrackMax = e.pending.cfg.System.ConntrackMax
-	} else if cfg, err := e.store.Load(); err == nil {
-		s.ConntrackMax = cfg.System.ConntrackMax
+		s = KernelSettings(e.pending.cfg)
+	} else {
+		cfg, err := e.store.Load()
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return nil, err
+		}
+		s = KernelSettings(cfg)
 	}
 	moved, err := h.Heal(s)
 	e.noteSysctl(err)
 	return moved, err
+}
+
+// KernelSettings is what cfg asks of the kernel. With none the router is
+// not configured, which leaves picking up TCP connections midway as the
+// kernel has it.
+func KernelSettings(cfg *model.Config) sysctl.Settings {
+	if cfg == nil {
+		return sysctl.Settings{}
+	}
+	return sysctl.Settings{
+		ConntrackMax:   cfg.System.ConntrackMax,
+		TCPEstablished: cfg.System.ConntrackTCPEstablished,
+		Configured:     true,
+	}
 }
 
 // noteSysctl keeps what the kernel refused for the dashboard, on one line.

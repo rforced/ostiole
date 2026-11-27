@@ -52,6 +52,9 @@ var SystemKinds = map[string]bool{
 	"block-ip-options":     true,
 	"block-routing-header": true,
 	"block-spoofed":        true,
+	"block-impossible":     true,
+	"block-tcp-flags":      true,
+	"block-hop-by-hop":     true,
 }
 
 // ParsePrefix splits an nft log prefix the renderer produced. Each shape

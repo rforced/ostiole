@@ -1,6 +1,7 @@
 package nft
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"net"
@@ -216,16 +217,184 @@ func ipv6Frame(dstMAC, srcMAC net.HardwareAddr, src, dst net.IP, next, hops byte
 // behind a routing header when rh is given, with a checksum conntrack
 // accepts.
 func udp6Frame(dstMAC, srcMAC net.HardwareAddr, src, dst net.IP, rh []byte, sport uint16) []byte {
+	if rh == nil {
+		return udp6Behind(dstMAC, srcMAC, src, dst, syscall.IPPROTO_UDP, nil, sport)
+	}
+	return udp6Behind(dstMAC, srcMAC, src, dst, syscall.IPPROTO_ROUTING, rh, sport)
+}
+
+// udp6Behind is udp6Frame behind any one extension header, which next
+// names.
+func udp6Behind(dstMAC, srcMAC net.HardwareAddr, src, dst net.IP, next byte, ext []byte, sport uint16) []byte {
 	udp := make([]byte, 8+4)
 	binary.BigEndian.PutUint16(udp[0:], sport)
 	binary.BigEndian.PutUint16(udp[2:], 53)
 	binary.BigEndian.PutUint16(udp[4:], uint16(len(udp)))
 	pseudo := append(append(append([]byte{}, src.To16()...), dst.To16()...), 0, 0, 0, byte(len(udp)), 0, 0, 0, syscall.IPPROTO_UDP)
 	binary.BigEndian.PutUint16(udp[6:], checksum(append(pseudo, udp...)))
-	if rh == nil {
-		return ipv6Frame(dstMAC, srcMAC, src, dst, syscall.IPPROTO_UDP, 64, udp)
+	return ipv6Frame(dstMAC, srcMAC, src, dst, next, 64, append(append([]byte{}, ext...), udp...))
+}
+
+// mldQuery builds an MLDv1 general query from src to every node, as a
+// querier sends it: hop limit one, Router Alert in a hop-by-hop header,
+// answers asked for within 50 ms.
+func mldQuery(srcMAC net.HardwareAddr, src net.IP) []byte {
+	all := net.ParseIP("ff02::1")
+	icmp := make([]byte, 24)
+	icmp[0] = 130
+	binary.BigEndian.PutUint16(icmp[4:], 50)
+	pseudo := append(append(append([]byte{}, src.To16()...), all.To16()...), 0, 0, 0, byte(len(icmp)), 0, 0, 0, syscall.IPPROTO_ICMPV6)
+	binary.BigEndian.PutUint16(icmp[2:], checksum(append(pseudo, icmp...)))
+	hbh := []byte{syscall.IPPROTO_ICMPV6, 0, 5, 2, 0, 0, 1, 0}
+	return ipv6Frame(net.HardwareAddr{0x33, 0x33, 0, 0, 0, 1}, srcMAC, src, all, syscall.IPPROTO_HOPOPTS, 1, append(hbh, icmp...))
+}
+
+// mldReport says whether an Ethernet frame is an MLDv1 report sent from
+// mac.
+func mldReport(f []byte, mac net.HardwareAddr) bool {
+	return len(f) > 14+48 && bytes.Equal(f[6:12], mac) && binary.BigEndian.Uint16(f[12:]) == 0x86dd &&
+		f[14+6] == syscall.IPPROTO_HOPOPTS && f[14+40] == syscall.IPPROTO_ICMPV6 && f[14+48] == 131
+}
+
+// edgeRouter loads cfg in the test's namespace with eth1 a LAN on
+// 192.168.1.1/24 and 2001:db8:1::1/64, fed from its veth peer, and eth0 a
+// WAN dummy holding the default route in both families. It returns the
+// LAN's two ends and a socket that sees what leaves by the WAN.
+func edgeRouter(ctx context.Context, t *testing.T, cfg *model.Config) (x *Exec, lan, peer netlink.Link, out int) {
+	t.Helper()
+	quietIPv6(t)
+	routeAll(t)
+	for i := range cfg.Interfaces {
+		if cfg.Interfaces[i].Name == "eth1" {
+			cfg.Interfaces[i].IPv6 = model.IPv6{Mode: model.AddrStatic, Address: "2001:db8:1::1/64"}
+		}
 	}
-	return ipv6Frame(dstMAC, srcMAC, src, dst, syscall.IPPROTO_ROUTING, 64, append(append([]byte{}, rh...), udp...))
+	ruleset, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lan, peer = vethPair(t, "eth1", "peer1", "192.168.1.1/24")
+	netnstest.AddAddr(t, lan.Index, netip.MustParsePrefix("2001:db8:1::1/64"))
+	wan := netnstest.Dummy(t, "eth0", "198.51.100.2/24", "2001:db8:ff::2/64")
+	defaultVia(t, "198.51.100.1", "eth0", 0)
+	defaultVia(t, "2001:db8:ff::1", "eth0", 0)
+	x = &Exec{}
+	if err := x.Apply(ctx, ruleset); err != nil {
+		t.Fatal(err)
+	}
+	return x, lan, peer, capture(t, wan)
+}
+
+// Packets no host sends are dropped before conntrack sees them, whatever
+// the protection settings say. A LAN host's TCP with SYN and FIN, with
+// SYN and RST and with no flags at all, its datagram behind a segment
+// routing header, and datagrams from and to IPv4-mapped addresses never
+// leave by the WAN, and each is counted. Its plain SYN and datagram leave.
+// A datagram from ::1 never leaves either, but the kernel drops it itself
+// before the hook (ip6_rcv_core), so that rule never counts one off the
+// wire.
+func TestRawChainDropsWhatNoHostSendsInKernel(t *testing.T) {
+	if !netnstest.Enter(t, "nft") {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	x, lan, peer, out := edgeRouter(ctx, t, loadConfig(t, "testdata/minimal.json"))
+
+	host, dst := net.ParseIP("192.168.1.10"), net.ParseIP("203.0.113.5")
+	host6, far := net.ParseIP("2001:db8:1::10"), net.ParseIP("2001:db8:ff::99")
+	tcp := func(sport uint16, flags byte) []byte {
+		return tcpFrame(lan.HardwareAddr, peer.HardwareAddr, host, dst, sport, 443, flags, 1, 0)
+	}
+	udp := func(src, dst net.IP, rh []byte, sport uint16) []byte {
+		return udp6Frame(lan.HardwareAddr, peer.HardwareAddr, src, dst, rh, sport)
+	}
+	// A segment routing header with no segment left to visit.
+	srh := append([]byte{syscall.IPPROTO_UDP, 2, 4, 0, 0, 0, 0, 0}, far...)
+	for _, frame := range [][]byte{
+		tcp(40001, tcpSYN|tcpFIN),
+		tcp(40002, tcpSYN|tcpRST),
+		tcp(40003, 0),
+		udp(host6, far, srh, 40011),
+		udp(host6, net.ParseIP("::ffff:203.0.113.5"), nil, 40012),
+		udp(net.IPv6loopback, far, nil, 40013),
+		udp(net.ParseIP("::ffff:192.0.2.1"), far, nil, 40014),
+		tcp(40004, tcpSYN),
+		udp(host6, far, nil, 40015),
+	} {
+		sendFrame(t, peer, lan, frame)
+	}
+
+	var left []uint16
+	for _, f := range departures(t, out, func(f []byte) bool {
+		_, sport, ok := udp6Source(f)
+		return ok && sport == 40015
+	}) {
+		if s, ok := parseTCP(f); ok && s.dport == 443 {
+			left = append(left, s.sport)
+		} else if _, sport, ok := udp6Source(f); ok {
+			left = append(left, sport)
+		}
+	}
+	if !slices.Equal(left, []uint16{40004, 40015}) {
+		t.Errorf("left by the WAN from ports %v, want only the plain SYN's 40004 and the plain datagram's 40015", left)
+	}
+	for key, want := range map[string]uint64{kindTCPFlags: 3, kindRoutingHeader: 1, kindImpossible: 2} {
+		if n := waitForCounter(ctx, t, x, RawChain+"/"+key, want); n != want {
+			t.Errorf("%s counted %d packets, want %d", key, n, want)
+		}
+	}
+}
+
+// Forwarded IPv6 with hop-by-hop options is dropped: nothing a router
+// passes on needs them, and every router on the way would take each one
+// down its slow path. What comes to the router itself still arrives, so
+// MLD, whose queries carry Router Alert in one, keeps working. A LAN
+// host's datagram behind a PadN option never leaves by the WAN and its
+// plain one does; a querier's MLDv1 general query gets the router's
+// MLDv1 reports back.
+func TestForwardDropsHopByHopOptionsAndMLDStillWorksInKernel(t *testing.T) {
+	if !netnstest.Enter(t, "nft") {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	x, lan, peer, out := edgeRouter(ctx, t, loadConfig(t, "testdata/minimal.json"))
+	near := capture(t, lan)
+
+	host, far := net.ParseIP("2001:db8:1::10"), net.ParseIP("2001:db8:ff::99")
+	padN := []byte{syscall.IPPROTO_UDP, 0, 1, 4, 0, 0, 0, 0}
+	for _, frame := range [][]byte{
+		udp6Behind(lan.HardwareAddr, peer.HardwareAddr, host, far, syscall.IPPROTO_HOPOPTS, padN, 40001),
+		udp6Frame(lan.HardwareAddr, peer.HardwareAddr, host, far, nil, 40002),
+		mldQuery(peer.HardwareAddr, net.ParseIP("fe80::5")),
+	} {
+		sendFrame(t, peer, lan, frame)
+	}
+
+	var plain, options int
+	for _, f := range departures(t, out, func(f []byte) bool {
+		_, sport, ok := udp6Source(f)
+		return ok && sport == 40002
+	}) {
+		switch {
+		case len(f) < 14+40 || binary.BigEndian.Uint16(f[12:]) != 0x86dd || !net.IP(f[14+24:14+40]).Equal(far):
+		case f[14+6] == syscall.IPPROTO_HOPOPTS:
+			options++
+		case f[14+6] == syscall.IPPROTO_UDP:
+			plain++
+		}
+	}
+	if plain != 1 || options != 0 {
+		t.Errorf("left by the WAN: %d plain datagrams and %d with hop-by-hop options, want one and none", plain, options)
+	}
+	if n := waitForCounter(ctx, t, x, "forward/"+kindHopByHop, 1); n != 1 {
+		t.Errorf("%s counted %d packets, want 1", kindHopByHop, n)
+	}
+	answered := func(f []byte) bool { return mldReport(f, lan.HardwareAddr) }
+	if !slices.ContainsFunc(departures(t, near, answered), answered) {
+		t.Error("the router sent no MLDv1 report back to the query")
+	}
 }
 
 // departures reads every frame leaving by the link fd watches, until the

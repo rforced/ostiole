@@ -16,8 +16,14 @@ table inet ostiole {
 	}
 	chain raw_prerouting {
 		type filter hook prerouting priority raw; policy accept;
+		iifname != "lo" ip6 saddr ::1 counter drop comment "block-impossible"
+		ip6 saddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		ip6 daddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop comment "block-tcp-flags"
+		tcp flags & (syn|fin) == (syn|fin) counter drop comment "block-tcp-flags"
+		tcp flags & (syn|rst) == (syn|rst) counter drop comment "block-tcp-flags"
 		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
-		rt type 0 counter drop comment "block-routing-header"
+		exthdr rt exists counter drop comment "block-routing-header"
 	}
 	chain input {
 		type filter hook input priority filter; policy drop;
@@ -26,19 +32,16 @@ table inet ostiole {
 		ct state invalid drop
 		iifname { "eth0", "eth1", "eth2" } icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
-		iifname "eth2" jump zone_dmz
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan, "eth2" : jump zone_dmz }
 		counter comment "default-drop"
 	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
+		exthdr hbh exists counter drop comment "block-hop-by-hop"
 		ct mark & 0x07000000 != 0x0 meta mark set ct mark counter comment "shaping:restore"
 		ct state established,related accept
 		ct state invalid drop
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
-		iifname "eth2" jump zone_dmz
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan, "eth2" : jump zone_dmz }
 		counter comment "default-drop"
 	}
 	chain output {
@@ -70,7 +73,7 @@ table inet ostiole {
 		type filter hook prerouting priority mangle; policy accept;
 		ct mark & 0x00ff0000 != 0x0 meta mark set ct mark counter accept comment "policy:established"
 		fib daddr type local counter accept comment "policy:local"
-		iifname "eth1" ct state new jump policy_lan
+		ct state new iifname "eth1" jump policy_lan
 	}
 	chain policy_lan {
 		udp dport 5060 counter accept comment "no-policy:lan-voip"

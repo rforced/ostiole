@@ -19,6 +19,9 @@ const KINDS: Record<string, (e: Omit<FwlogEntry, 'seq'>) => string> = {
   'block-ip-options': zoned('IP options'),
   'block-routing-header': zoned('routing header'),
   'block-spoofed': zoned('spoofed source'),
+  'block-impossible': zoned('impossible address'),
+  'block-tcp-flags': zoned('TCP flags'),
+  'block-hop-by-hop': zoned('hop-by-hop options'),
 }
 
 /**

@@ -44,6 +44,7 @@ export interface System {
   bogonV6Url?: string
   logging?: Logging
   conntrackMax?: number
+  conntrackTcpEstablished?: number
 }
 
 export interface Management {

@@ -74,8 +74,14 @@ table inet ostiole {
 	}
 	chain raw_prerouting {
 		type filter hook prerouting priority raw; policy accept;
+		iifname != "lo" ip6 saddr ::1 counter drop comment "block-impossible"
+		ip6 saddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		ip6 daddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop comment "block-tcp-flags"
+		tcp flags & (syn|fin) == (syn|fin) counter drop comment "block-tcp-flags"
+		tcp flags & (syn|rst) == (syn|rst) counter drop comment "block-tcp-flags"
 		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
-		rt type 0 counter drop comment "block-routing-header"
+		exthdr rt exists counter drop comment "block-routing-header"
 	}
 	chain input {
 		type filter hook input priority filter; policy drop;
@@ -86,16 +92,15 @@ table inet ostiole {
 		iifname "eth0" icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
 		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan }
 		counter comment "default-drop"
 	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
+		exthdr hbh exists counter drop comment "block-hop-by-hop"
 		ct state established,related accept
 		ct state invalid drop
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan }
 		counter comment "default-drop"
 	}
 	chain output {
@@ -103,17 +108,17 @@ table inet ostiole {
 	}
 	chain zone_wan {
 		ip saddr @scanners_wan_v4 counter drop comment "protect:scanner"
-		ip6 saddr @scanners_wan_v6 counter drop comment "protect:scanner"
+		ip6 saddr & ffff:ffff:ffff:ffff:: @scanners_wan_v6 counter drop comment "protect:scanner"
 		ct state new add @synflood_wan_v4 { ip saddr limit rate over 30/second burst 60 packets } counter drop comment "protect:synflood"
-		ct state new add @synflood_wan_v6 { ip6 saddr limit rate over 30/second burst 60 packets } counter drop comment "protect:synflood"
+		ct state new add @synflood_wan_v6 { ip6 saddr & ffff:ffff:ffff:ffff:: limit rate over 30/second burst 60 packets } counter drop comment "protect:synflood"
 		icmp type echo-request add @icmpflood_wan_v4 { ip saddr limit rate over 10/second burst 20 packets } counter drop comment "protect:icmpflood"
-		icmpv6 type echo-request add @icmpflood_wan_v6 { ip6 saddr limit rate over 10/second burst 20 packets } counter drop comment "protect:icmpflood"
+		icmpv6 type echo-request add @icmpflood_wan_v6 { ip6 saddr & ffff:ffff:ffff:ffff:: limit rate over 10/second burst 20 packets } counter drop comment "protect:icmpflood"
 		fib daddr type local tcp dport 22 add @rlimit_ssh-in_v4 { ip saddr limit rate over 3/minute burst 3 packets } counter drop comment "limit:ssh-in"
-		fib daddr type local tcp dport 22 add @rlimit_ssh-in_v6 { ip6 saddr limit rate over 3/minute burst 3 packets } counter drop comment "limit:ssh-in"
+		fib daddr type local tcp dport 22 add @rlimit_ssh-in_v6 { ip6 saddr & ffff:ffff:ffff:ffff:: limit rate over 3/minute burst 3 packets } counter drop comment "limit:ssh-in"
 		fib daddr type local tcp dport 22 counter accept comment "id:ssh-in"
 		ip daddr 192.168.1.10 tcp dport 443 limit rate 500/second burst 1000 packets counter accept comment "id:web-in"
 		meta l4proto { tcp, udp } add @scan_wan_v4 { ip saddr limit rate over 20/minute } add @scanners_wan_v4 { ip saddr } counter comment "protect:scan"
-		meta l4proto { tcp, udp } add @scan_wan_v6 { ip6 saddr limit rate over 20/minute } add @scanners_wan_v6 { ip6 saddr } counter comment "protect:scan"
+		meta l4proto { tcp, udp } add @scan_wan_v6 { ip6 saddr & ffff:ffff:ffff:ffff:: limit rate over 20/minute } add @scanners_wan_v6 { ip6 saddr & ffff:ffff:ffff:ffff:: } counter comment "protect:scan"
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {

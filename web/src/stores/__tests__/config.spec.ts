@@ -1001,11 +1001,12 @@ describe('config store traffic shaping', () => {
     expect(config.sectionFor('vpn')).toBe('/vpn')
   })
 
-  // The connection limit lives under system but is edited on Protection.
-  it('files the connection limit under the protection page', () => {
+  // The connection table's settings live under system but are edited on Protection.
+  it('files the connection table under the protection page', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(draft()))
     expect(config.sectionFor('system.conntrackMax')).toBe('/firewall/protection')
+    expect(config.sectionFor('system.conntrackTcpEstablished')).toBe('/firewall/protection')
   })
 
   // The last provider takes the list with it, so a page that only looked

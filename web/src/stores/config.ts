@@ -1460,7 +1460,7 @@ export const useConfigStore = defineStore('config', () => {
     p.zones = [...names]
   }
 
-  /** Let TCP with IPv4 options and IPv6 type 0 routing headers through, or drop them as by default. */
+  /** Let TCP with IPv4 options and IPv6 routing and hop-by-hop headers through, or drop them as by default. */
   function setAllowIPOptions(allow: boolean) {
     if (!allow) {
       dropProtection('allowIPOptions')
@@ -1880,7 +1880,7 @@ export const useConfigStore = defineStore('config', () => {
       case 'system':
         if (path.startsWith('system.keepRevisions')) return '/system/configuration'
         if (path.startsWith('system.keepDriveReadings')) return '/diagnostics/drives'
-        if (path.startsWith('system.conntrackMax')) return '/firewall/protection'
+        if (path.startsWith('system.conntrack')) return '/firewall/protection'
         if (path.startsWith('system.management.certificate')) return '/system/certificates'
         if (
           path.startsWith('system.management.firewallLog') ||

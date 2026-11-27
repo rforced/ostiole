@@ -77,7 +77,9 @@ func TestRedirectsAreOffOnEveryInterface(t *testing.T) {
 	root := t.TempDir()
 	keys := []string{}
 	for _, iface := range []string{"all", "default", "eth0", "eth0.10", "wg0"} {
-		keys = append(keys, "net/ipv4/conf/"+iface+"/send_redirects", "net/ipv6/conf/"+iface+"/accept_redirects")
+		keys = append(keys, "net/ipv4/conf/"+iface+"/send_redirects", "net/ipv6/conf/"+iface+"/accept_redirects",
+			"net/ipv4/conf/"+iface+"/accept_redirects",
+			"net/ipv4/conf/"+iface+"/accept_source_route", "net/ipv6/conf/"+iface+"/accept_source_route")
 	}
 	for _, k := range keys {
 		p := filepath.Join(root, k)
@@ -96,7 +98,9 @@ func TestRedirectsAreOffOnEveryInterface(t *testing.T) {
 			t.Errorf("%s = %q", k, raw)
 		}
 	}
-	for _, want := range []string{"net.ipv4.conf.*.send_redirects = 0", "net.ipv6.conf.*.accept_redirects = 0"} {
+	for _, want := range []string{"net.ipv4.conf.*.send_redirects = 0", "net.ipv6.conf.*.accept_redirects = 0",
+		"net.ipv4.conf.*.accept_redirects = 0", "net.ipv4.conf.*.accept_source_route = 0",
+		"net.ipv6.conf.*.accept_source_route = 0"} {
 		if !strings.Contains(Content(), want+"\n") {
 			t.Errorf("%q missing from the persisted file:\n%s", want, Content())
 		}
@@ -173,7 +177,7 @@ func TestConntrackCountersAndEventsAreAlwaysOn(t *testing.T) {
 func TestConntrackReadBackAndRestored(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	for k, v := range map[string]string{ConntrackMaxKey: "65536", ConntrackBucketsKey: "65536"} {
+	for k, v := range map[string]string{ConntrackMaxKey: "65536", ConntrackBucketsKey: "65536", ConntrackTCPEstablishedKey: "432000"} {
 		p := filepath.Join(root, k)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -184,11 +188,14 @@ func TestConntrackReadBackAndRestored(t *testing.T) {
 	}
 	proc := Proc{Root: root}
 	before, err := proc.Current()
-	if err != nil || before != (Settings{ConntrackMax: 65536, ConntrackBuckets: 65536}) {
+	if err != nil || before != (Settings{ConntrackMax: 65536, ConntrackBuckets: 65536, TCPEstablished: 432000}) {
 		t.Fatalf("Current() = %+v, %v", before, err)
 	}
 	if err := proc.Apply(Settings{ConntrackMax: 1_000_000}); err != nil {
 		t.Fatal(err)
+	}
+	if got, err := proc.Current(); err != nil || got.TCPEstablished != DefaultTCPEstablished {
+		t.Fatalf("an apply that names no idle time left %+v, %v; want a day", got, err)
 	}
 	if err := proc.Apply(before); err != nil {
 		t.Fatal(err)
@@ -276,9 +283,13 @@ func TestHealWritesNothingWhileTheSettingsHold(t *testing.T) {
 	for k, v := range All() {
 		files[strings.ReplaceAll(k, "*", "eth0")] = v
 	}
-	maps.Copy(files, map[string]string{ConntrackAcctKey: "1", ConntrackEventsKey: "1"})
+	maps.Copy(files, map[string]string{ConntrackAcctKey: "1", ConntrackEventsKey: "1",
+		ConntrackTCPLooseKey: "0", ConntrackTCPEstablishedKey: "86400"})
+	maps.Copy(files, conntrackFixed)
+	// As the kernel shows the pair.
+	files["net/ipv4/ip_local_port_range"] = "10000\t65535"
 	root := fakeKernel(t, files)
-	moved, err := (Proc{Root: root}).Heal(Settings{ConntrackMax: 1_000_000})
+	moved, err := (Proc{Root: root}).Heal(Settings{ConntrackMax: 1_000_000, Configured: true})
 	if err != nil || len(moved) != 0 {
 		t.Fatalf("Heal = %+v, %v; want nothing moved", moved, err)
 	}
@@ -350,5 +361,141 @@ func TestHealSaysWhatItCouldNotPutBack(t *testing.T) {
 	}
 	if raw, _ := os.ReadFile(filepath.Join(root, "net/ipv4/ip_forward")); strings.TrimSpace(string(raw)) != "1" {
 		t.Errorf("ip_forward = %q, want it put back beside the failure", raw)
+	}
+}
+
+// A unicast packet in a broadcast frame is dropped on every interface,
+// and a kernel or a container without the neighbour defaults and the
+// receive queue's sizes must not turn the drop-in into a boot error.
+func TestLinkSettingsReachEveryInterfaceAndOptionalKeysAreMarked(t *testing.T) {
+	t.Parallel()
+	files := map[string]string{}
+	for _, iface := range []string{"all", "default", "eth0", "ppp0"} {
+		files["net/ipv4/conf/"+iface+"/drop_unicast_in_l2_multicast"] = "0"
+		files["net/ipv6/conf/"+iface+"/drop_unicast_in_l2_multicast"] = "0"
+	}
+	root := fakeKernel(t, files)
+	if err := (Proc{Root: root}).Apply(Settings{}); err != nil {
+		t.Fatal(err)
+	}
+	for k := range files {
+		if raw, _ := os.ReadFile(filepath.Join(root, k)); strings.TrimSpace(string(raw)) != "1" {
+			t.Errorf("%s = %q, want 1", k, raw)
+		}
+	}
+	for key := range Tuning {
+		if !strings.Contains(key, "/neigh/default/") && !strings.HasPrefix(key, "net/core/netdev_") {
+			continue
+		}
+		if line := "\n-" + strings.ReplaceAll(key, "/", ".") + " = "; !strings.Contains(Content(), line) {
+			t.Errorf("%s is not optional in the persisted file, and only the first network namespace has it", key)
+		}
+	}
+}
+
+// The idle time of an established connection is a day unless the
+// configuration names one, the closing states are held to a minute, and
+// connections are tracked from their handshake only once a configuration
+// is in force: an unconfigured router leaves that as the kernel has it.
+func TestConntrackTimeoutsAndTheHandshakeRule(t *testing.T) {
+	t.Parallel()
+	kernel := map[string]string{
+		ConntrackTCPEstablishedKey:                          "432000",
+		ConntrackTCPLooseKey:                                "1",
+		"net/netfilter/nf_conntrack_tcp_timeout_fin_wait":   "120",
+		"net/netfilter/nf_conntrack_tcp_timeout_close_wait": "10",
+	}
+	for _, tc := range []struct {
+		name string
+		s    Settings
+		want map[string]string
+	}{
+		{"unconfigured", Settings{}, map[string]string{ConntrackTCPEstablishedKey: "86400", ConntrackTCPLooseKey: "1"}},
+		{"configured", Settings{Configured: true}, map[string]string{ConntrackTCPEstablishedKey: "86400", ConntrackTCPLooseKey: "0"}},
+		{"a set idle time", Settings{Configured: true, TCPEstablished: 18000}, map[string]string{ConntrackTCPEstablishedKey: "18000", ConntrackTCPLooseKey: "0"}},
+	} {
+		root := fakeKernel(t, kernel)
+		if err := (Proc{Root: root}).Apply(tc.s); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		maps.Copy(tc.want, conntrackFixed)
+		for key, want := range tc.want {
+			if raw, _ := os.ReadFile(filepath.Join(root, key)); strings.TrimSpace(string(raw)) != want {
+				t.Errorf("%s: %s = %q, want %s", tc.name, key, raw, want)
+			}
+		}
+		if tc.name == "unconfigured" && written(t, root, ConntrackTCPLooseKey) {
+			t.Error("an unconfigured router wrote the handshake rule")
+		}
+	}
+	// Undoing a first apply puts back the rule read before it.
+	strict := maps.Clone(kernel)
+	strict[ConntrackTCPLooseKey] = "0"
+	strict[ConntrackMaxKey], strict[ConntrackBucketsKey] = "65536", "65536"
+	root := fakeKernel(t, strict)
+	if err := (Proc{Root: root}).Apply(Settings{TCPLoose: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	if now, err := (Proc{Root: root}).Current(); err != nil || now.TCPLoose != "1" {
+		t.Errorf("after putting the rule back the kernel holds %+v, %v; want TCPLoose 1", now, err)
+	}
+	// None of it is in the drop-in: the module is not there when it is read.
+	if strings.Contains(Content(), "nf_conntrack") {
+		t.Errorf("a conntrack key is persisted:\n%s", Content())
+	}
+}
+
+// The hourly check puts back an idle time and a handshake rule something
+// moved, and leaves the handshake rule alone on a router with no
+// configuration.
+func TestHealWatchesTheConntrackTimeouts(t *testing.T) {
+	t.Parallel()
+	kernel := map[string]string{ConntrackTCPEstablishedKey: "432000", ConntrackTCPLooseKey: "1"}
+	root := fakeKernel(t, kernel)
+	moved, err := (Proc{Root: root}).Heal(Settings{Configured: true, TCPEstablished: 18000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Drift{
+		{Key: ConntrackTCPLooseKey, Found: "1", Want: "0"},
+		{Key: ConntrackTCPEstablishedKey, Found: "432000", Want: "18000"},
+	}
+	if !slices.Equal(moved, want) {
+		t.Errorf("moved = %+v\nwant %+v", moved, want)
+	}
+	for key, value := range map[string]string{ConntrackTCPLooseKey: "0", ConntrackTCPEstablishedKey: "18000"} {
+		if raw, _ := os.ReadFile(filepath.Join(root, key)); strings.TrimSpace(string(raw)) != value {
+			t.Errorf("%s = %q, want %s", key, raw, value)
+		}
+	}
+
+	root = fakeKernel(t, map[string]string{ConntrackTCPEstablishedKey: "86400", ConntrackTCPLooseKey: "1"})
+	if moved, err := (Proc{Root: root}).Heal(Settings{}); err != nil || len(moved) != 0 {
+		t.Errorf("unconfigured: Heal = %+v, %v; want the handshake rule left alone", moved, err)
+	}
+	if written(t, root, ConntrackTCPLooseKey) {
+		t.Error("unconfigured: the handshake rule was written")
+	}
+}
+
+// The kernel shows a port range with a tab between its ends. That is the
+// range as written, not one that moved, and a range that did move goes back.
+func TestHealReadsAPortRangeAsTheKernelShowsIt(t *testing.T) {
+	t.Parallel()
+	const key = "net/ipv4/ip_local_port_range"
+	root := fakeKernel(t, map[string]string{key: "10000\t65535"})
+	if moved, err := (Proc{Root: root}).Heal(Settings{}); err != nil || len(moved) != 0 {
+		t.Fatalf("Heal = %+v, %v; want nothing moved", moved, err)
+	}
+	if written(t, root, key) {
+		t.Error("the range was written though it held")
+	}
+	root = fakeKernel(t, map[string]string{key: "32768\t60999"})
+	moved, err := (Proc{Root: root}).Heal(Settings{})
+	if err != nil || !slices.Equal(moved, []Drift{{Key: key, Found: "32768 60999", Want: "10000 65535"}}) {
+		t.Fatalf("Heal = %+v, %v; want the kernel's own range reported", moved, err)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(root, key)); strings.TrimSpace(string(raw)) != "10000 65535" {
+		t.Errorf("%s = %q", key, raw)
 	}
 }

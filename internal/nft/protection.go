@@ -63,6 +63,23 @@ func rateLimitSet(id string, family int) string {
 	return fmt.Sprintf("rlimit_%s_v%d", id, family)
 }
 
+// A zone that faces the internet counts IPv6 sources by /64. One customer
+// out there holds at least that much and can send from any address in it,
+// so a counter per address is one it never runs out of. Inside, a /64 is
+// a whole network of devices, each counted on its own.
+const sourceNetV6 = "ip6 saddr & ffff:ffff:ffff:ffff::"
+
+// sourceKey is what a per-source set of a zone is keyed by in one family.
+func (r *renderer) sourceKey(zone string, family int) string {
+	if family == 4 {
+		return "ip saddr"
+	}
+	if z, ok := r.cfg.Zone(zone); ok && z.External {
+		return sourceNetV6
+	}
+	return "ip6 saddr"
+}
+
 // families is the two address families with the expression prefix each
 // one is matched by. In an inet table the prefix is what decides which
 // packets a rule sees, so one rule per family is how anything per-source
@@ -150,7 +167,7 @@ func (r *renderer) protectZone(zone string) {
 		// A plain set lookup, so the sampled log can repeat the match in a
 		// rule of its own and the drop below it is untouched.
 		for _, fam := range families {
-			match := fmt.Sprintf("%s saddr @%s", fam.prefix, scanHoldSet(zone, fam.n))
+			match := fmt.Sprintf("%s @%s", r.sourceKey(zone, fam.n), scanHoldSet(zone, fam.n))
 			if logs {
 				r.line(systemLogLine(match, "", "protect-scanner"))
 			}
@@ -174,8 +191,8 @@ func (r *renderer) protectZone(zone string) {
 			// chain, and this way the limit counts connections, which is
 			// what the setting says it counts.
 			r.line(floodVerdict(zone, logs, "protect:synflood",
-				fmt.Sprintf(`ct state new add @%s { %s saddr %s }`,
-					synFloodSet(zone, fam.n), fam.prefix, limitOver(*p.SynFlood))))
+				fmt.Sprintf(`ct state new add @%s { %s %s }`,
+					synFloodSet(zone, fam.n), r.sourceKey(zone, fam.n), limitOver(*p.SynFlood))))
 		}
 		r.sys(SystemRule{
 			Chain: floodChainOr(zone, logs, "synflood"), Zones: []string{zone}, Action: "drop",
@@ -191,13 +208,12 @@ func (r *renderer) protectZone(zone string) {
 	}
 	if p.ICMPFlood != nil {
 		for _, fam := range []struct {
-			n      int
-			prefix string
-			proto  string
-		}{{4, "ip", "icmp"}, {6, "ip6", "icmpv6"}} {
+			n     int
+			proto string
+		}{{4, "icmp"}, {6, "icmpv6"}} {
 			r.line(floodVerdict(zone, logs, "protect:icmpflood",
-				fmt.Sprintf(`%s type echo-request add @%s { %s saddr %s }`,
-					fam.proto, icmpFloodSet(zone, fam.n), fam.prefix, limitOver(*p.ICMPFlood))))
+				fmt.Sprintf(`%s type echo-request add @%s { %s %s }`,
+					fam.proto, icmpFloodSet(zone, fam.n), r.sourceKey(zone, fam.n), limitOver(*p.ICMPFlood))))
 		}
 		r.sys(SystemRule{
 			Chain: floodChainOr(zone, logs, "icmpflood"), Zones: []string{zone}, Action: "drop",
@@ -212,6 +228,58 @@ func (r *renderer) protectZone(zone string) {
 		})
 	}
 }
+
+// lockoutFlooded reports whether a zone's anti-lockout accept sits behind
+// the zone's connection flood limit: a zone that faces the internet, with
+// the flood defence on for it.
+func (r *renderer) lockoutFlooded(z model.Zone) bool {
+	return z.External && z.AntiLockout && r.cfg.Protection.SynFlood != nil && r.protects(z.Name)
+}
+
+// lockoutFlood holds new connections to the management ports of a zone
+// that faces the internet to the zone's connection flood limit, on the
+// zone's own counters, ahead of the anti-lockout accept. Nothing else of
+// the zone's chain comes before that accept: a scan with a forged source
+// puts that source in the hold, and the hold must not be able to take the
+// web UI and SSH from the address it forged.
+func (r *renderer) lockoutFlood(zone string, ifs, ports []string) {
+	z, ok := r.cfg.Zone(zone)
+	if !ok || !r.lockoutFlooded(*z) {
+		return
+	}
+	limit := *r.cfg.Protection.SynFlood
+	logs := r.zoneLogsDrops(*z)
+	chain, key := "input", lockoutFloodTag+":"+zone
+	if logs {
+		chain, key = lockoutFloodChain(zone), lockoutFloodTag
+	}
+	for _, fam := range families {
+		match := fmt.Sprintf("iifname %s tcp dport %s ct state new add @%s { %s %s }",
+			ifnameSet(ifs), setOrSingle(ports), synFloodSet(zone, fam.n), r.sourceKey(zone, fam.n), limitOver(limit))
+		if logs {
+			r.line(match + " jump " + chain)
+			continue
+		}
+		r.line(fmt.Sprintf("%s counter drop comment %q", match, key))
+	}
+	r.sys(SystemRule{
+		Chain: "input", Zones: []string{zone}, Action: "drop", Protocol: string(model.ProtocolTCP),
+		Source:      "a source opening connections faster than " + limit.String(),
+		Destination: firewallDest(ports),
+		Description: "Drop the new management connections over the limit",
+		Log:         logs,
+		Keys:        []string{chain + "/" + key},
+		LogKeys:     logKeys(logs, chain+"/log:protect-synflood"),
+		Setting:     "protection",
+	})
+}
+
+// lockoutFloodTag is the comment of the drop lockoutFlood writes.
+const lockoutFloodTag = "anti-lockout-flood"
+
+// lockoutFloodChain names the chain that logs and drops for lockoutFlood
+// in a zone that logs its drops, as floodChain does for the zone's own.
+func lockoutFloodChain(zone string) string { return "plog_" + zone + "_lockflood" }
 
 // floodChain names the chain that logs and drops one kind of flood for a
 // zone. See floodVerdict for why it exists.
@@ -260,6 +328,12 @@ func (r *renderer) floodChains() {
 		if !r.zoneNamedLogsDrops(zone) {
 			continue
 		}
+		if z, ok := r.cfg.Zone(zone); ok && r.lockoutFlooded(*z) && len(r.managementPorts()) > 0 {
+			r.block("chain "+lockoutFloodChain(zone), func() {
+				r.line(systemLogLine("", "", "protect-synflood"))
+				r.line(fmt.Sprintf("counter drop comment %q", lockoutFloodTag))
+			})
+		}
 		for _, k := range []struct {
 			kind string
 			on   bool
@@ -288,9 +362,10 @@ func (r *renderer) scanTally(zone string) {
 		return
 	}
 	for _, fam := range families {
-		r.line(fmt.Sprintf(`meta l4proto { tcp, udp } add @%s { %s saddr %s } add @%s { %s saddr } counter comment "protect:scan"`,
-			scanCountSet(zone, fam.n), fam.prefix, limitOver(p.Limit()),
-			scanHoldSet(zone, fam.n), fam.prefix))
+		key := r.sourceKey(zone, fam.n)
+		r.line(fmt.Sprintf(`meta l4proto { tcp, udp } add @%s { %s %s } add @%s { %s } counter comment "protect:scan"`,
+			scanCountSet(zone, fam.n), key, limitOver(p.Limit()),
+			scanHoldSet(zone, fam.n), key))
 	}
 	r.sys(SystemRule{
 		Chain: "zone_" + zone, After: true, Zones: []string{zone}, Action: "continue",
@@ -340,7 +415,7 @@ func (r *renderer) ruleLimit(rule *model.Rule, m match) {
 			parts = append(parts, m.l4)
 		}
 		parts = append(parts,
-			fmt.Sprintf("add @%s { %s saddr %s }", rateLimitSet(rule.ID, fam.n), fam.prefix, limitOver(*l)),
+			fmt.Sprintf("add @%s { %s %s }", rateLimitSet(rule.ID, fam.n), r.sourceKey(rule.Zone, fam.n), limitOver(*l)),
 			"counter", "drop", fmt.Sprintf("comment %q", "limit:"+rule.ID))
 		r.line(strings.Join(parts, " "))
 	}

@@ -89,6 +89,17 @@ const conntrackMax = computed({
   },
 })
 
+/** How long an idle TCP connection is kept, in seconds. Empty is the default, a day. */
+const tcpEstablished = computed({
+  get: () => config.draft?.system?.conntrackTcpEstablished || '',
+  set: (v: number | '') => {
+    const system = config.draft?.system
+    if (!system) return
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) system.conntrackTcpEstablished = v
+    else delete system.conntrackTcpEstablished
+  },
+})
+
 /** How a limit reads in a sentence, the way the ruleset writes it. */
 function rate(limit: RateLimit | undefined) {
   if (!limit) return ''
@@ -101,7 +112,8 @@ function rate(limit: RateLimit | undefined) {
   <div v-if="config.draft" class="space-y-5">
     <SectionCard
       title="Where"
-      intro="Defended zones. None chosen means every zone that faces the internet."
+      intro="Defended zones. None chosen means every zone that faces the internet. On those, IPv6
+        sources are counted by /64."
       :locked="auth.readOnly"
     >
       <div class="space-y-4">
@@ -129,7 +141,8 @@ function rate(limit: RateLimit | undefined) {
     <SectionCard
       title="Connection flood"
       intro="Holds each source to a number of new connections. Over it, the connections are dropped
-        and the source keeps whatever it already has open."
+        and the source keeps whatever it already has open. On a WAN with anti-lockout, new
+        connections to the management ports count against this limit too."
       :locked="auth.readOnly"
     >
       <template #actions>
@@ -301,8 +314,9 @@ function rate(limit: RateLimit | undefined) {
 
     <SectionCard
       title="IP options drop"
-      intro="Drops TCP that carries IPv4 options and IPv6 with a type 0 routing header, on every
-        interface whatever zones are chosen above. IGMP's Router Alert still passes."
+      intro="Drops TCP that carries IPv4 options, IPv6 with a routing header and forwarded IPv6 with
+        hop-by-hop options, on every interface whatever zones are chosen above. IGMP's Router Alert
+        still passes."
       :locked="auth.readOnly"
     >
       <template #actions>
@@ -372,6 +386,21 @@ function rate(limit: RateLimit | undefined) {
           min="16384"
           max="4194304"
           placeholder="sized from memory"
+          class="input w-48 max-sm:w-full"
+        />
+      </FormField>
+      <FormField
+        id="prot-tcp-established"
+        label="Idle TCP connection kept for"
+        hint="Seconds. Empty keeps 86400, one day."
+      >
+        <input
+          id="prot-tcp-established"
+          v-model.number="tcpEstablished"
+          type="number"
+          min="7440"
+          max="2592000"
+          placeholder="86400"
           class="input w-48 max-sm:w-full"
         />
       </FormField>

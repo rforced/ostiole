@@ -25,17 +25,17 @@ var Forwarding = map[string]string{
 	// asymmetric traffic on multi-homed routers.
 	"net/ipv4/conf/all/rp_filter":     "2",
 	"net/ipv4/conf/default/rp_filter": "2",
-	// Do not accept ICMP redirects or source-routed packets on a router.
-	"net/ipv4/conf/all/accept_redirects":     "0",
-	"net/ipv4/conf/default/accept_redirects": "0",
-	"net/ipv4/conf/all/accept_source_route":  "0",
-	"net/ipv6/conf/all/accept_source_route":  "0",
-	// Nor send redirects. The kernel sends one when all or the interface
+	// Do not accept ICMP redirects or source-routed packets on a router,
+	// nor send redirects. The kernel sends one when all or the interface
 	// says so, and IPv6 reads accept_redirects of the interface alone, so
-	// these two are set on every interface, those that appear later too:
-	// systemd-sysctl applies a pattern to each as it comes.
-	"net/ipv4/conf/*/send_redirects":   "0",
-	"net/ipv6/conf/*/accept_redirects": "0",
+	// these are set on every interface, those that appear later too:
+	// systemd-sysctl applies a pattern to each as it comes. A pattern
+	// takes in all and default.
+	"net/ipv4/conf/*/accept_redirects":    "0",
+	"net/ipv6/conf/*/accept_redirects":    "0",
+	"net/ipv4/conf/*/accept_source_route": "0",
+	"net/ipv6/conf/*/accept_source_route": "0",
+	"net/ipv4/conf/*/send_redirects":      "0",
 	// Secure redirects only narrow which redirects are taken, and none
 	// are, so this is for the reader of the file as much as the kernel.
 	"net/ipv4/conf/*/secure_redirects": "0",
@@ -61,6 +61,12 @@ var Forwarding = map[string]string{
 //     ConntrackMaxKey: an override somebody asked for, not a default.
 //   - net.core.somaxconn has defaulted to 4096 since kernel 5.4, which is
 //     below the kernel floor in internal/kernel, so it is always already set.
+//
+// The neighbour table's thresholds and the receive queue's sizes are fixed
+// numbers all the same. They are not sized from memory by anyone: the
+// kernel's own are constants too, set for a host with a handful of
+// neighbours, and a router with a few hundred devices or a busy line runs
+// into them.
 var Tuning = map[string]string{
 	// Reclaim page cache before swapping. A router's working set is small
 	// and paging a packet path back in adds latency where it hurts most.
@@ -74,6 +80,31 @@ var Tuning = map[string]string{
 	// of traffic passing through. A gateway wants the active queue
 	// management.
 	"net/core/default_qdisc": "fq_codel",
+	// Share an equal-tier gateway group by connection, not by address
+	// pair: every connection of two hosts otherwise takes one line.
+	"net/ipv4/fib_multipath_hash_policy": "1",
+	"net/ipv6/fib_multipath_hash_policy": "1",
+	// The neighbour table is not collected below the first, is collected
+	// hard above the second and refuses entries above the third. The
+	// kernel's 128, 512 and 1024 are spent by a few hundred devices with
+	// both families, and "neighbour table overflow" drops packets.
+	"net/ipv4/neigh/default/gc_thresh1": "512",
+	"net/ipv4/neigh/default/gc_thresh2": "2048",
+	"net/ipv4/neigh/default/gc_thresh3": "4096",
+	"net/ipv6/neigh/default/gc_thresh1": "512",
+	"net/ipv6/neigh/default/gc_thresh2": "2048",
+	"net/ipv6/neigh/default/gc_thresh3": "4096",
+	// Packets a CPU may have waiting, and how many and for how long one
+	// receive pass takes them before giving the CPU back. The kernel's
+	// time is two ticks, 8000 µs at Debian's HZ of 250, so 8000 is a floor
+	// on every supported distribution.
+	"net/core/netdev_max_backlog":  "4096",
+	"net/core/netdev_budget":       "600",
+	"net/core/netdev_budget_usecs": "8000",
+	// The router's own outgoing connections start above every port it
+	// listens on by default, the web UI's 9443 included. The kernel shows
+	// the pair with a tab between.
+	"net/ipv4/ip_local_port_range": "10000 65535",
 }
 
 // Hardening closes the doors a router never needs open. Nothing here
@@ -141,6 +172,17 @@ var Hardening = map[string]string{
 	// owner owns it.
 	"fs/protected_fifos":   "2",
 	"fs/protected_regular": "2",
+	// The kernel's and every distribution's defaults, held against
+	// something that moves them: no following a link in such a directory
+	// to somebody else's file, no hard link to a file one cannot read or
+	// write, and addresses shuffled for stack, libraries and heap.
+	"fs/protected_hardlinks":    "1",
+	"fs/protected_symlinks":     "1",
+	"kernel/randomize_va_space": "2",
+	// A unicast packet in a broadcast or multicast frame was sent to
+	// every host on the link to reach one that should not have had it.
+	"net/ipv4/conf/*/drop_unicast_in_l2_multicast": "1",
+	"net/ipv6/conf/*/drop_unicast_in_l2_multicast": "1",
 	// A process that changed its credentials leaves no core: the
 	// resolvers' would hold the network's DNS names.
 	"fs/suid_dumpable": "0",
@@ -164,6 +206,17 @@ var optional = map[string]bool{
 	"vm/unprivileged_userfaultfd":      true,
 	"kernel/io_uring_disabled":         true,
 	"kernel/unprivileged_userns_clone": true,
+	// Only the first network namespace has the neighbour defaults and the
+	// receive queue's sizes; a container's has neither.
+	"net/ipv4/neigh/default/gc_thresh1": true,
+	"net/ipv4/neigh/default/gc_thresh2": true,
+	"net/ipv4/neigh/default/gc_thresh3": true,
+	"net/ipv6/neigh/default/gc_thresh1": true,
+	"net/ipv6/neigh/default/gc_thresh2": true,
+	"net/ipv6/neigh/default/gc_thresh3": true,
+	"net/core/netdev_max_backlog":       true,
+	"net/core/netdev_budget":            true,
+	"net/core/netdev_budget_usecs":      true,
 }
 
 // All returns every setting Ostiole manages, keyed by /proc/sys path.
@@ -197,6 +250,19 @@ type Settings struct {
 	// the ceiling; a number is only ever one read back from the kernel,
 	// to be put back.
 	ConntrackBuckets int `json:"conntrackBuckets"`
+	// TCPEstablished is how many seconds an established TCP connection
+	// may carry nothing before the kernel forgets it. Zero is
+	// DefaultTCPEstablished.
+	TCPEstablished int `json:"tcpEstablished,omitempty"`
+	// Configured says a configuration is in force or being applied. Only
+	// then is picking up TCP connections midway turned off: a router
+	// still on its bootstrap ruleset has just loaded connection tracking
+	// under the session that installs it, which has to be picked up.
+	Configured bool `json:"-"`
+	// TCPLoose is the pickup rule read back before an apply, "0" or "1",
+	// put back when undoing it leaves the router unconfigured. Empty
+	// leaves the kernel's.
+	TCPLoose string `json:"tcpLoose,omitempty"`
 }
 
 // ConntrackMaxKey is the ceiling on tracked connections, and the one
@@ -231,6 +297,35 @@ const ConntrackAcctKey = "net/netfilter/nf_conntrack_acct"
 // kernel's own 2 announces only those that opened while somebody listened:
 // at 1 a restarted daemon still hears the last bytes of what was open.
 const ConntrackEventsKey = "net/netfilter/nf_conntrack_events"
+
+// ConntrackTCPLooseKey at 0 has the kernel track a TCP connection only from
+// its handshake. At the kernel's 1 any packet starts one, so a connection
+// whose entry timed out or was removed comes back without ever being held
+// to the rules a new connection meets.
+const ConntrackTCPLooseKey = "net/netfilter/nf_conntrack_tcp_loose"
+
+// ConntrackTCPEstablishedKey is how long an idle established TCP
+// connection is kept.
+const ConntrackTCPEstablishedKey = "net/netfilter/nf_conntrack_tcp_timeout_established"
+
+// The idle time of an established TCP connection, in seconds. The default
+// is a day, as pf keeps one, where the kernel keeps five. The floor is
+// the 2 hours 4 minutes of RFC 5382: under it a connection that sends
+// nothing but TCP's keepalives, two hours apart by default, is forgotten
+// between two of them.
+const (
+	DefaultTCPEstablished = 86400
+	MinTCPEstablished     = 7440
+	MaxTCPEstablished     = 30 * 86400
+)
+
+// conntrackFixed are the TCP timeouts that are no setting: a connection
+// one end has closed, or both have, is kept a minute, where the kernel
+// keeps the first two.
+var conntrackFixed = map[string]string{
+	"net/netfilter/nf_conntrack_tcp_timeout_fin_wait":   "60",
+	"net/netfilter/nf_conntrack_tcp_timeout_close_wait": "60",
+}
 
 // Bounds on the ceiling. The floor is not a memory figure but a lockout
 // one: a router that cannot open a few thousand connections cannot be
@@ -273,9 +368,9 @@ func (p Proc) Apply(s Settings) error {
 	want := All()
 	maps.Copy(want, conntrack(s))
 	var errs []error
-	for key, value := range want {
+	for _, key := range slices.Sorted(maps.Keys(want)) {
 		for _, path := range p.paths(key) {
-			if err := p.write(path, value); err != nil {
+			if err := p.write(path, want[key]); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -319,7 +414,8 @@ func (p Proc) Heal(s Settings) ([]Drift, error) {
 				errs = append(errs, keyErr(rel, err))
 				continue
 			}
-			found := strings.TrimSpace(string(raw))
+			// The kernel puts a tab between the two ports of a range.
+			found := strings.Join(strings.Fields(string(raw)), " ")
 			if found == want[key] {
 				continue
 			}
@@ -366,7 +462,8 @@ func keyErr(key string, err error) error {
 	return fmt.Errorf("%s: %w", key, err)
 }
 
-// conntrack renders the accounting and the events, and the ceiling when
+// conntrack renders the accounting, the events and the TCP timeouts, the
+// handshake rule once a configuration is in force, and the ceiling when
 // one was asked for rather than left to the kernel.
 //
 // These keys are deliberately not in the persisted drop-in. nf_conntrack
@@ -376,6 +473,18 @@ func keyErr(key string, err error) error {
 // module is guaranteed to be there, at boot and on every apply alike.
 func conntrack(s Settings) map[string]string {
 	out := map[string]string{ConntrackAcctKey: "1", ConntrackEventsKey: "1"}
+	maps.Copy(out, conntrackFixed)
+	established := s.TCPEstablished
+	if established <= 0 {
+		established = DefaultTCPEstablished
+	}
+	out[ConntrackTCPEstablishedKey] = strconv.Itoa(established)
+	switch {
+	case s.Configured:
+		out[ConntrackTCPLooseKey] = "0"
+	case s.TCPLoose != "":
+		out[ConntrackTCPLooseKey] = s.TCPLoose
+	}
 	if s.ConntrackMax <= 0 {
 		return out
 	}
@@ -395,7 +504,8 @@ func (p Proc) ConntrackMax() (int, error) {
 	return p.read(ConntrackMaxKey)
 }
 
-// Current implements Reader: the ceiling and the table size in force.
+// Current implements Reader: the ceiling, the table size, the idle time
+// and the pickup rule in force.
 func (p Proc) Current() (Settings, error) {
 	ceiling, err := p.read(ConntrackMaxKey)
 	if err != nil {
@@ -405,7 +515,12 @@ func (p Proc) Current() (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{ConntrackMax: ceiling, ConntrackBuckets: buckets}, nil
+	now := Settings{ConntrackMax: ceiling, ConntrackBuckets: buckets}
+	now.TCPEstablished, _ = p.read(ConntrackTCPEstablishedKey)
+	if loose, err := p.read(ConntrackTCPLooseKey); err == nil {
+		now.TCPLoose = strconv.Itoa(loose)
+	}
+	return now, nil
 }
 
 func (p Proc) read(key string) (int, error) {

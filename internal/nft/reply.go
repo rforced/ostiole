@@ -28,14 +28,18 @@ func (r *renderer) replyChains() {
 	// After policy routing's chain, whose restore leaves the line off.
 	r.block("chain reply_prerouting", func() {
 		r.line("type filter hook prerouting priority mangle + 1; policy accept;")
+		// Most packets belong to a connection that started inside and
+		// carries no line: one check and they are out.
+		r.line(fmt.Sprintf("ct state != new ct mark & 0x%08x == 0x0 accept", uint32(model.ReplyMarkMask)))
 		for _, l := range lines {
-			r.line(fmt.Sprintf(`iifname %s ct state new ct mark set ct mark & 0x%08x | 0x%08x counter comment %q`,
+			r.line(fmt.Sprintf(`ct state new iifname %s ct mark set ct mark & 0x%08x | 0x%08x counter comment %q`,
 				ifnameSet([]string{l.Interface}), others, l.Mark, "reply:"+l.Interface))
 		}
 		back()
 	})
 	r.block("chain reply_output", func() {
 		r.line("type route hook output priority mangle; policy accept;")
+		r.line(fmt.Sprintf("ct mark & 0x%08x == 0x0 accept", uint32(model.ReplyMarkMask)))
 		back()
 	})
 	for _, l := range lines {

@@ -45,8 +45,14 @@ table inet ostiole {
 	}
 	chain raw_prerouting {
 		type filter hook prerouting priority raw; policy accept;
+		iifname != "lo" ip6 saddr ::1 counter drop comment "block-impossible"
+		ip6 saddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		ip6 daddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop comment "block-tcp-flags"
+		tcp flags & (syn|fin) == (syn|fin) counter drop comment "block-tcp-flags"
+		tcp flags & (syn|rst) == (syn|rst) counter drop comment "block-tcp-flags"
 		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
-		rt type 0 counter drop comment "block-routing-header"
+		exthdr rt exists counter drop comment "block-routing-header"
 		iifname "eth1" ip6 saddr != :: fib saddr . iif oif missing counter drop comment "block-spoofed"
 	}
 	chain input {
@@ -59,16 +65,15 @@ table inet ostiole {
 		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"
 		iifname "eth0" tcp dport { 443, 22 } counter accept comment "anti-lockout:wan"
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan }
 		counter comment "default-drop"
 	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
+		exthdr hbh exists counter drop comment "block-hop-by-hop"
 		ct state established,related accept
 		ct state invalid drop
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan }
 		counter comment "default-drop"
 	}
 	chain output {

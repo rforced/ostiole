@@ -20,6 +20,9 @@ var kindLabels = map[string]string{
 	"block-ip-options":     "IP options",
 	"block-routing-header": "routing header",
 	"block-spoofed":        "spoofed source",
+	"block-impossible":     "impossible address",
+	"block-tcp-flags":      "TCP flags",
+	"block-hop-by-hop":     "hop-by-hop options",
 }
 
 // Search hands a the values the Logs page shows for the entry, as it shows

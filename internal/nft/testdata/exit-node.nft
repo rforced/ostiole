@@ -4,8 +4,14 @@ delete table inet ostiole
 table inet ostiole {
 	chain raw_prerouting {
 		type filter hook prerouting priority raw; policy accept;
+		iifname != "lo" ip6 saddr ::1 counter drop comment "block-impossible"
+		ip6 saddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		ip6 daddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop comment "block-tcp-flags"
+		tcp flags & (syn|fin) == (syn|fin) counter drop comment "block-tcp-flags"
+		tcp flags & (syn|rst) == (syn|rst) counter drop comment "block-tcp-flags"
 		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
-		rt type 0 counter drop comment "block-routing-header"
+		exthdr rt exists counter drop comment "block-routing-header"
 	}
 	chain input {
 		type filter hook input priority filter; policy drop;
@@ -17,20 +23,17 @@ table inet ostiole {
 		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
 		iifname "eth0" udp dport 41641 counter accept comment "service:tailscale:wan"
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
-		iifname "tailscale0" jump zone_tailnet
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan, "tailscale0" : jump zone_tailnet }
 		counter comment "default-drop"
 	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
-		oifname "tailscale0" tcp flags syn tcp option maxseg size set rt mtu counter comment "tunnel-mss"
+		exthdr hbh exists counter drop comment "block-hop-by-hop"
+		tcp flags syn / syn,rst oifname "tailscale0" tcp option maxseg size set rt mtu counter comment "mss-clamp"
 		ct mark & 0x00ff0000 == 0x10000 oifname "eth0" counter drop comment "kill-switch:amsterdam"
 		ct state established,related accept
 		ct state invalid drop
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
-		iifname "tailscale0" jump zone_tailnet
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan, "tailscale0" : jump zone_tailnet }
 		counter comment "default-drop"
 	}
 	chain output {
@@ -52,7 +55,7 @@ table inet ostiole {
 		type filter hook prerouting priority mangle; policy accept;
 		ct mark & 0x00ff0000 != 0x0 meta mark set ct mark counter accept comment "policy:established"
 		fib daddr type local counter accept comment "policy:local"
-		iifname "eth1" ct state new jump policy_lan
+		ct state new iifname "eth1" jump policy_lan
 	}
 	chain policy_lan {
 		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set ct mark & 0xff00ffff | 0x10000 counter accept comment "policy:lan-strict"

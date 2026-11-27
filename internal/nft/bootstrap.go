@@ -2,6 +2,7 @@ package nft
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"ostiole/internal/model"
@@ -75,8 +76,10 @@ func minimal(title, tag string, ports []uint16, ifaces []string) string {
 	// are too, whatever a configuration would say about them.
 	b.WriteString("\tchain " + RawChain + " {\n")
 	b.WriteString("\t\ttype filter hook prerouting priority raw; policy accept;\n")
-	for _, d := range rawDrops {
-		b.WriteString("\t\t" + d.match + " drop comment \"" + tag + ":" + d.kind + "\"\n")
+	for _, d := range slices.Concat(rawFixed, rawOptions) {
+		for _, match := range d.matches {
+			b.WriteString("\t\t" + match + " drop comment \"" + tag + ":" + d.kind + "\"\n")
+		}
 	}
 	b.WriteString("\t}\n")
 	b.WriteString("\tchain input {\n")

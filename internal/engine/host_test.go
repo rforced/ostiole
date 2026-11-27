@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -66,20 +67,25 @@ func (f sshFake) Apply(_ context.Context, passwords bool) error {
 }
 
 // kernelFake keeps a conntrack ceiling the way the kernel does: it changes
-// only when something writes one. A heal reports drift and fails with
-// healErr.
+// only when something writes one. The idle time is written by every apply,
+// and picking connections up midway stays off once an apply turned it off.
+// A heal reports drift and fails with healErr.
 type kernelFake struct {
 	*hostCalls
-	mu      sync.Mutex
-	now     sysctl.Settings
-	drift   []sysctl.Drift
-	healErr error
+	mu          sync.Mutex
+	now         sysctl.Settings
+	established int
+	strict      bool
+	asked       []sysctl.Settings
+	drift       []sysctl.Drift
+	healErr     error
 }
 
 func (f *kernelFake) Heal(s sysctl.Settings) ([]sysctl.Drift, error) {
 	f.add("heal %d", s.ConntrackMax)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.asked = append(f.asked, s)
 	return f.drift, f.healErr
 }
 
@@ -87,11 +93,19 @@ func (f *kernelFake) Apply(s sysctl.Settings) error {
 	f.add("conntrack %d/%d", s.ConntrackMax, s.ConntrackBuckets)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.asked = append(f.asked, s)
 	if s.ConntrackMax > 0 {
 		if s.ConntrackBuckets == 0 {
 			s.ConntrackBuckets = s.ConntrackMax / 4
 		}
-		f.now = s
+		f.now = sysctl.Settings{ConntrackMax: s.ConntrackMax, ConntrackBuckets: s.ConntrackBuckets}
+	}
+	f.established = cmp.Or(s.TCPEstablished, sysctl.DefaultTCPEstablished)
+	switch {
+	case s.Configured:
+		f.strict = true
+	case s.TCPLoose != "":
+		f.strict = s.TCPLoose == "0"
 	}
 	return nil
 }
@@ -99,7 +113,20 @@ func (f *kernelFake) Apply(s sysctl.Settings) error {
 func (f *kernelFake) Current() (sysctl.Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.now, nil
+	now := f.now
+	now.TCPEstablished = f.established
+	now.TCPLoose = "1"
+	if f.strict {
+		now.TCPLoose = "0"
+	}
+	return now, nil
+}
+
+// last is what the engine asked of the kernel most recently.
+func (f *kernelFake) last() sysctl.Settings {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.asked[len(f.asked)-1]
 }
 
 // kernelOwn is the ceiling the kernel picked for itself.
@@ -165,7 +192,7 @@ func TestUndoPutsTheRoutersOwnSettingsBack(t *testing.T) {
 			if got := calls.take(); !reflect.DeepEqual(got, want) {
 				t.Errorf("apply and %s asked for %q, want %q", how, got, want)
 			}
-			if now, _ := kernel.Current(); now != kernelOwn {
+			if now, _ := kernel.Current(); now.ConntrackMax != kernelOwn.ConntrackMax || now.ConntrackBuckets != kernelOwn.ConntrackBuckets {
 				t.Errorf("conntrack after the %s = %+v, want the kernel's own %+v", how, now, kernelOwn)
 			}
 		})
@@ -272,8 +299,8 @@ func TestARefusedRulesetChangesNothingElse(t *testing.T) {
 	}
 }
 
-// The record carries the ceiling from before the apply, so a restart
-// between the two still knows it.
+// The record carries the ceiling and the pickup rule from before the
+// apply, so a restart between the two still knows them.
 func TestTheRecordKeepsTheCeilingFromBefore(t *testing.T) {
 	t.Parallel()
 	st := store.New(t.TempDir())
@@ -291,8 +318,10 @@ func TestTheRecordKeepsTheCeilingFromBefore(t *testing.T) {
 	if err := json.Unmarshal(raw, &rec); err != nil {
 		t.Fatal(err)
 	}
-	if rec.Kernel == nil || *rec.Kernel != kernelOwn {
-		t.Errorf("record kept %+v, want %+v", rec.Kernel, kernelOwn)
+	want := kernelOwn
+	want.TCPLoose = "1"
+	if rec.Kernel == nil || *rec.Kernel != want {
+		t.Errorf("record kept %+v, want %+v", rec.Kernel, want)
 	}
 }
 
@@ -391,5 +420,142 @@ func TestHealSysctlWithoutAHealer(t *testing.T) {
 	e := New(store.New(t.TempDir()), &fakeRunner{}, nil, slog.New(slog.DiscardHandler))
 	if moved, err := e.HealSysctl(); moved != nil || err != nil {
 		t.Errorf("HealSysctl = %+v, %v", moved, err)
+	}
+}
+
+// A configuration that cannot be read is not taken for none: the heal
+// writes nothing, where an unconfigured one would put back the default
+// idle time and leave picking connections up alone.
+func TestHealSysctlLeavesTheKernelWhenTheConfigurationCannotBeRead(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, store.ConfigFile), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	calls := &hostCalls{}
+	e, _ := hostEngine(t, store.New(dir), calls, &kernelFake{hostCalls: calls, now: kernelOwn})
+	if _, err := e.HealSysctl(); err == nil {
+		t.Error("the heal read a broken configuration without an error")
+	}
+	if got := calls.take(); len(got) != 0 {
+		t.Errorf("the heal asked the kernel for %q", got)
+	}
+}
+
+// The idle time of an established connection follows the configuration
+// through an apply and its undo, a day where it names none, and
+// connections are tracked from their handshake from the first apply on.
+func TestTheIdleTimeFollowsTheConfiguration(t *testing.T) {
+	t.Parallel()
+	calls := &hostCalls{}
+	kernel := &kernelFake{hostCalls: calls, now: kernelOwn, established: 432000}
+	e, _ := hostEngine(t, store.New(t.TempDir()), calls, kernel)
+	ctx := context.Background()
+	saved := cfg("saved")
+	saved.System.ConntrackTCPEstablished = 18000
+	if _, err := e.Apply(ctx, saved, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if now, _ := kernel.Current(); now.TCPEstablished != 18000 || !kernel.strict {
+		t.Fatalf("after the apply: idle time %d, handshakes only %v", now.TCPEstablished, kernel.strict)
+	}
+
+	if _, err := e.Apply(ctx, unconfirmed(), ApplyOptions{ConfirmTimeout: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if now, _ := kernel.Current(); now.TCPEstablished != sysctl.DefaultTCPEstablished {
+		t.Errorf("a configuration that names no idle time left %d, want a day", now.TCPEstablished)
+	}
+	if _, err := e.HealSysctl(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := kernel.last(), (sysctl.Settings{ConntrackMax: 1_000_000, Configured: true}); got != want {
+		t.Errorf("heal in the window asked for %+v, want %+v", got, want)
+	}
+	if err := e.Revert(ctx, tester); err != nil {
+		t.Fatal(err)
+	}
+	want := sysctl.Settings{ConntrackMax: 65536, ConntrackBuckets: 65536, TCPEstablished: 18000, Configured: true}
+	if got := kernel.last(); got != want {
+		t.Errorf("the revert asked for %+v, want %+v", got, want)
+	}
+	if _, err := e.HealSysctl(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := kernel.last(), (sysctl.Settings{TCPEstablished: 18000, Configured: true}); got != want {
+		t.Errorf("heal asked for %+v, want %+v", got, want)
+	}
+}
+
+// A router with no configuration yet leaves picking connections up midway
+// as the kernel has it: at boot on the fallback ruleset and in the hourly
+// check. Undoing its first apply picks connections up again and keeps the
+// default idle time, so the next hourly check finds nothing to put back.
+func TestAnUnconfiguredRouterKeepsPickingConnectionsUp(t *testing.T) {
+	t.Parallel()
+	calls := &hostCalls{}
+	kernel := &kernelFake{hostCalls: calls, now: kernelOwn, established: 432000}
+	e, _ := hostEngine(t, store.New(t.TempDir()), calls, kernel)
+	ctx := context.Background()
+	if _, err := e.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := kernel.last(); got.Configured || kernel.strict {
+		t.Errorf("the load without a configuration asked for %+v", got)
+	}
+	if _, err := e.HealSysctl(); err != nil {
+		t.Fatal(err)
+	}
+	if got := kernel.last(); got.Configured {
+		t.Errorf("the heal without a configuration asked for %+v", got)
+	}
+
+	first := unconfirmed()
+	first.System.ConntrackTCPEstablished = 36000
+	if _, err := e.Apply(ctx, first, ApplyOptions{ConfirmTimeout: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if got := kernel.last(); !got.Configured || got.TCPEstablished != 36000 {
+		t.Errorf("the first apply asked for %+v", got)
+	}
+	if !kernel.strict {
+		t.Error("the first apply left picking connections up midway on")
+	}
+	if err := e.Revert(ctx, tester); err != nil {
+		t.Fatal(err)
+	}
+	if kernel.strict {
+		t.Error("undoing the first apply left picking connections up midway off")
+	}
+	if kernel.established != sysctl.DefaultTCPEstablished {
+		t.Errorf("undoing the first apply left an idle time of %d, want %d", kernel.established, sysctl.DefaultTCPEstablished)
+	}
+	if _, err := e.HealSysctl(); err != nil {
+		t.Fatal(err)
+	}
+	if got := kernel.last(); got.Configured || cmp.Or(got.TCPEstablished, sysctl.DefaultTCPEstablished) != kernel.established {
+		t.Errorf("the hourly check after the undo asked for %+v against an idle time of %d", got, kernel.established)
+	}
+}
+
+// A configured router enforces handshakes from the load at boot.
+func TestAConfiguredBootTracksFromTheHandshake(t *testing.T) {
+	t.Parallel()
+	st := store.New(t.TempDir())
+	calls := &hostCalls{}
+	first, _ := hostEngine(t, st, calls, &kernelFake{hostCalls: calls, now: kernelOwn})
+	ctx := context.Background()
+	saved := cfg("saved")
+	saved.System.ConntrackTCPEstablished = 18000
+	if _, err := first.Apply(ctx, saved, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	kernel := &kernelFake{hostCalls: calls, now: kernelOwn, established: 432000}
+	boot, _ := hostEngine(t, st, calls, kernel)
+	if _, err := boot.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := kernel.last(), (sysctl.Settings{TCPEstablished: 18000, Configured: true}); got != want {
+		t.Errorf("the load at boot asked for %+v, want %+v", got, want)
 	}
 }

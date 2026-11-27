@@ -169,4 +169,31 @@ describe('ProtectionPage', () => {
     await field.setValue('')
     expect(draftOf(config).system.conntrackMax).toBeUndefined()
   })
+
+  it('keeps an idle TCP connection a day until a number is typed', async () => {
+    const { wrapper, config } = await opened(draft())
+    const field = wrapper.find<HTMLInputElement>('#prot-tcp-established')
+    expect(field.element.value).toBe('')
+    expect(field.attributes('placeholder')).toBe('86400')
+
+    await field.setValue(18000)
+    expect(draftOf(config).system.conntrackTcpEstablished).toBe(18000)
+
+    // Cleared is the default again, and the draft is as it was saved.
+    await field.setValue('')
+    expect(draftOf(config).system.conntrackTcpEstablished).toBeUndefined()
+    expect(config.dirty).toBe(false)
+  })
+
+  it('shows a saved idle time and leaves an untouched draft alone', async () => {
+    const saved = draft()
+    saved.system.conntrackTcpEstablished = 18000
+    const { wrapper, config } = await opened(saved)
+    const field = wrapper.find<HTMLInputElement>('#prot-tcp-established')
+    expect(field.element.value).toBe('18000')
+    expect(config.dirty).toBe(false)
+
+    await field.setValue(18000)
+    expect(config.dirty).toBe(false)
+  })
 })

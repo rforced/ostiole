@@ -210,6 +210,103 @@ func TestPPPoEClampsTheSegmentSizeInKernel(t *testing.T) {
 	}
 }
 
+// Any link narrower than Ethernet clamps the SYNs that leave by it, not
+// only PPPoE: a WireGuard tunnel at 1420, a VLAN set to 1400, and a VLAN
+// left to its parent, which is set to 1400. The LAN's host offers 1460 to
+// a device behind each, in IPv6 too through the VLAN that has it, and the
+// SYNs leave offering what fits. ACKs out the same links are not touched.
+func TestNarrowLinksClampTheSegmentSizeInKernel(t *testing.T) {
+	if !netnstest.Enter(t, "nft") {
+		return
+	}
+	cfg := loadConfig(t, "testdata/wireguard-peers.json")
+	for i := range cfg.Interfaces {
+		if cfg.Interfaces[i].Name == "eth1" {
+			cfg.Interfaces[i].IPv6 = model.IPv6{Mode: model.AddrStatic, Address: "2001:db8:1::1/64"}
+		}
+	}
+	none := model.IPv6{Mode: model.AddrNone}
+	cfg.Interfaces = append(cfg.Interfaces,
+		model.Interface{
+			Name: "eth1.30", Zone: "lan", Enabled: true, MTU: 1400, VLAN: &model.VLAN{Parent: "eth1", ID: 30},
+			IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.30.1/24"},
+			IPv6: model.IPv6{Mode: model.AddrStatic, Address: "2001:db8:30::1/64"},
+		},
+		model.Interface{Name: "eth2", Zone: "lan", Enabled: true, MTU: 1400, IPv4: model.IPv4{Mode: model.AddrNone}, IPv6: none},
+		model.Interface{
+			Name: "eth2.40", Zone: "lan", Enabled: true, VLAN: &model.VLAN{Parent: "eth2", ID: 40},
+			IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.40.1/24"}, IPv6: none,
+		},
+	)
+	ruleset, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quietIPv6(t)
+	routeAll(t)
+	lan, peer := vethPair(t, "eth1", "peer1", "192.168.1.1/24")
+	netnstest.AddAddr(t, lan.Index, netip.MustParsePrefix("2001:db8:1::1/64"))
+	narrow := func(name string, mtu int, addrs ...string) int {
+		link := netnstest.Dummy(t, name, addrs...)
+		if err := netlink.SetLinkMTU(link.Index, mtu); err != nil {
+			t.Fatal(err)
+		}
+		return capture(t, link)
+	}
+	tunnel := narrow("wg0", 1420, "10.66.0.1/24")
+	vlan := narrow("eth1.30", 1400, "192.168.30.1/24", "2001:db8:30::1/64")
+	inherited := narrow("eth2.40", 1400, "192.168.40.1/24")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	x := &Exec{}
+	if err := x.Apply(ctx, ruleset); err != nil {
+		t.Fatal(err)
+	}
+
+	send := frameSender(t, peer, lan)
+	host, host6 := net.ParseIP("192.168.1.10"), net.ParseIP("2001:db8:1::10")
+	mss1460 := []byte{2, 4, 0x05, 0xb4}
+	segment := func(dst net.IP, sport uint16, flags byte) []byte {
+		if dst.To4() != nil {
+			return tcpFrame(lan.HardwareAddr, peer.HardwareAddr, host, dst, sport, 443, flags, 1, 1, mss1460...)
+		}
+		return tcp6Frame(lan.HardwareAddr, peer.HardwareAddr, host6, dst, sport, 443, flags, 1, 1, mss1460...)
+	}
+	sport := func(f []byte) uint16 {
+		if tcp, ok := tcpHeader(f); ok {
+			return binary.BigEndian.Uint16(tcp)
+		}
+		return 0
+	}
+	cases := []struct {
+		out  int
+		dst  string
+		want int
+	}{
+		{tunnel, "10.66.0.5", 1420 - 40},
+		{vlan, "192.168.30.5", 1400 - 40},
+		{vlan, "2001:db8:30::5", 1400 - 60},
+		{inherited, "192.168.40.5", 1400 - 40},
+	}
+	for i, c := range cases {
+		dst, syn, ack := net.ParseIP(c.dst), 40001+uint16(i), 40101+uint16(i)
+		send(segment(dst, syn, tcpSYN))
+		send(segment(dst, ack, tcpACK))
+		mss := 0
+		for _, f := range departures(t, c.out, func(f []byte) bool { return sport(f) == ack }) {
+			if sport(f) == syn {
+				mss, _ = synMSS(f, 443)
+			}
+		}
+		if mss != c.want {
+			t.Errorf("the SYN to %s left offering %d, want %d", c.dst, mss, c.want)
+		}
+	}
+	if n := waitForCounter(ctx, t, x, "forward/mss-clamp", uint64(len(cases))); n != uint64(len(cases)) {
+		t.Errorf("the clamp counted %d segments, want the %d SYNs", n, len(cases))
+	}
+}
+
 // A group set to block holds its traffic to its own line before the daemon
 // has routed it, as at boot. With no ip rules, the SYN the kiosk rule marks
 // for wan2_only takes the main table towards eth0, and the kill switch drops
@@ -486,17 +583,38 @@ func parseTCP(frame []byte) (tcpSegment, bool) {
 	}, true
 }
 
-// synMSS reads the segment size an Ethernet frame's TCP SYN to port offers.
-func synMSS(frame []byte, port uint16) (int, bool) {
-	if len(frame) < 14+20 || binary.BigEndian.Uint16(frame[12:]) != syscall.ETH_P_IP {
-		return 0, false
+// tcpHeader finds the TCP header in an Ethernet frame carrying IPv4, or
+// IPv6 with no extension headers.
+func tcpHeader(frame []byte) ([]byte, bool) {
+	if len(frame) < 14 {
+		return nil, false
 	}
 	ip := frame[14:]
-	ihl := int(ip[0]&0x0f) * 4
-	if ip[9] != syscall.IPPROTO_TCP || len(ip) < ihl+20 {
+	switch binary.BigEndian.Uint16(frame[12:]) {
+	case syscall.ETH_P_IP:
+		if len(ip) < 20 {
+			return nil, false
+		}
+		ihl := int(ip[0]&0x0f) * 4
+		if ip[9] != syscall.IPPROTO_TCP || len(ip) < ihl+20 {
+			return nil, false
+		}
+		return ip[ihl:], true
+	case syscall.ETH_P_IPV6:
+		if len(ip) < 40+20 || ip[6] != syscall.IPPROTO_TCP {
+			return nil, false
+		}
+		return ip[40:], true
+	}
+	return nil, false
+}
+
+// synMSS reads the segment size an Ethernet frame's TCP SYN to port offers.
+func synMSS(frame []byte, port uint16) (int, bool) {
+	tcp, ok := tcpHeader(frame)
+	if !ok {
 		return 0, false
 	}
-	tcp := ip[ihl:]
 	off := int(tcp[12]>>4) * 4
 	if binary.BigEndian.Uint16(tcp[2:]) != port || tcp[13]&0x02 == 0 || len(tcp) < off {
 		return 0, false
@@ -529,7 +647,9 @@ func synFrame(dstMAC, srcMAC net.HardwareAddr, src, dst net.IP, sport, dport uin
 
 // TCP flags, as the header's thirteenth byte holds them.
 const (
+	tcpFIN = 0x01
 	tcpSYN = 0x02
+	tcpRST = 0x04
 	tcpACK = 0x10
 )
 
@@ -561,6 +681,28 @@ func tcpFrame(dstMAC, srcMAC net.HardwareAddr, src, dst net.IP, sport, dport uin
 
 	frame := append(append(append([]byte{}, dstMAC...), srcMAC...), 0x08, 0x00)
 	return append(append(frame, ip...), tcp...)
+}
+
+// syn6Frame is synFrame in IPv6.
+func syn6Frame(dstMAC, srcMAC net.HardwareAddr, src, dst net.IP, sport, dport uint16, opts ...byte) []byte {
+	return tcp6Frame(dstMAC, srcMAC, src, dst, sport, dport, tcpSYN, 1, 0, opts...)
+}
+
+// tcp6Frame is tcpFrame in IPv6.
+func tcp6Frame(dstMAC, srcMAC net.HardwareAddr, src, dst net.IP, sport, dport uint16, flags byte, seq, ack uint32, opts ...byte) []byte {
+	tcp := make([]byte, 20+len(opts))
+	binary.BigEndian.PutUint16(tcp[0:], sport)
+	binary.BigEndian.PutUint16(tcp[2:], dport)
+	binary.BigEndian.PutUint32(tcp[4:], seq)
+	if flags&tcpACK != 0 {
+		binary.BigEndian.PutUint32(tcp[8:], ack)
+	}
+	tcp[12], tcp[13] = byte(len(tcp)/4)<<4, flags
+	copy(tcp[20:], opts)
+	binary.BigEndian.PutUint16(tcp[14:], 64240)
+	pseudo := append(append(append([]byte{}, src.To16()...), dst.To16()...), 0, 0, 0, byte(len(tcp)), 0, 0, 0, syscall.IPPROTO_TCP)
+	binary.BigEndian.PutUint16(tcp[16:], checksum(append(pseudo, tcp...)))
+	return ipv6Frame(dstMAC, srcMAC, src, dst, syscall.IPPROTO_TCP, 64, tcp)
 }
 
 func checksum(b []byte) uint16 {

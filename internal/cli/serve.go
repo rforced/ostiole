@@ -137,11 +137,7 @@ at your own.`,
 			if os.Geteuid() == 0 {
 				ensureRuleset(cmd.Context(), eng)
 				// A router must forward from the moment the daemon is up.
-				var kernel sysctl.Settings
-				if cfg := eng.Effective(); cfg != nil {
-					kernel.ConntrackMax = cfg.System.ConntrackMax
-				}
-				if err := (sysctl.Proc{}).Apply(kernel); err != nil {
+				if err := (sysctl.Proc{}).Apply(engine.KernelSettings(eng.Effective())); err != nil {
 					slog.Warn("could not apply router sysctls", "err", err)
 				}
 				// And read its clock in the configured zone from the same

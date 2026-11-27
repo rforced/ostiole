@@ -181,10 +181,12 @@ func TestSystemRulesFull(t *testing.T) {
 		t.Errorf("zone tails = %v", tails)
 	}
 
-	// Nothing here is scoped to no zone at all but the replies and the raw
-	// chain, which runs ahead of the zones.
+	// Nothing here is scoped to no zone at all but the replies, the raw
+	// chain, which runs ahead of the zones, and what forward does to every
+	// packet before it asks where one came from.
+	ahead := map[string]bool{"forward/" + kindHopByHop: true, "forward/mss-clamp": true}
 	for _, r := range rows {
-		if r.Keys != nil && len(r.Zones) == 0 && !strings.HasPrefix(r.Description, "Replies") && r.Chain != RawChain {
+		if r.Keys != nil && len(r.Zones) == 0 && !strings.HasPrefix(r.Description, "Replies") && r.Chain != RawChain && !ahead[r.Keys[0]] {
 			t.Errorf("row %q counts packets but names no zone", r.Description)
 		}
 	}

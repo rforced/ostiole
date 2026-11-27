@@ -10,8 +10,14 @@ table inet ostiole {
 	}
 	chain raw_prerouting {
 		type filter hook prerouting priority raw; policy accept;
+		iifname != "lo" ip6 saddr ::1 counter drop comment "block-impossible"
+		ip6 saddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		ip6 daddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop comment "block-tcp-flags"
+		tcp flags & (syn|fin) == (syn|fin) counter drop comment "block-tcp-flags"
+		tcp flags & (syn|rst) == (syn|rst) counter drop comment "block-tcp-flags"
 		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
-		rt type 0 counter drop comment "block-routing-header"
+		exthdr rt exists counter drop comment "block-routing-header"
 		iifname "eth2" ip6 saddr != :: fib saddr . iif oif missing counter drop comment "block-spoofed"
 	}
 	chain input {
@@ -22,21 +28,16 @@ table inet ostiole {
 		iifname { "eth0", "eth1", "eth2", "eth3" } icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
 		iifname "eth2" icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
 		iifname "eth2" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_wan2
-		iifname "eth2" jump zone_lan
-		iifname "eth3" jump zone_guest
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_wan2, "eth2" : jump zone_lan, "eth3" : jump zone_guest }
 		counter comment "default-drop"
 	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
+		exthdr hbh exists counter drop comment "block-hop-by-hop"
 		ct mark & 0x00ff0000 == 0x60000 oifname "eth0" counter drop comment "kill-switch:wan2_only"
 		ct state established,related accept
 		ct state invalid drop
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_wan2
-		iifname "eth2" jump zone_lan
-		iifname "eth3" jump zone_guest
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_wan2, "eth2" : jump zone_lan, "eth3" : jump zone_guest }
 		counter comment "default-drop"
 	}
 	chain output {
@@ -66,8 +67,7 @@ table inet ostiole {
 		type filter hook prerouting priority mangle; policy accept;
 		ct mark & 0x00ff0000 != 0x0 meta mark set ct mark & 0x07ffffff counter accept comment "policy:established"
 		fib daddr type local counter accept comment "policy:local"
-		iifname "eth2" ct state new jump policy_lan
-		iifname "eth3" ct state new jump policy_guest
+		ct state new iifname vmap { "eth2" : jump policy_lan, "eth3" : jump policy_guest }
 	}
 	chain policy_lan {
 		# rule lan-to-guest not mirrored: it matches on the destination zone, which prerouting cannot see
@@ -82,13 +82,15 @@ table inet ostiole {
 	}
 	chain reply_prerouting {
 		type filter hook prerouting priority mangle + 1; policy accept;
-		iifname "eth0" ct state new ct mark set ct mark & 0x07ffffff | 0x08000000 counter comment "reply:eth0"
-		iifname "eth1" ct state new ct mark set ct mark & 0x07ffffff | 0x10000000 counter comment "reply:eth1"
+		ct state != new ct mark & 0xf8000000 == 0x0 accept
+		ct state new iifname "eth0" ct mark set ct mark & 0x07ffffff | 0x08000000 counter comment "reply:eth0"
+		ct state new iifname "eth1" ct mark set ct mark & 0x07ffffff | 0x10000000 counter comment "reply:eth1"
 		ct direction reply ct mark & 0xf8000000 == 0x08000000 meta mark set meta mark & 0x07ffffff | 0x08000000 counter comment "reply-back:eth0"
 		ct direction reply ct mark & 0xf8000000 == 0x10000000 meta mark set meta mark & 0x07ffffff | 0x10000000 counter comment "reply-back:eth1"
 	}
 	chain reply_output {
 		type route hook output priority mangle; policy accept;
+		ct mark & 0xf8000000 == 0x0 accept
 		ct direction reply ct mark & 0xf8000000 == 0x08000000 meta mark set meta mark & 0x07ffffff | 0x08000000 counter comment "reply-back:eth0"
 		ct direction reply ct mark & 0xf8000000 == 0x10000000 meta mark set meta mark & 0x07ffffff | 0x10000000 counter comment "reply-back:eth1"
 	}

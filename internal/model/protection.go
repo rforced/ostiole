@@ -103,11 +103,14 @@ type Protection struct {
 	// PortScan holds a source that keeps knocking on closed ports.
 	PortScan *PortScan `json:"portScan,omitempty"`
 	// AllowIPOptions lets through TCP whose IPv4 header carries options,
-	// and IPv6 with a type 0 routing header, on every interface whatever
-	// Zones says. Both are dropped otherwise, as pf drops them unless a
-	// rule allows them: nothing on the internet needs either, RFC 5095
-	// retired the routing header, and a SYN with options reached a
-	// use-after-free in the IPv4 handshake (CVE-2026-98432).
+	// IPv6 with a routing header of any type, and forwarded IPv6 with
+	// hop-by-hop options, on every interface whatever Zones says. All are
+	// dropped otherwise, as pf drops them unless a rule allows them:
+	// nothing on the internet needs them, RFC 5095 retired type 0 and the
+	// other routing headers stay inside one operator's network, and a SYN
+	// with options reached a use-after-free in the IPv4 handshake
+	// (CVE-2026-98432). Hop-by-hop options addressed to the router, as
+	// MLD's Router Alert is, are never dropped.
 	AllowIPOptions bool `json:"allowIPOptions,omitempty"`
 }
 

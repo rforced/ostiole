@@ -97,25 +97,3 @@ func (r *renderer) tunnelNAT() {
 		})
 	}
 }
-
-// clampTunnels lowers the segment size a TCP handshake offers into a
-// tunnel gateway's tunnel to what fits in it. The LAN's hosts assume a
-// 1500-byte path, and a site whose path MTU discovery is broken stalls
-// on every large answer otherwise. It comes before the connection state,
-// as the PPPoE clamp does.
-func (r *renderer) clampTunnels() {
-	var ifs []string
-	for _, w := range r.tunnelWays() {
-		ifs = append(ifs, w.iface)
-	}
-	if len(ifs) == 0 {
-		return
-	}
-	r.line(fmt.Sprintf(`oifname %s tcp flags syn tcp option maxseg size set rt mtu counter comment "tunnel-mss"`, ifnameSet(ifs)))
-	r.sys(SystemRule{
-		Chain: "forward", Action: "continue", Protocol: string(model.ProtocolTCP),
-		Source: "any", Destination: "out " + strings.Join(ifs, ", "),
-		Description: "Shrink TCP segments to fit the tunnel",
-		Keys:        []string{"forward/tunnel-mss"}, Setting: "routing",
-	})
-}

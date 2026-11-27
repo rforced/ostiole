@@ -15,8 +15,10 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
 
 - **Firewall:** zones and rules; aliases for addresses, ports, countries, AS numbers and URL feeds
   in text or JSON; schedules; port forwards, outbound NAT (automatic, hybrid or manual), 1:1 NAT
-  and NAT reflection; flood and port scan protection; TCP with IP options, type 0 routing headers
-  and spoofed IPv6 sources dropped before connection tracking; rate limits per rule; a live log.
+  and NAT reflection; flood and port scan protection; TCP with IP options or impossible flags, and
+  IPv6 with a routing header, an IPv4-mapped or loopback address or a spoofed source, dropped before
+  connection tracking; forwarded IPv6 with hop-by-hop options dropped; rate limits per rule; a live
+  log.
 - **Interfaces:** Ethernet, VLANs, bridges, bonds and PPPoE. IPv4 static or DHCP. IPv6 static,
   SLAAC or DHCPv6 with prefix delegation, and LANs numbered from the delegated prefix. MTU and MAC
   address per interface.

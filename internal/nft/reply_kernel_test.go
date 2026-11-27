@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -350,5 +351,115 @@ func TestAPortForwardedThroughATunnelIsAnsweredIntoItInKernel(t *testing.T) {
 	}
 	if got := waitSeen(t, server); len(got) != 1 || got[0] != "10.64.0.1" {
 		t.Errorf("the LAN's server saw %v, want the provider's end of the tunnel", got)
+	}
+}
+
+// Connections that came in on no line leave the reply chains at their
+// first rule: they get no tag, no restored mark, and do not walk the line
+// rules at all. A LAN host's connection to the client and the router's own
+// both work, from the first line's address. Rules appended to the chains
+// see the LAN connection's first packet, which is new and has to be
+// looked at, and nothing else of either connection.
+func TestConnectionsOfNoLineLeaveTheReplyChainsEarlyInKernel(t *testing.T) {
+	if !netnstest.Enter(t, "nft") {
+		return
+	}
+	lan, client := twoLines(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	runRouter(ctx, t, twoLinesConfig(false))
+	netnstest.Ruleset(t, `add rule inet ostiole reply_prerouting ip daddr 192.0.2.9 tcp dport 443 counter comment "test:out"
+add rule inet ostiole reply_prerouting ip saddr 192.0.2.9 tcp sport 443 counter comment "test:back"
+add rule inet ostiole reply_output ip daddr 192.0.2.9 tcp dport 443 counter comment "test:own"
+`)
+	far := listen(t, client, "192.0.2.9:443")
+
+	for _, from := range []*os.File{lan, nil} {
+		if err := dial(t, from, "192.0.2.9:443", 3*time.Second); err != nil {
+			t.Fatalf("could not reach the client: %v", err)
+		}
+	}
+	var seen []string
+	for deadline := time.Now().Add(3 * time.Second); len(seen) < 2 && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		seen = far.seen()
+	}
+	if !slices.Equal(seen, []string{"203.0.113.2", "203.0.113.2"}) {
+		t.Errorf("the client saw %v, want both connections from the first line's address", seen)
+	}
+	raw, err := (&Exec{}).ListTableJSON(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counters, err := ParseCounters(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines int
+	for key, c := range counters {
+		if !strings.HasPrefix(key, "reply_prerouting/") && !strings.HasPrefix(key, "reply_output/") {
+			continue
+		}
+		want := uint64(0)
+		switch key {
+		case "reply_prerouting/test:out":
+			want = 1
+		case "reply_prerouting/test:back", "reply_output/test:own":
+		default:
+			lines++
+		}
+		if c.Packets != want {
+			t.Errorf("%s counted %d packets, want %d", key, c.Packets, want)
+		}
+	}
+	if lines == 0 {
+		t.Fatal("the ruleset has no line rules to read")
+	}
+}
+
+// Each link's traffic reaches its own zone's rules through the one lookup
+// that picks the zone. The client calls the router once on the first line
+// and twice on the second, the LAN's host three times, and each zone's
+// rule for the port counts its own calls and nobody else's.
+func TestEachLinkReachesItsOwnZoneInKernel(t *testing.T) {
+	if !netnstest.Enter(t, "nft") {
+		return
+	}
+	lan, client := twoLines(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cfg := twoLinesConfig(false)
+	cfg.Rules = append([]model.Rule{{
+		ID: "lan-service", Enabled: true, Zone: "lan", Action: model.ActionAccept, Protocol: model.ProtocolTCP,
+		Destination: model.Endpoint{Self: true, Ports: []string{"8443"}},
+	}}, cfg.Rules...)
+	runRouter(ctx, t, cfg)
+	for _, addr := range []string{"203.0.113.2:8443", "198.51.100.2:8443", "192.168.1.1:8443"} {
+		listenHere(t, addr)
+	}
+
+	for _, c := range []struct {
+		from  *os.File
+		addr  string
+		times int
+	}{
+		{client, "203.0.113.2:8443", 1},
+		{client, "198.51.100.2:8443", 2},
+		{lan, "192.168.1.1:8443", 3},
+	} {
+		for range c.times {
+			if err := dial(t, c.from, c.addr, 3*time.Second); err != nil {
+				t.Errorf("call to %s: %v", c.addr, err)
+			}
+		}
+	}
+	x := &Exec{}
+	for key, want := range map[string]uint64{
+		"wan-service":  1,
+		"wan2-service": 2,
+		"lan-service":  3,
+	} {
+		if n := waitForCounter(ctx, t, x, key, want); n != want {
+			t.Errorf("%s counted %d calls, want %d", key, n, want)
+		}
 	}
 }

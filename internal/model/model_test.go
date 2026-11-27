@@ -2690,6 +2690,38 @@ func TestValidateConntrackMax(t *testing.T) {
 	}
 }
 
+// The idle time of an established connection is held between RFC 5382's
+// floor, under which TCP's own keepalives no longer keep a connection, and
+// thirty days. Zero stays valid: it is the default, a day.
+func TestValidateConntrackTCPEstablished(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		seconds int
+		want    bool
+	}{
+		{0, true},
+		{sysctl.DefaultTCPEstablished, true},
+		{sysctl.MinTCPEstablished, true},
+		{sysctl.MaxTCPEstablished, true},
+		{sysctl.MinTCPEstablished - 1, false},
+		{sysctl.MaxTCPEstablished + 1, false},
+		{-1, false},
+	} {
+		cfg := &Config{Version: SchemaVersion, System: System{ConntrackTCPEstablished: tc.seconds}}
+		got := true
+		if ve, ok := errors.AsType[*ValidationError](cfg.Validate()); ok {
+			for _, issue := range ve.Issues {
+				if issue.Path == "system.conntrackTcpEstablished" {
+					got = false
+				}
+			}
+		}
+		if got != tc.want {
+			t.Errorf("ConntrackTCPEstablished %d accepted = %v, want %v", tc.seconds, got, tc.want)
+		}
+	}
+}
+
 func TestGatewayThresholds(t *testing.T) {
 	t.Parallel()
 	off, big, neg := 0, MaxSlowAboveMS+1, -1

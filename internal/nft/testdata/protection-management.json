@@ -1,0 +1,56 @@
+{
+  "version": 16,
+  "system": { "hostname": "fw", "management": { "webPort": 9443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true, "antiLockout": true },
+    { "name": "wan2", "external": true, "antiLockout": true, "logDrops": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "guest" }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "slaac" } },
+    { "name": "eth1", "zone": "wan2", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "slaac" } },
+    { "name": "eth2", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "static", "address": "2001:db8:1::1/64" } },
+    { "name": "eth3", "zone": "guest", "enabled": true, "mtu": 1400, "ipv4": { "mode": "static", "address": "192.168.30.1/24" }, "ipv6": { "mode": "static", "address": "2001:db8:30::1/64" } }
+  ],
+  "protection": {
+    "zones": ["wan", "wan2", "guest"],
+    "synFlood": { "rate": 30, "unit": "second", "burst": 60, "perSource": true },
+    "portScan": { "rate": 20, "unit": "minute", "hold": "10m" }
+  },
+  "rules": [
+    {
+      "id": "web-in",
+      "description": "The site on this router, twenty connections a minute per source",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "tcp",
+      "source": {},
+      "destination": { "self": true, "ports": ["443"] },
+      "limit": { "rate": 20, "unit": "minute", "burst": 10, "perSource": true }
+    },
+    {
+      "id": "guest-dns",
+      "description": "Guests ask this router for names, held per device",
+      "enabled": true,
+      "zone": "guest",
+      "action": "accept",
+      "protocol": "udp",
+      "source": {},
+      "destination": { "self": true, "ports": ["53"] },
+      "limit": { "rate": 50, "unit": "second", "burst": 100, "perSource": true }
+    },
+    {
+      "id": "allow-lan",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } }
+}

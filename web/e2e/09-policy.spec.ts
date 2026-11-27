@@ -215,7 +215,7 @@ test('add a way out from a file and route a rule through it', async ({ page }) =
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('comment "tunnel-nat:wg0"')
-  await expect(ruleset).toContainText('comment "tunnel-mss"')
+  await expect(ruleset).toContainText('comment "mss-clamp"')
   await expect(ruleset).toContainText('comment "kill-switch:wg0"')
   await expect(ruleset).toContainText('comment "reply:wg0"')
 })

@@ -766,9 +766,9 @@ func (r *renderer) upnpChains() {
 func (r *renderer) chainForward() {
 	r.block("chain forward", func() {
 		r.line("type filter hook forward priority filter; policy drop;")
+		r.hopByHop()
 		r.shapeRestore("forward")
-		r.clampPPPoE()
-		r.clampTunnels()
+		r.clampSegments()
 		r.killSwitch()
 		r.translateHold("forward")
 		r.connectionState("forward")
@@ -782,27 +782,46 @@ func (r *renderer) chainForward() {
 	})
 }
 
-// clampPPPoE lowers the segment size a TCP handshake offers across a PPPoE
-// link to what fits in it. A client at 1500 behind a 1492 link otherwise
-// stalls on every site whose path MTU discovery is broken. It comes before
-// the connection state, since the answer to a forwarded port's SYN is
-// already an established packet.
-func (r *renderer) clampPPPoE() {
+// clampSegments lowers the segment size a TCP handshake offers out a link
+// narrower than Ethernet to what fits in it: PPPoE, a WireGuard, OpenVPN
+// or Tailscale tunnel, a tunnel a gateway sends into, and any link set to
+// an MTU under 1500, a VLAN left to its parent's included. A client at
+// 1500 behind such a link otherwise stalls on every site whose path MTU
+// discovery is broken. It comes before the connection state, since the
+// answer to a forwarded port's SYN is already an established packet, and
+// it looks at the flags first, so every other packet is done in one check.
+func (r *renderer) clampSegments() {
+	gateway := map[string]bool{}
+	for _, w := range r.tunnelWays() {
+		gateway[w.iface] = true
+	}
+	set := map[string]int{}
+	for _, in := range r.cfg.Interfaces {
+		set[in.Name] = in.MTU
+	}
 	var ifs []string
 	for _, in := range r.cfg.Interfaces {
-		if in.Enabled && in.PPPoE != nil {
+		if !in.Enabled {
+			continue
+		}
+		mtu := in.MTU
+		if mtu == 0 && in.VLAN != nil {
+			mtu = set[in.VLAN.Parent]
+		}
+		tunnel := in.PPPoE != nil || in.WireGuard != nil || in.OpenVPN != nil || in.Tailscale != nil
+		if tunnel || gateway[in.Name] || (mtu > 0 && mtu < 1500) {
 			ifs = append(ifs, in.Name)
 		}
 	}
 	if len(ifs) == 0 {
 		return
 	}
-	r.line(fmt.Sprintf(`oifname %s tcp flags syn tcp option maxseg size set rt mtu counter comment "pppoe-mss"`, ifnameSet(ifs)))
+	r.line(fmt.Sprintf(`tcp flags syn / syn,rst oifname %s tcp option maxseg size set rt mtu counter comment "mss-clamp"`, ifnameSet(ifs)))
 	r.sys(SystemRule{
 		Chain: "forward", Action: "continue", Protocol: string(model.ProtocolTCP),
-		Source: "any", Destination: "any",
-		Description: "Shrink TCP segments to fit the PPPoE link",
-		Keys:        []string{"forward/pppoe-mss"}, Setting: "interface",
+		Source: "any", Destination: "out " + strings.Join(ifs, ", "),
+		Description: "Shrink TCP segments to fit the link they leave by",
+		Keys:        []string{"forward/mss-clamp"}, Setting: "interface",
 	})
 }
 
@@ -1004,7 +1023,8 @@ func (r *renderer) shapeRestore(chain string) {
 	})
 }
 
-func (r *renderer) antiLockout() {
+// managementPorts are the ports the web UI and SSH answer on.
+func (r *renderer) managementPorts() []string {
 	m := r.cfg.System.Management
 	var ports []string
 	if m.WebPort != 0 {
@@ -1013,6 +1033,11 @@ func (r *renderer) antiLockout() {
 	if m.SSHPort != 0 && m.SSHPort != m.WebPort {
 		ports = append(ports, fmt.Sprint(m.SSHPort))
 	}
+	return ports
+}
+
+func (r *renderer) antiLockout() {
+	ports := r.managementPorts()
 	if len(ports) == 0 {
 		return
 	}
@@ -1023,6 +1048,9 @@ func (r *renderer) antiLockout() {
 		ifs := r.cfg.ZoneInterfaces(z.Name)
 		if len(ifs) == 0 {
 			continue
+		}
+		if z.External {
+			r.lockoutFlood(z.Name, ifs, ports)
 		}
 		r.line(fmt.Sprintf("iifname %s tcp dport %s counter accept comment \"anti-lockout:%s\"",
 			ifnameSet(ifs), setOrSingle(ports), z.Name))
@@ -1036,12 +1064,35 @@ func (r *renderer) antiLockout() {
 }
 
 func (r *renderer) zoneDispatch() {
-	for _, z := range r.cfg.Zones {
-		ifs := r.cfg.ZoneInterfaces(z.Name)
-		if len(ifs) == 0 {
-			continue
+	zones := make([]string, len(r.cfg.Zones))
+	for i, z := range r.cfg.Zones {
+		zones[i] = z.Name
+	}
+	r.dispatch("", "zone_", zones)
+}
+
+// dispatch sends a packet to the chain of the zone it arrived in: one
+// lookup by interface name, however many zones and interfaces there are,
+// where a rule for each zone was a comparison for each. The names stay
+// strings, so the ruleset loads before the interfaces exist. guard is
+// what the packet has to pass first.
+func (r *renderer) dispatch(guard, chain string, zones []string) {
+	var arms []string
+	for _, z := range zones {
+		for _, name := range r.cfg.ZoneInterfaces(z) {
+			arms = append(arms, fmt.Sprintf("%q : jump %s%s", name, chain, z))
 		}
-		r.line(fmt.Sprintf("iifname %s jump zone_%s", ifnameSet(ifs), z.Name))
+	}
+	if guard != "" {
+		guard += " "
+	}
+	switch len(arms) {
+	case 0:
+	case 1:
+		name, verdict, _ := strings.Cut(arms[0], " : ")
+		r.line(fmt.Sprintf("%siifname %s %s", guard, name, verdict))
+	default:
+		r.line(fmt.Sprintf("%siifname vmap { %s }", guard, strings.Join(arms, ", ")))
 	}
 }
 
@@ -1675,9 +1726,7 @@ func (r *renderer) policyChains() {
 		// no mark of its own when its connection came in from outside, a
 		// port forward's say, and marking it would send it out the rule's
 		// gateway instead of back the way the connection came.
-		for _, z := range zones {
-			r.line(fmt.Sprintf("iifname %s ct state new jump policy_%s", ifnameSet(r.cfg.ZoneInterfaces(z)), z))
-		}
+		r.dispatch("ct state new", "policy_", zones)
 	})
 	for _, z := range zones {
 		r.block("chain policy_"+z, func() { r.policyZoneRules(z) })

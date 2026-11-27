@@ -79,7 +79,7 @@ test('route through a Tailscale exit node gateway and apply', async ({ page }) =
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.getByLabel('confirmed ruleset')
   await expect(ruleset).toContainText('tunnel-nat:tailscale0')
-  await expect(ruleset).toContainText('tunnel-mss')
+  await expect(ruleset).toContainText('mss-clamp')
   await expect(ruleset).toContainText('kill-switch:amsterdam')
 })
 

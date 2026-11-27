@@ -2,6 +2,7 @@ package nft
 
 import (
 	"fmt"
+	"strings"
 
 	"ostiole/internal/model"
 )
@@ -15,52 +16,107 @@ const (
 	kindIPOptions     = "block-ip-options"
 	kindRoutingHeader = "block-routing-header"
 	kindSpoofed       = "block-spoofed"
+	kindImpossible    = "block-impossible"
+	kindTCPFlags      = "block-tcp-flags"
+	kindHopByHop      = "block-hop-by-hop"
 )
 
-// chainRaw drops what no connection should be built from: TCP whose IPv4
-// header carries options and IPv6 with a type 0 routing header, unless
-// the protection settings allow them, and IPv6 whose source an inside
-// link would not route back to. Nothing here matches by zone: it runs
-// before the zone chains, on everything that arrives, forwarded or not.
+// chainRaw drops what no connection should be built from: addresses and
+// TCP flags that never cross a link honestly, TCP whose IPv4 header
+// carries options and IPv6 with a routing header, unless the protection
+// settings allow those two, and IPv6 whose source an inside link would not
+// route back to. Nothing here matches by zone: it runs before the zone
+// chains, on everything that arrives, forwarded or not.
 func (r *renderer) chainRaw() {
-	spoof := r.sourceCheckedInterfaces()
-	if r.cfg.Protection.AllowIPOptions && len(spoof) == 0 {
-		return
-	}
 	r.block("chain "+RawChain, func() {
 		r.line("type filter hook prerouting priority raw; policy accept;")
+		r.rawDrops(rawFixed, "")
 		if !r.cfg.Protection.AllowIPOptions {
-			r.ipOptions()
+			r.rawDrops(rawOptions, "protection")
 		}
-		r.spoofedSources(spoof)
+		r.spoofedSources(r.sourceCheckedInterfaces())
 	})
 }
 
-// rawDrops are the drops the IP options setting controls. The TCP match
-// leaves IGMP's Router Alert alone, which is the one option a network
-// does need.
-var rawDrops = []struct {
-	match, kind, protocol, description string
-}{
-	{"ip protocol tcp ip hdrlength != 5", kindIPOptions, string(model.ProtocolTCP), "TCP with IPv4 options"},
-	{"rt type 0", kindRoutingHeader, string(model.ProtocolAny), "IPv6 type 0 routing headers"},
+// rawDrop is one kind of packet the raw chain drops, by every match that
+// finds it. The matches share a comment, so one counter sums them.
+type rawDrop struct {
+	kind, protocol, description string
+	matches                     []string
 }
 
-func (r *renderer) ipOptions() {
+// rawFixed are the drops no setting lifts. RFC 6092 names the addresses:
+// the IPv6 loopback as a source from the wire, and an IPv4-mapped address
+// at either end, which exists inside a host's socket layer and nowhere
+// else. The flags are no flags at all, SYN with FIN and SYN with RST,
+// which connection tracking would call invalid one lookup later.
+var rawFixed = []rawDrop{
+	{
+		kindImpossible, string(model.ProtocolAny), "IPv6 loopback sources and IPv4-mapped addresses from the wire",
+		[]string{notLoopback + "ip6 saddr ::1", "ip6 saddr ::ffff:0:0/96", "ip6 daddr ::ffff:0:0/96"},
+	},
+	{
+		kindTCPFlags, string(model.ProtocolTCP), "TCP with flags no connection sends",
+		[]string{
+			"tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0",
+			"tcp flags & (syn|fin) == (syn|fin)",
+			"tcp flags & (syn|rst) == (syn|rst)",
+		},
+	},
+}
+
+const notLoopback = `iifname != "lo" `
+
+// rawOptions are the drops the IP options setting controls. The TCP match
+// leaves IGMP's Router Alert alone, which is the one option a network
+// does need. Every routing header goes, not type 0 alone: types 3 and 4
+// steer a packet through hosts of the sender's choosing as type 0 did.
+var rawOptions = []rawDrop{
+	{kindIPOptions, string(model.ProtocolTCP), "TCP with IPv4 options", []string{"ip protocol tcp ip hdrlength != 5"}},
+	{kindRoutingHeader, string(model.ProtocolAny), "IPv6 routing headers", []string{"exthdr rt exists"}},
+}
+
+func (r *renderer) rawDrops(drops []rawDrop, setting string) {
 	loud, all := r.loggingInterfaces(r.enabledInterfaces())
-	for _, d := range rawDrops {
-		if len(loud) > 0 {
-			r.line(systemLogLine(d.match, ifnameSet(loud), d.kind))
+	for _, d := range drops {
+		for _, match := range d.matches {
+			if len(loud) > 0 {
+				// The set names real links, never lo.
+				r.line(systemLogLine(strings.TrimPrefix(match, notLoopback), ifnameSet(loud), d.kind))
+			}
+			r.line(fmt.Sprintf("%s counter drop comment %q", match, d.kind))
 		}
-		r.line(fmt.Sprintf("%s counter drop comment %q", d.match, d.kind))
 		r.sys(SystemRule{
 			Chain: RawChain, Action: "drop", Protocol: d.protocol,
 			Source: "any", Destination: "any", Description: d.description, Log: all,
 			Keys:    []string{RawChain + "/" + d.kind},
 			LogKeys: logKeys(len(loud) > 0, RawChain+"/log:"+d.kind),
-			Setting: "protection",
+			Setting: setting,
 		})
 	}
+}
+
+// hopByHop drops forwarded IPv6 that carries hop-by-hop options, under the
+// IP options setting (RFC 9098): every router on the path has to read
+// them, and nothing a network forwards needs them. It is in forward alone:
+// MLD on the router's own links carries Router Alert there.
+func (r *renderer) hopByHop() {
+	if r.cfg.Protection.AllowIPOptions {
+		return
+	}
+	const match = "exthdr hbh exists"
+	loud, all := r.loggingInterfaces(r.enabledInterfaces())
+	if len(loud) > 0 {
+		r.line(systemLogLine(match, ifnameSet(loud), kindHopByHop))
+	}
+	r.line(fmt.Sprintf("%s counter drop comment %q", match, kindHopByHop))
+	r.sys(SystemRule{
+		Chain: "forward", Action: "drop", Protocol: string(model.ProtocolAny),
+		Source: "any", Destination: "any", Description: "Forwarded IPv6 with hop-by-hop options", Log: all,
+		Keys:    []string{"forward/" + kindHopByHop},
+		LogKeys: logKeys(len(loud) > 0, "forward/log:"+kindHopByHop),
+		Setting: "protection",
+	})
 }
 
 // spoofedSources holds IPv6 arriving on an inside link to the routes back:

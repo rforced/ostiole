@@ -30,10 +30,22 @@ table inet ostiole {
 	}
 	chain raw_prerouting {
 		type filter hook prerouting priority raw; policy accept;
+		iifname { "eth0", "eth2" } ip6 saddr ::1 limit rate 10/second counter log prefix "ostiole:s:block-impossible:drop: " group 1 comment "log:block-impossible"
+		iifname != "lo" ip6 saddr ::1 counter drop comment "block-impossible"
+		iifname { "eth0", "eth2" } ip6 saddr ::ffff:0:0/96 limit rate 10/second counter log prefix "ostiole:s:block-impossible:drop: " group 1 comment "log:block-impossible"
+		ip6 saddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		iifname { "eth0", "eth2" } ip6 daddr ::ffff:0:0/96 limit rate 10/second counter log prefix "ostiole:s:block-impossible:drop: " group 1 comment "log:block-impossible"
+		ip6 daddr ::ffff:0:0/96 counter drop comment "block-impossible"
+		iifname { "eth0", "eth2" } tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 limit rate 10/second counter log prefix "ostiole:s:block-tcp-flags:drop: " group 1 comment "log:block-tcp-flags"
+		tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 counter drop comment "block-tcp-flags"
+		iifname { "eth0", "eth2" } tcp flags & (syn|fin) == (syn|fin) limit rate 10/second counter log prefix "ostiole:s:block-tcp-flags:drop: " group 1 comment "log:block-tcp-flags"
+		tcp flags & (syn|fin) == (syn|fin) counter drop comment "block-tcp-flags"
+		iifname { "eth0", "eth2" } tcp flags & (syn|rst) == (syn|rst) limit rate 10/second counter log prefix "ostiole:s:block-tcp-flags:drop: " group 1 comment "log:block-tcp-flags"
+		tcp flags & (syn|rst) == (syn|rst) counter drop comment "block-tcp-flags"
 		iifname { "eth0", "eth2" } ip protocol tcp ip hdrlength != 5 limit rate 10/second counter log prefix "ostiole:s:block-ip-options:drop: " group 1 comment "log:block-ip-options"
 		ip protocol tcp ip hdrlength != 5 counter drop comment "block-ip-options"
-		iifname { "eth0", "eth2" } rt type 0 limit rate 10/second counter log prefix "ostiole:s:block-routing-header:drop: " group 1 comment "log:block-routing-header"
-		rt type 0 counter drop comment "block-routing-header"
+		iifname { "eth0", "eth2" } exthdr rt exists limit rate 10/second counter log prefix "ostiole:s:block-routing-header:drop: " group 1 comment "log:block-routing-header"
+		exthdr rt exists counter drop comment "block-routing-header"
 		iifname "eth1" ip6 saddr != :: fib saddr . iif oif missing counter drop comment "block-spoofed"
 	}
 	chain input {
@@ -54,15 +66,15 @@ table inet ostiole {
 		iifname "eth0" ip6 saddr @bogons_v6 counter drop comment "block-bogons"
 		iifname "eth0" tcp dport { 443, 22 } counter accept comment "anti-lockout:wan"
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
-		iifname "eth2" jump zone_iot
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan, "eth2" : jump zone_iot }
 		iifname "eth1" counter drop comment "default-drop:quiet"
 		limit rate 10/second counter log prefix "ostiole:c:input:drop: " group 1 comment "log:default-drop"
 		counter comment "default-drop"
 	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
+		iifname { "eth0", "eth2" } exthdr hbh exists limit rate 10/second counter log prefix "ostiole:s:block-hop-by-hop:drop: " group 1 comment "log:block-hop-by-hop"
+		exthdr hbh exists counter drop comment "block-hop-by-hop"
 		ct state established,related accept
 		ct state invalid drop
 		iifname "eth0" ip saddr @private_v4 limit rate 10/second counter log prefix "ostiole:c:forward:block-private: " group 1 comment "log:block-private"
@@ -73,9 +85,7 @@ table inet ostiole {
 		iifname "eth0" ip saddr @bogons_v4 counter drop comment "block-bogons"
 		iifname "eth0" ip6 saddr @bogons_v6 limit rate 10/second counter log prefix "ostiole:c:forward:block-bogons: " group 1 comment "log:block-bogons"
 		iifname "eth0" ip6 saddr @bogons_v6 counter drop comment "block-bogons"
-		iifname "eth0" jump zone_wan
-		iifname "eth1" jump zone_lan
-		iifname "eth2" jump zone_iot
+		iifname vmap { "eth0" : jump zone_wan, "eth1" : jump zone_lan, "eth2" : jump zone_iot }
 		iifname "eth1" counter drop comment "default-drop:quiet"
 		limit rate 10/second counter log prefix "ostiole:c:forward:drop: " group 1 comment "log:default-drop"
 		counter comment "default-drop"

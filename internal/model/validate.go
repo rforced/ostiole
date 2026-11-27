@@ -3273,6 +3273,10 @@ func (v *validator) system(s *System) {
 		v.add("system.conntrackMax", "%d must be %d-%d (0 leaves the kernel's own limit)",
 			n, sysctl.MinConntrackMax, sysctl.MaxConntrackMax)
 	}
+	if n := s.ConntrackTCPEstablished; n != 0 && (n < sysctl.MinTCPEstablished || n > sysctl.MaxTCPEstablished) {
+		v.add("system.conntrackTcpEstablished", "%d must be %d-%d seconds (0 keeps %d)",
+			n, sysctl.MinTCPEstablished, sysctl.MaxTCPEstablished, sysctl.DefaultTCPEstablished)
+	}
 	for i, d := range s.DNSServers {
 		if _, err := ParseIP(d); err != nil {
 			v.add(fmt.Sprintf("system.dnsServers[%d]", i), "%v", err)
