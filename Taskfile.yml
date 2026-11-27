@@ -132,7 +132,7 @@ tasks:
   go:test:
     desc: Run Go tests with the race detector
     cmds:
-      - go test -race -cover ./...
+      - go test -race -cover -p 2 ./...
 
   go:vuln:
     desc: Run govulncheck

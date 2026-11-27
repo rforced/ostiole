@@ -164,7 +164,7 @@ jobs:
           CGO_ENABLED=0 go build -trimpath -o bin/ostiole-proxy ./cmd/ostiole-proxy
       # -count=1 runs every test every time, rather than reporting a
       # stored result for a package that has not changed.
-      - run: go test -race -cover -count=1 ./...
+      - run: go test -race -cover -count=1 -p 2 ./...
         env:
           TESTENV_REQUIRE: '1'
 

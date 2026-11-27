@@ -6,9 +6,7 @@ export default defineConfig({
   // the router global-setup.ts configured (e2e/fixtures.ts), so the files
   // run side by side.
   fullyParallel: false,
-  // CI's runner has four vCPUs. Held to four CPUs here, four workers took
-  // 2.0 min and two 3.4. Elsewhere, half the cores.
-  workers: process.env.CI ? 4 : undefined,
+  workers: 4,
   retries: 0,
   globalSetup: './e2e/global-setup.ts',
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
